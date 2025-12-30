@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}EDRefCard: public configurations{% endblock %}
+
+{% block content %}
+<div id="list">
+    <h1>EDRefCard: public configurations</h1>
+</div>
+
+<div>
+    <form action="{{ url_for('list_configs') }}" id="searchForm">
+        <table>
+            <tr>
+                <td><label for="deviceFilter">Select Controller(s)</label></td>
+                <td><select name="deviceFilter" id="deviceFilter" multiple size="10">
+                        {% for controller in controllers %}
+                        <option value="{{ controller }}" {% if controller in selected_controllers %}selected{% endif %}>
+                            {{ controller }}</option>
+                        {% endfor %}
+                    </select></td>
+            </tr>
+            <tr>
+                <td colspan="2"><input type="submit" value="Search"></input></td>
+            </tr>
+        </table>
+    </form>
+</div>
+
+<!-- Search options: {{ search_opts }} -->
+
+<table>
+    <tr>
+        <th align="left" class="description">Description</th>
+        <th align="left" class="controllers">Controllers</th>
+        <th align="left" class="date">Date</th>
+    </tr>
+    {% for item in items %}
+    <tr>
+        <td class="description">
+            <a href="{{ item.url }}">{{ item.description }}</a>
+        </td>
+        <td class="controllers">
+            {{ item.controllers }}
+        </td>
+        <td class="date">
+            {{ item.date }}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

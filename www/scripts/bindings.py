@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__version__ = '1.4.20250503'
+__version__ = '2.0.0'
 
 from lxml import etree
 
@@ -11,8 +11,6 @@ from wand.image import Image
 from wand.font import Font
 from wand.color import Color
 
-import cgi
-import cgitb
 import html
 import sys
 import string
@@ -37,12 +35,33 @@ except: # pragma: no cover
     from controlsData import *
 
 class Config:
-    def dirRoot():
-        return Path(os.environ.get('CONTEXT_DOCUMENT_ROOT', '..')).resolve()
-        
-    def webRoot():
-        return urljoin(os.environ.get('SCRIPT_URI', 'http://172.17.128.10/'), '/')
+    # Class-level configuration - can be overridden by Flask app
+    _dir_root = None
+    _web_root = None
     
+    @classmethod
+    def setDirRoot(cls, path):
+        """Set the root directory for configs (for Flask integration)."""
+        cls._dir_root = Path(path).resolve()
+    
+    @classmethod
+    def setWebRoot(cls, url):
+        """Set the web root URL (for Flask integration)."""
+        cls._web_root = url
+    
+    @staticmethod
+    def dirRoot():
+        if Config._dir_root is not None:
+            return Config._dir_root
+        return Path(os.environ.get('CONTEXT_DOCUMENT_ROOT', '..')).resolve()
+    
+    @staticmethod    
+    def webRoot():
+        if Config._web_root is not None:
+            return Config._web_root
+        return urljoin(os.environ.get('SCRIPT_URI', 'https://edrefcard.info/'), '/')
+    
+    @staticmethod
     def newRandom():
         config = Config(Config.randomName())
         while(config.exists()):
@@ -57,10 +76,12 @@ class Config:
     def __repr__(self):
         return "Config('%s')" % self.name
     
+    @staticmethod
     def randomName():
         name = ''.join(random.choice(string.ascii_lowercase) for x in range(6))
         return name
     
+    @staticmethod
     def configsPath():
         return Config.dirRoot() / 'configs'
         
@@ -83,6 +104,7 @@ class Config:
         fullPath = self.path()
         dirPath = fullPath.parent
         dirPath.mkdir(parents=True, exist_ok=True)
+        
     def refcardURL(self):
         url = urljoin(Config.webRoot(), "binds/%s" % self.name)
         return url
@@ -91,21 +113,25 @@ class Config:
         url = urljoin(Config.webRoot(), "configs/%s.binds" % self.name)
         return url
 
+    @staticmethod
     def unpickle(path):
         with path.open('rb') as file:
             object = pickle.load(file)
             object['runID'] = path.stem
         return object
             
+    @staticmethod
     def allConfigs(sortKey=None):
         configsPath = Config.configsPath()
+        if not configsPath.exists():
+            return []
         picklePaths = list(configsPath.glob('**/*.replay'))
         objs = [Config.unpickle(path) for path in picklePaths]
         if sortKey is not None:
             objs.sort(key=sortKey)
         return objs
 
-	
+
 class Mode(Enum):
     invalid = 0
     blocks = 1
@@ -1136,6 +1162,45 @@ def parseForm(form):
     if description is None:
         description = ''
     return (displayGroups, styling, description)
+
+def parseFormData(form_data):
+    """Parse form data from Flask request.form (dict-like object).
+    
+    This is a Flask-compatible version of parseForm that works with
+    request.form instead of cgi.FieldStorage.
+    
+    Args:
+        form_data: A dict-like object (e.g., Flask's request.form)
+    
+    Returns:
+        List of display groups to show
+    """
+    displayGroups = []
+    if form_data.get('showgalaxymap'):
+        displayGroups.append('Galaxy map')
+    if form_data.get('showheadlook'):
+        displayGroups.append('Head look')
+    if form_data.get('showsrv'):
+        displayGroups.append('SRV')
+    if form_data.get('showscanners'):
+        displayGroups.append('Scanners')
+    if form_data.get('showship'):
+        displayGroups.append('Ship')
+    if form_data.get('showui'):
+        displayGroups.append('UI')
+    if form_data.get('showfighter'):
+        displayGroups.append('Fighter')
+    if form_data.get('showonfoot'):
+        displayGroups.append('OnFoot')
+    if form_data.get('showmulticrew'):
+        displayGroups.append('Multicrew')
+    if form_data.get('showcamera'):
+        displayGroups.append('Camera')
+    if form_data.get('showcommandercreator'):
+        displayGroups.append('Holo-Me')
+    if form_data.get('showmisc'):
+        displayGroups.append('Misc')
+    return displayGroups
     
 def determineMode(form):
     deviceForBlockImage = form.getvalue('blocks')

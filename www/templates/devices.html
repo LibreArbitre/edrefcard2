@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}EDRefCard: supported devices{% endblock %}
+
+{% block content %}
+<div id="list">
+    <h1>EDRefCard: supported devices</h1>
+</div>
+<ul>
+    {% for device in devices %}
+    <li>
+        <a href="{{ url_for('show_device', device_name=device.name) }}">{{ device.name }}</a>
+        <a href="{{ url_for('list_configs', deviceFilter=device.name) }}" title="search">&#128269;</a>
+        &nbsp;&nbsp;
+        <div class="supported-ids">Supported IDs: {{ device.handled_devices }}</div>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}

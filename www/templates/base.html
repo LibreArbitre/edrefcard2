@@ -21,14 +21,20 @@
 </head>
 
 <body>
-  {% block content %}{% endblock %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
 
-  <p>
-    Version {{ version }}<br>
-    Please direct questions, suggestions and support requests to
-    <a href="https://forums.frontier.co.uk/threads/627609/">the thread on the official Elite: Dangerous forums</a>.
-  </p>
-  <p class="text-center"><a href="/">← Home</a></p>
+  <footer class="site-footer">
+    <div class="footer-content">
+      <p>
+        Version {{ version }}<br>
+        Please direct questions, suggestions and support requests to
+        <a href="https://forums.frontier.co.uk/threads/627609/">the thread on the official Elite: Dangerous forums</a>.
+      </p>
+      <p><a href="/">← Home</a></p>
+    </div>
+  </footer>
 
   {% block scripts %}{% endblock %}
 </body>

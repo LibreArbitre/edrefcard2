@@ -1,0 +1,101 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 Dashboard</h1>
+    <p>Welcome to the EDRefCard admin panel</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_configurations }}</div>
+        <div class="stat-label">Total Configurations</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.public_configurations }}</div>
+        <div class="stat-label">Public Configurations</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.popular_devices | length }}</div>
+        <div class="stat-label">Device Types Used</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.daily_stats | length }}</div>
+        <div class="stat-label">Days with Activity</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>🔥 Most Popular Controllers</h2>
+    </div>
+
+    {% if stats.popular_devices %}
+    <table>
+        <thead>
+            <tr>
+                <th>Controller</th>
+                <th>Usage Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for device in stats.popular_devices %}
+            <tr>
+                <td>{{ device.device_display_name or 'Unknown' }}</td>
+                <td>{{ device.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted);">No device statistics available yet. Run migration to import existing data.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>📈 Recent Activity</h2>
+    </div>
+
+    {% if stats.daily_stats %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Configurations Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for day in stats.daily_stats[:10] %}
+            <tr>
+                <td>{{ day.date }}</td>
+                <td>{{ day.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: var(--text-muted);">No activity data available yet.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>⚡ Quick Actions</h2>
+    </div>
+
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{{ url_for('admin.list_configs') }}" class="btn btn-primary">
+            📋 Manage Configurations
+        </a>
+        <a href="{{ url_for('admin.list_devices') }}" class="btn btn-outline">
+            🎮 View Devices
+        </a>
+        <a href="{{ url_for('admin.migrate_data') }}" class="btn btn-outline">
+            🔄 Migrate Data
+        </a>
+    </div>
+</div>
+{% endblock %}

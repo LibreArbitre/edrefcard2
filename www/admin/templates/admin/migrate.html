@@ -1,0 +1,81 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Data Migration{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🔄 Data Migration</h1>
+    <p>Migrate existing pickle files to SQLite database</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Migration Status</h2>
+    </div>
+
+    <div class="stats-grid" style="margin-bottom: 0;">
+        <div class="stat-card">
+            <div class="stat-value">{{ pickle_count }}</div>
+            <div class="stat-label">Pickle Files Found</div>
+        </div>
+    </div>
+</div>
+
+{% if pickle_count > 0 %}
+<div class="card">
+    <div class="card-header">
+        <h2>⚠️ Important</h2>
+    </div>
+
+    <p style="color: var(--text-secondary);">
+        This will import all existing <code>.replay</code> pickle files into the SQLite database.
+    </p>
+
+    <ul style="color: var(--text-secondary); margin: 1rem 0; padding-left: 1.5rem;">
+        <li>Existing database records will be updated if they already exist</li>
+        <li>Original pickle files will not be modified</li>
+        <li>Large migrations may take a few seconds</li>
+    </ul>
+
+    <form method="post"
+        onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').innerHTML = '⏳ Migrating...';">
+        <button type="submit" class="btn btn-primary">
+            🚀 Start Migration
+        </button>
+    </form>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header">
+        <h2>✅ No Migration Needed</h2>
+    </div>
+
+    <p style="color: var(--text-secondary);">
+        No pickle files found in the configs directory.
+        Either migration has already been completed, or no configurations exist yet.
+    </p>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h2>ℹ️ About the Database</h2>
+    </div>
+
+    <p style="color: var(--text-secondary);">
+        EDRefCard now uses SQLite to store configuration metadata. This provides:
+    </p>
+
+    <ul style="color: var(--text-secondary); padding-left: 1.5rem;">
+        <li><strong>Better search</strong> - Filter by description, device, date</li>
+        <li><strong>Faster queries</strong> - No need to read every file</li>
+        <li><strong>Admin features</strong> - Edit descriptions, toggle visibility</li>
+        <li><strong>Statistics</strong> - Track usage patterns</li>
+    </ul>
+
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 1rem;">
+        Note: Generated images (.jpg) and binds files (.binds) are still stored on disk.
+        Only the metadata is stored in SQLite.
+    </p>
+</div>
+{% endblock %}

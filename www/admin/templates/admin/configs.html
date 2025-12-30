@@ -1,0 +1,117 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Configurations{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📋 Configurations</h1>
+    <p>Manage published reference card configurations</p>
+</div>
+
+<!-- Search and filters -->
+<form class="search-form" method="get">
+    <input type="text" name="search" placeholder="Search descriptions..." value="{{ search }}">
+    <input type="text" name="device" placeholder="Filter by device..." value="{{ device }}">
+    <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary);">
+        <input type="checkbox" name="public_only" value="1" {% if public_only %}checked{% endif %}>
+        Public only
+    </label>
+    <button type="submit" class="btn btn-primary">🔍 Search</button>
+    <a href="{{ url_for('admin.list_configs') }}" class="btn btn-outline">Clear</a>
+</form>
+
+<div class="card">
+    <div class="card-header">
+        <h2>{{ total }} Configuration{% if total != 1 %}s{% endif %} Found</h2>
+    </div>
+
+    {% if configs %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Description</th>
+                <th>Devices</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in configs %}
+            <tr>
+                <td>
+                    <a href="/binds/{{ config.id }}" target="_blank" style="color: var(--ed-orange);">
+                        {{ config.id }}
+                    </a>
+                </td>
+                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                    {{ config.description or '(no description)' }}
+                </td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted);">
+                    {{ config.device_names or '-' }}
+                </td>
+                <td style="white-space: nowrap; color: var(--text-muted);">
+                    {{ config.created_at[:10] if config.created_at else '-' }}
+                </td>
+                <td>
+                    {% if config.is_featured %}
+                    <span class="badge badge-warning">⭐ Featured</span>
+                    {% elif config.is_public %}
+                    <span class="badge badge-success">Public</span>
+                    {% else %}
+                    <span class="badge badge-muted">Private</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <form method="post" action="{{ url_for('admin.toggle_public', config_id=config.id) }}"
+                        style="display: inline;">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Toggle visibility">
+                            {% if config.is_public %}🔒{% else %}🔓{% endif %}
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin.delete_config', config_id=config.id) }}"
+                        style="display: inline;"
+                        onsubmit="return confirm('Delete configuration {{ config.id }}? This cannot be undone.');">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Delete">🗑️</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a
+            href="?page={{ page - 1 }}&search={{ search }}&device={{ device }}&public_only={{ '1' if public_only else '0' }}">←
+            Prev</a>
+        {% endif %}
+
+        {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="active">{{ p }}</span>
+        {% elif p <= 3 or p> total_pages - 2 or (p >= page - 1 and p <= page + 1) %} <a
+                href="?page={{ p }}&search={{ search }}&device={{ device }}&public_only={{ '1' if public_only else '0' }}">
+                {{ p }}</a>
+                {% elif p == 4 or p == total_pages - 2 %}
+                <span>...</span>
+                {% endif %}
+                {% endfor %}
+
+                {% if page < total_pages %} <a
+                    href="?page={{ page + 1 }}&search={{ search }}&device={{ device }}&public_only={{ '1' if public_only else '0' }}">
+                    Next →</a>
+                    {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p style="color: var(--text-muted); padding: 2rem; text-align: center;">
+        No configurations found matching your criteria.
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

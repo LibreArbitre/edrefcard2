@@ -46,10 +46,20 @@ app = Flask(__name__,
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
 app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 app.config['WWW_DIR'] = WWW_DIR
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Configure the bindings Config class for Flask
 Config.setDirRoot(WWW_DIR)
 Config.setWebRoot('https://edrefcard.info/')
+
+# Initialize SQLite database
+from scripts.database import init_db
+DB_PATH = WWW_DIR / 'data' / 'edrefcard.db'
+init_db(DB_PATH)
+
+# Register admin blueprint
+from admin import admin_bp
+app.register_blueprint(admin_bp)
 
 
 def get_configs_path():

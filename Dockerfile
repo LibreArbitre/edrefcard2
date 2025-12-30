@@ -1,30 +1,34 @@
-FROM python:3
+FROM python:3.12-slim
 
+# Install ImageMagick for wand library
 RUN apt-get update -y \
-    && apt-get install -y apache2 \
+    && apt-get install -y libmagickwand-dev \
     && apt-get clean -y \
     && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*    
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install lxml wand legacy-cgi
+# Set work directory
+WORKDIR /app
 
-# Copy over the apache configuration file and enable the site
-RUN a2enmod headers rewrite cgi
+# Copy requirements first for better caching
+COPY requirements.txt .
 
-COPY ./conf/apache/edrefcard.conf /etc/apache2/sites-available/edrefcard.conf
-COPY ./www/ /var/www/html
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN mkdir /var/www/html/configs \
-    && chmod uga+rw /var/www/html/configs 
+# Copy application code
+COPY ./www/ /app/
 
-RUN echo "SetEnv PYTHONIOENCODING utf-8" >> /etc/apache2/apache2.conf
+# Create configs directory
+RUN mkdir -p /app/configs \
+    && chmod 755 /app/configs
 
-RUN a2dissite 000-default.conf
-RUN a2ensite edrefcard.conf
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
 
-EXPOSE 80
+# Expose port
+EXPOSE 8000
 
-WORKDIR /var/www/html
-
-CMD  /usr/sbin/apache2ctl -D FOREGROUND
-
+# Run with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "app:app"]

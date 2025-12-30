@@ -1,19 +1,37 @@
 {% extends "base.html" %}
 
-{% block title %}EDRefCard: supported devices{% endblock %}
+{% block title %}EDRefCard - Supported Devices{% endblock %}
 
 {% block content %}
-<div id="list">
-    <h1>EDRefCard: supported devices</h1>
+<div id="container">
+    <div id="list">
+        <h1>🎮 Supported Devices</h1>
+    </div>
+
+    <div id="content">
+        <p>EDRefCard supports the following controllers and input devices:</p>
+
+        <ul>
+            {% for device in devices %}
+            <li>
+                <a href="{{ url_for('show_device', device_name=device.name) }}">
+                    <strong>{{ device.name }}</strong>
+                </a>
+                <a href="{{ url_for('list_configs', deviceFilter=device.name) }}"
+                    title="Search configurations using this device" style="margin-left: 0.5rem;">
+                    🔍
+                </a>
+                <div class="supported-ids">
+                    Device IDs: {{ device.handled_devices | join(', ') }}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <p class="text-muted mt-2">
+            Don't see your device?
+            <a href="https://forums.frontier.co.uk/threads/627609/">Request support on the forums</a>.
+        </p>
+    </div>
 </div>
-<ul>
-    {% for device in devices %}
-    <li>
-        <a href="{{ url_for('show_device', device_name=device.name) }}">{{ device.name }}</a>
-        <a href="{{ url_for('list_configs', deviceFilter=device.name) }}" title="search">&#128269;</a>
-        &nbsp;&nbsp;
-        <div class="supported-ids">Supported IDs: {{ device.handled_devices }}</div>
-    </li>
-    {% endfor %}
-</ul>
 {% endblock %}

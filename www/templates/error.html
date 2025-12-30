@@ -7,8 +7,15 @@
     <div id="banner">
         <h1>EDRefCard</h1>
     </div>
+
     <div id="content">
-        {{ error_message|safe }}
+        <div class="alert alert-error">
+            {{ error_message|safe }}
+        </div>
+
+        <div class="text-center mt-2">
+            <a href="/" class="nav-link" style="display: inline-flex;">Go back home</a>
+        </div>
     </div>
 </div>
 {% endblock %}

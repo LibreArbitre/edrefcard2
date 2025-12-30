@@ -1,88 +1,180 @@
 {% extends "base.html" %}
 
-{% block title %}EDRefCard{% endblock %}
+{% block title %}EDRefCard - Elite: Dangerous Reference Card Generator{% endblock %}
 
 {% block content %}
 <div id="container">
     <div id="banner">
         <h1>EDRefCard</h1>
+        <p class="text-muted">Generate printable reference cards for your Elite: Dangerous bindings</p>
     </div>
+
     <div id="content">
-        Create and optionally publish a graphical reference card for your Elite: Dangerous keyboard and controller
-        bindings.
-        <p />
-        <a href="{{ url_for('list_configs') }}">View a list of published bindings</a>.
-        <p />
-        <p />
-        <a href="{{ url_for('list_devices') }}">View a list of supported devices</a>.
-        <p />
+        <!-- Navigation Links -->
+        <div class="nav-links">
+            <a href="{{ url_for('list_configs') }}" class="nav-link">View published bindings</a>
+            <a href="{{ url_for('list_devices') }}" class="nav-link">Supported devices</a>
+        </div>
+
         <form id="uploadbindings" enctype="multipart/form-data" method="post" action="{{ url_for('generate') }}"
             accept-charset="utf-8">
-            <h3>Choose a bindings file</h3>
-            Your custom bindings files reside as '.binds' files in your local data directory (typically
-            %LOCALAPPDATA%\Frontier Developments\Elite Dangerous\Options\Bindings).
-            <p />
-            Click the button below to pick a file, or drag a '.binds' file onto it.
-            <p />
-            <input id="fileupload" name="bindings" type="file" accept=".binds" required />
-            <p />
-            <h3>Filtering</h3>
-            Select the categories of control to appear on the reference card:
-            <p />
-            <input type="checkbox" checked name="showship" value="on" /> Ship
-            <br />
-            <input type="checkbox" checked name="showsrv" value="on" /> SRV
-            <br />
-            <input type="checkbox" checked name="showscanners" value="on" /> Scanners
-            <br />
-            <input type="checkbox" checked name="showfighter" value="on" /> Fighter
-            <br />
-            <input type="checkbox" checked name="showonfoot" value="on" /> On Foot
-            <br />
-            <input type="checkbox" checked name="showmulticrew" value="on" /> Multicrew
-            <br />
-            <input type="checkbox" checked name="showheadlook" value="on" /> Head Look
-            <br />
-            <input type="checkbox" checked name="showui" value="on" /> UI
-            <br />
-            <input type="checkbox" checked name="showgalaxymap" value="on" /> Galaxy Map
-            <br />
-            <input type="checkbox" checked name="showcamera" value="on" /> Camera
-            <br />
-            <input type="checkbox" checked name="showcommandercreator" value="on" /> Holo-Me
-            <br />
-            <input type="checkbox" checked name="showmisc" value="on" /> Miscellaneous
-            <br />
-            <p />
-            <h3>Color options</h3>
-            You can use colours to highlight modifier buttons or control types:
-            <p />
-            <input type="radio" checked name="styling" value="modifier" /> Color by Modifier
-            <br />
-            <input type="radio" name="styling" value="group" /> Color by Type
-            <br />
-            <input type="radio" name="styling" value="none" /> No Colors
-            <p />
-            <h3>Publishing</h3>
-            To publish your bindings, give a description below (we save a timestamp and which controllers you are using,
-            so no need to mention those):
-            <p />
-            <input type="text" name="description" autofocus size="256" maxlength="190" style="width: 600px;" />
-            <br>
-            <p>
-                Descriptions are curated and no leading punctation is allowed. Offensive and/or spammy descriptions will
-                be removed without prejudice.
-            </p>
-            <div class="button">
-                <button type="submit">
-                    <h3>Generate reference card</h3>
-                </button>
+
+            <!-- File Upload Section -->
+            <div class="form-section">
+                <h3>📂 Choose a bindings file</h3>
+                <p>Your custom bindings files reside as <code>.binds</code> files in your local data directory:</p>
+                <p class="text-muted" style="font-size: 0.9rem;">
+                    <code>%LOCALAPPDATA%\Frontier Developments\Elite Dangerous\Options\Bindings</code>
+                </p>
+
+                <div class="file-upload-wrapper">
+                    <label for="fileupload" class="file-upload" id="dropZone">
+                        <div class="file-upload-icon">📁</div>
+                        <div class="file-upload-text">
+                            <strong>Click to select a file</strong><br>
+                            or drag and drop your .binds file here
+                        </div>
+                    </label>
+                    <input id="fileupload" name="bindings" type="file" accept=".binds" required>
+                </div>
             </div>
-            <hr>
-            <p>Please direct questions, suggestions and support requests to <a
-                    href="https://forums.frontier.co.uk/threads/627609/">the thread on the official Elite: Dangerous
-                    forums</a>.</p>
+
+            <!-- Filtering Section -->
+            <div class="form-section">
+                <h3>🎮 Control Categories</h3>
+                <p>Select which categories to include on your reference card:</p>
+
+                <div class="checkbox-grid">
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showship" value="on">
+                        <span>🚀 Ship</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showsrv" value="on">
+                        <span>🚗 SRV</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showscanners" value="on">
+                        <span>📡 Scanners</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showfighter" value="on">
+                        <span>✈️ Fighter</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showonfoot" value="on">
+                        <span>🚶 On Foot</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showmulticrew" value="on">
+                        <span>👥 Multicrew</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showheadlook" value="on">
+                        <span>👀 Head Look</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showui" value="on">
+                        <span>📱 UI</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showgalaxymap" value="on">
+                        <span>🗺️ Galaxy Map</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showcamera" value="on">
+                        <span>📷 Camera</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showcommandercreator" value="on">
+                        <span>👤 Holo-Me</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" checked name="showmisc" value="on">
+                        <span>⚙️ Misc</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Color Options Section -->
+            <div class="form-section">
+                <h3>🎨 Color Scheme</h3>
+                <p>Choose how to highlight your controls:</p>
+
+                <div class="radio-group">
+                    <label class="radio-item">
+                        <input type="radio" checked name="styling" value="modifier">
+                        <span>Color by Modifier</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="styling" value="group">
+                        <span>Color by Type</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="styling" value="none">
+                        <span>No Colors</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Publishing Section -->
+            <div class="form-section">
+                <h3>📤 Publish (Optional)</h3>
+                <p>Add a description to share your bindings publicly:</p>
+
+                <input type="text" name="description" placeholder="e.g., My HOTAS setup for combat..." maxlength="190">
+
+                <p class="text-muted mt-1" style="font-size: 0.85rem;">
+                    Descriptions are curated. Offensive or spammy content will be removed.
+                </p>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn-primary">
+                🚀 Generate Reference Card
+            </button>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Drag and drop enhancement
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileupload');
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+        });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files.length) {
+            fileInput.files = files;
+            updateFileLabel(files[0].name);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) {
+            updateFileLabel(e.target.files[0].name);
+        }
+    });
+
+    function updateFileLabel(filename) {
+        dropZone.querySelector('.file-upload-text').innerHTML =
+            '<strong>Selected:</strong> ' + filename;
+    }
+</script>
 {% endblock %}

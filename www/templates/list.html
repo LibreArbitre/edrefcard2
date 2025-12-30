@@ -1,51 +1,70 @@
 {% extends "base.html" %}
 
-{% block title %}EDRefCard: public configurations{% endblock %}
+{% block title %}EDRefCard - Public Configurations{% endblock %}
 
 {% block content %}
-<div id="list">
-    <h1>EDRefCard: public configurations</h1>
-</div>
+<div id="container">
+    <div id="list">
+        <h1>📋 Public Configurations</h1>
+    </div>
 
-<div>
-    <form action="{{ url_for('list_configs') }}" id="searchForm">
-        <table>
-            <tr>
-                <td><label for="deviceFilter">Select Controller(s)</label></td>
-                <td><select name="deviceFilter" id="deviceFilter" multiple size="10">
+    <div id="content">
+        <!-- Search Form -->
+        <form action="{{ url_for('list_configs') }}" id="searchForm">
+            <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap;">
+                <div>
+                    <label for="deviceFilter" style="display: block; margin-bottom: 0.5rem; color: var(--ed-orange);">
+                        Filter by Controller
+                    </label>
+                    <select name="deviceFilter" id="deviceFilter" multiple size="6">
                         {% for controller in controllers %}
                         <option value="{{ controller }}" {% if controller in selected_controllers %}selected{% endif %}>
-                            {{ controller }}</option>
+                            {{ controller }}
+                        </option>
                         {% endfor %}
-                    </select></td>
-            </tr>
-            <tr>
-                <td colspan="2"><input type="submit" value="Search"></input></td>
-            </tr>
+                    </select>
+                </div>
+                <div style="padding-top: 1.75rem;">
+                    <input type="submit" value="🔍 Search">
+                </div>
+            </div>
+            <p class="text-muted mt-1" style="font-size: 0.85rem;">
+                Hold Ctrl/Cmd to select multiple controllers
+            </p>
+        </form>
+    </div>
+
+    {% if items %}
+    <div id="content" style="margin-top: 1.5rem;">
+        <table>
+            <thead>
+                <tr>
+                    <th class="description">Description</th>
+                    <th class="controllers">Controllers</th>
+                    <th class="date">Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="description">
+                        <a href="{{ item.url }}">{{ item.description }}</a>
+                    </td>
+                    <td class="controllers">
+                        {{ item.controllers }}
+                    </td>
+                    <td class="date">
+                        {{ item.date }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
-    </form>
+    </div>
+    {% else %}
+    <div id="content" style="margin-top: 1.5rem; text-align: center;">
+        <p class="text-muted">No configurations found matching your criteria.</p>
+    </div>
+    {% endif %}
 </div>
-
-<!-- Search options: {{ search_opts }} -->
-
-<table>
-    <tr>
-        <th align="left" class="description">Description</th>
-        <th align="left" class="controllers">Controllers</th>
-        <th align="left" class="date">Date</th>
-    </tr>
-    {% for item in items %}
-    <tr>
-        <td class="description">
-            <a href="{{ item.url }}">{{ item.description }}</a>
-        </td>
-        <td class="controllers">
-            {{ item.controllers }}
-        </td>
-        <td class="date">
-            {{ item.date }}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
 {% endblock %}

@@ -1,52 +1,81 @@
 {% extends "base.html" %}
 
-{% block title %}EDRefCard{% endblock %}
+{% block title %}EDRefCard - Reference Card{% endblock %}
 
 {% block content %}
-{% if errors.unhandled_devices_warnings %}
-{{ errors.unhandled_devices_warnings|safe }}<br />
-{% endif %}
+<div id="container">
+    <div id="banner">
+        <h1>EDRefCard</h1>
+    </div>
 
-{% if errors.misconfiguration_warnings %}
-{{ errors.misconfiguration_warnings|safe }}<br />
-{% endif %}
+    <div id="content">
+        {% if errors.unhandled_devices_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.unhandled_devices_warnings|safe }}
+        </div>
+        {% endif %}
 
-{% if errors.device_warnings %}
-{{ errors.device_warnings|safe }}<br />
-{% endif %}
+        {% if errors.misconfiguration_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.misconfiguration_warnings|safe }}
+        </div>
+        {% endif %}
 
-{% if errors.errors %}
-{{ errors.errors|safe }}<br />
-{% else %}
-{% for image in created_images %}
-{% if '::' in image %}
-{% set parts = image.split('::') %}
-{% set device = parts[0] %}
-{% set device_index = parts[1]|int %}
-{% else %}
-{% set device = image %}
-{% set device_index = 0 %}
-{% endif %}
+        {% if errors.device_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.device_warnings|safe }}
+        </div>
+        {% endif %}
 
-{% if device_index == 0 %}
-<img width="100%"
-    src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '.jpg') }}" /><br />
-{% else %}
-<img width="100%"
-    src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '-' + device_index|string + '.jpg') }}" /><br />
-{% endif %}
-{% endfor %}
+        {% if errors.errors %}
+        <div class="alert alert-error">
+            {{ errors.errors|safe }}
+        </div>
+        {% else %}
+        {% for image in created_images %}
+        {% if '::' in image %}
+        {% set parts = image.split('::') %}
+        {% set device = parts[0] %}
+        {% set device_index = parts[1]|int %}
+        {% else %}
+        {% set device = image %}
+        {% set device_index = 0 %}
+        {% endif %}
 
-{% if device_for_block_image %}
-<img width="100%"
-    src="{{ url_for('serve_config', path=supported_devices[device_for_block_image]['Template'][:2] + '/' + supported_devices[device_for_block_image]['Template'] + '.jpg') }}" /><br />
-{% endif %}
+        {% if device_index == 0 %}
+        <img class="refcard-image"
+            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '.jpg') }}"
+            alt="{{ device }} Reference Card" />
+        {% else %}
+        <img class="refcard-image"
+            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '-' + device_index|string + '.jpg') }}"
+            alt="{{ device }} Reference Card ({{ device_index }})" />
+        {% endif %}
+        {% endfor %}
 
-{% if not device_for_block_image and public %}
-<p />Link directly to this page with the URL <a href="{{ refcard_url }}">{{ refcard_url }}</a>
-<p />You can download the custom binds file for the configuration shown above at <a href="{{ binds_url }}">{{ binds_url
-    }}</a>. Replace your existing custom binds file with this file to use these controls.
-{% endif %}
-{% endif %}
-<p />
+        {% if device_for_block_image %}
+        <img class="refcard-image"
+            src="{{ url_for('serve_config', path=supported_devices[device_for_block_image]['Template'][:2] + '/' + supported_devices[device_for_block_image]['Template'] + '.jpg') }}"
+            alt="{{ device_for_block_image }} Block Diagram" />
+        {% endif %}
+
+        {% if not device_for_block_image and public and run_id %}
+        <div class="form-section" style="margin-top: 2rem;">
+            <h3>🔗 Share Your Reference Card</h3>
+            <p>
+                <strong>Direct link:</strong><br>
+                <a href="{{ refcard_url }}">{{ refcard_url }}</a>
+            </p>
+            <p>
+                <strong>Download binds file:</strong><br>
+                <a href="{{ binds_url }}">{{ binds_url }}</a>
+            </p>
+            <p class="text-muted">
+                You can replace your existing custom binds file with this file to use these controls.
+            </p>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

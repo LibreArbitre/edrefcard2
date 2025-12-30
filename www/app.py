@@ -19,7 +19,8 @@ WWW_DIR = Path(__file__).parent.resolve()
 scripts_path = WWW_DIR / 'scripts'
 sys.path.insert(0, str(scripts_path))
 
-from scripts.bindings import (
+# Import from the modular package
+from scripts import (
     __version__,
     Config,
     Mode,

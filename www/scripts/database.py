@@ -367,4 +367,15 @@ def get_all_device_names():
             ORDER BY device_display_name
         """).fetchall()
         
-    return [r['device_display_name'] for r in rows]
+    return [r['device_display_name'] for r in rows] # type: ignore
+
+
+def get_all_config_ids():
+    """Get all configuration IDs from the database.
+    
+    Returns:
+        Set of configuration IDs
+    """
+    with get_db() as conn:
+        rows = conn.execute("SELECT id FROM configurations").fetchall()
+        return {r['id'] for r in rows}

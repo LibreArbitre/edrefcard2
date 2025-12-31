@@ -16,7 +16,11 @@
     <div class="stats-grid" style="margin-bottom: 0;">
         <div class="stat-card">
             <div class="stat-value">{{ pickle_count }}</div>
-            <div class="stat-label">Pickle Files Found</div>
+            <div class="stat-label">Files Remaining</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ total_pickles }}</div>
+            <div class="stat-label">Total Valid Files</div>
         </div>
     </div>
 </div>
@@ -51,8 +55,8 @@
     </div>
 
     <p style="color: var(--text-secondary);">
-        No pickle files found in the configs directory.
-        Either migration has already been completed, or no configurations exist yet.
+        All {{ total_pickles }} pickle files found on disk have been imported into the database.
+        The system is fully synchronized.
     </p>
 </div>
 {% endif %}

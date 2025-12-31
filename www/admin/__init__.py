@@ -189,9 +189,23 @@ def migrate_data():
     # GET: show migration form
     from scripts.models import Config
     configs_path = Config.configsPath()
-    pickle_count = len(list(configs_path.glob('**/*.replay'))) if configs_path.exists() else 0
     
-    return render_template('admin/migrate.html', pickle_count=pickle_count)
+    # Get all replay files
+    replay_files = list(configs_path.glob('**/*.replay')) if configs_path.exists() else []
+    total_pickles = len(replay_files)
+    
+    # Get all DB IDs
+    db_ids = db.get_all_config_ids()
+    
+    # Calculate missing
+    missing_count = 0
+    for p in replay_files:
+        if p.stem not in db_ids:
+            missing_count += 1
+            
+    return render_template('admin/migrate.html', 
+                           pickle_count=missing_count,
+                           total_pickles=total_pickles)
 
 
 @admin_bp.route('/stats')

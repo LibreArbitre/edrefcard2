@@ -173,3 +173,50 @@ def stats():
     device_names = db.get_all_device_names()
     
     return render_template('admin/stats.html', stats=stats, device_names=device_names)
+
+
+@admin_bp.route('/debug')
+@require_admin
+def debug_info():
+    """Debug information about the environment."""
+    import sys
+    import shutil
+    from scripts.models import Config
+    
+    # Check Wand status
+    wand_status = "Not Installed"
+    wand_path = "Unknown"
+    wand_error = None
+    try:
+        import wand
+        from wand.version import VERSION
+        wand_status = f"Installed (v{VERSION})"
+        wand_path = wand.__file__
+    except ImportError as e:
+        wand_status = "Import Failed"
+        wand_error = str(e)
+    
+    # Path info
+    www_dir = Path(__file__).parent.parent
+    configs_path = Config.configsPath()
+    
+    # Directory listing
+    config_files = []
+    if configs_path.exists():
+        try:
+            # List top level standard dirs or files
+            for p in sorted(configs_path.glob('*')):
+                config_files.append(f"{p.name} ({'DIR' if p.is_dir() else 'FILE'})")
+        except Exception as e:
+            config_files.append(f"Error listing files: {e}")
+    else:
+        config_files.append("Configs directory does not exist!")
+        
+    return render_template('admin/debug.html',
+                           www_dir=www_dir,
+                           configs_path=configs_path,
+                           wand_status=wand_status,
+                           wand_path=wand_path,
+                           wand_error=wand_error,
+                           config_files=config_files,
+                           sys_path=sys.path)

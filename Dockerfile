@@ -17,6 +17,9 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 # Copy application code
 COPY ./www/ /app/www/
 COPY ./bindings/ /app/bindings/
@@ -25,8 +28,8 @@ COPY ./bindings/ /app/bindings/
 WORKDIR /app/www
 
 # Create configs and data directories
-# Note: configs is now at /app/www/configs to match relative paths, or we adjust
 RUN mkdir -p /app/www/configs /app/www/data \
+    && chown -R appuser:appuser /app/www/configs /app/www/data \
     && chmod 755 /app/www/configs /app/www/data
 
 # Set environment variables
@@ -36,6 +39,9 @@ ENV PYTHONIOENCODING=utf-8
 ENV EDREFCARD_ADMIN_USER=admin
 ENV EDREFCARD_ADMIN_PASS=changeme
 ENV FLASK_SECRET_KEY=change-this-in-production
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8000

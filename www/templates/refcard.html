@@ -28,10 +28,12 @@
         {% endif %}
 
         {% if errors.errors %}
-        <div class="alert alert-error">
+        <div class="alert alert-danger">
             {{ errors.errors|safe }}
         </div>
-        {% else %}
+        {% endif %}
+
+        {% if created_images or device_for_block_image %}
         {% for image in created_images %}
         {% if '::' in image %}
         {% set parts = image.split('::') %}
@@ -75,9 +77,8 @@
             </p>
         </div>
         {% endif %}
-        {% endif %}
     </div>
-    
+
     <!-- Lightbox -->
     <div id="lightbox" class="hidden">
         <span class="lightbox-close">&times;</span>

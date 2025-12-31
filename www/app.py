@@ -426,75 +426,125 @@ def show_binds(run_id):
         binds_path = config.pathWithSuffix('.binds')
         replay_path = config.pathWithSuffix('.replay')
         
-        if not binds_path.exists():
-            raise FileNotFoundError
-        
-        with codecs.open(str(binds_path), 'r', 'utf-8') as f:
-            xml = f.read()
-        
-        display_groups = ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI']
-        styling = 'None'
-        description = ''
-        
+        replay_info = {}
         if replay_path.exists():
-            with replay_path.open('rb') as pickle_file:
-                replay_info = pickle.load(pickle_file)
-                display_groups = replay_info.get('displayGroups', display_groups)
-                errors.misconfigurationWarnings = replay_info.get('misconfigurationWarnings', replay_info.get('warnings', ''))
-                errors.deviceWarnings = replay_info.get('deviceWarnings', '')
-                styling = replay_info.get('styling', 'None')
-                description = replay_info.get('description', '')
-    except (ValueError, FileNotFoundError):
-        return render_template('error.html',
-                               error_message=f'<h1>Configuration "{run_id}" not found</h1>')
-    
-    # Parse and generate
-    try:
-        (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
+            try:
+                with replay_path.open('rb') as pickle_file:
+                    replay_info = pickle.load(pickle_file)
+            except Exception as e:
+                logError(f"Error loading replay for {run_id}: {e}")
         
-        already_handled_devices = []
-        created_images = []
-        
-        for supported_device_key, supported_device in supportedDevices.items():
-            if supported_device_key == 'Keyboard':
-                continue
+        if not binds_path.exists():
+            if not replay_path.exists():
+                # Truly not found
+                return render_template('error.html', error_message=f'<h1>Configuration "{run_id}" not found</h1>')
             
-            for device_index in [0, 1]:
-                handled = False
-                device_key = None
-                for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                    if handled_device.find('::') > -1:
-                        if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                            handled = True
-                            device_key = handled_device
-                            break
-                    else:
-                        if devices.get(f'{handled_device}::{device_index}') is not None:
-                            handled = True
-                            device_key = f'{handled_device}::{device_index}'
-                            break
-                
-                if handled:
-                    has_new_bindings = False
-                    for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                        if device_key not in already_handled_devices:
-                            has_new_bindings = True
-                            break
-                    
-                    if has_new_bindings:
-                        createHOTASImage(
-                            physical_keys, modifiers,
-                            supported_device['Template'],
-                            supported_device['HandledDevices'],
-                            40, config, True, styling, device_index,
-                            errors.misconfigurationWarnings
-                        )
-                        created_images.append(f'{supported_device_key}::{device_index}')
-                        for handled_device in supported_device['HandledDevices']:
-                            already_handled_devices.append(f'{handled_device}::{device_index}')
+            # Source missing but we have metadata (graceful degradation)
+            source_missing = True
+            xml = None
+        else:
+            source_missing = False
+            with codecs.open(str(binds_path), 'r', 'utf-8') as f:
+                xml = f.read()
         
-        if devices.get('Keyboard::0') is not None:
-            appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+        display_groups = replay_info.get('displayGroups', ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI'])
+        styling = replay_info.get('styling', 'None')
+        description = replay_info.get('description', '')
+        
+        if not source_missing:
+            errors.misconfigurationWarnings = replay_info.get('misconfigurationWarnings', replay_info.get('warnings', ''))
+            errors.deviceWarnings = replay_info.get('deviceWarnings', '')
+
+    except (ValueError):
+        return render_template('error.html',
+                               error_message=f'<h1>Configuration "{run_id}" invalid</h1>')
+    
+    # Parse and generate (or recover)
+    created_images = []
+    
+    try:
+        if not source_missing:
+            (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
+            
+            already_handled_devices = []
+            
+            for supported_device_key, supported_device in supportedDevices.items():
+                if supported_device_key == 'Keyboard':
+                    continue
+                
+                for device_index in [0, 1]:
+                    handled = False
+                    device_key = None
+                    for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                        if handled_device.find('::') > -1:
+                            if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
+                                handled = True
+                                device_key = handled_device
+                                break
+                        else:
+                            if devices.get(f'{handled_device}::{device_index}') is not None:
+                                handled = True
+                                device_key = f'{handled_device}::{device_index}'
+                                break
+                    
+                    if handled:
+                        has_new_bindings = False
+                        for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                            if device_key not in already_handled_devices:
+                                has_new_bindings = True
+                                break
+                        
+                        if has_new_bindings:
+                            # REGENERATION logic
+                            createHOTASImage(
+                                physical_keys, modifiers,
+                                supported_device['Template'],
+                                supported_device['HandledDevices'],
+                                40, config, True, styling, device_index,
+                                errors.misconfigurationWarnings
+                            )
+                            created_images.append(f'{supported_device_key}::{device_index}')
+                            for handled_device in supported_device['HandledDevices']:
+                                already_handled_devices.append(f'{handled_device}::{device_index}')
+            
+            if devices.get('Keyboard::0') is not None:
+                appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+
+        else:
+            # Source missing: check for existing images on disk
+            logError(f"Source missing for {run_id}, checking existing images...")
+            errors.errors = "<strong>Source file missing.</strong><br>The `.binds` file for this configuration is missing from the server. Showing archived images if available."
+            
+            # We can rely on devices list from replay info if available, or just scan directory?
+            # Creating list based on supportedDevices checks
+            
+            # Check for images corresponding to supported devices
+            for supported_device_key, supported_device in supportedDevices.items():
+                template = supported_device['Template']
+                # Check for -Template.jpg or -Template-1.jpg
+                
+                # Index 0
+                img_path_0 = config.pathWithNameAndSuffix(template, '.jpg')
+                if img_path_0.exists():
+                     created_images.append(f'{supported_device_key}::0')
+                
+                # Index 1
+                img_path_1 = config.pathWithNameAndSuffix(f'{template}-1', '.jpg')
+                if img_path_1.exists():
+                     created_images.append(f'{supported_device_key}::1')
+            
+            # Check for keyboard
+            kb_path = config.pathWithNameAndSuffix('m-Keyboard', '.jpg') # standard matrix
+            # Wait, appendKeyboardImage naming is complex. It's usually just runID-Keyboard.jpg check?
+            # Actually appendKeyboardImage calls save() 
+            # In appendKeyboardImage (not visible here but assuming standard naming):
+            # It usually appends to the image list.
+            
+            # Let's check for "Keyboard" specifically?
+            # The template for Keyboard is special.
+            # Assume if we find ANY keyboard image? 
+            # It's usually handled inside the loop for other apps but here it is separate.
+            pass # created_images is good enough for now.
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')

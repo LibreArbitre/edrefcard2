@@ -63,7 +63,8 @@ print(f"Application configured with Web Root: {web_root}")
 # Initialize SQLite database
 # Initialize SQLite database
 from scripts.database import init_db, get_configuration_stats, migrate_from_pickle
-DB_PATH = WWW_DIR / 'data' / 'edrefcard.db'
+# Store DB in configs folder for persistence
+DB_PATH = WWW_DIR / 'configs' / 'edrefcard.db'
 init_db(DB_PATH)
 
 # Auto-migrate legacy data if database is empty

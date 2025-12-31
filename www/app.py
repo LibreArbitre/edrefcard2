@@ -420,51 +420,61 @@ def show_binds(run_id):
                                error_message=f'<h1>Configuration "{run_id}" not found</h1>')
     
     # Parse and generate
-    (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
-    
-    already_handled_devices = []
-    created_images = []
-    
-    for supported_device_key, supported_device in supportedDevices.items():
-        if supported_device_key == 'Keyboard':
-            continue
+    try:
+        (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
         
-        for device_index in [0, 1]:
-            handled = False
-            device_key = None
-            for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                if handled_device.find('::') > -1:
-                    if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                        handled = True
-                        device_key = handled_device
-                        break
-                else:
-                    if devices.get(f'{handled_device}::{device_index}') is not None:
-                        handled = True
-                        device_key = f'{handled_device}::{device_index}'
-                        break
+        already_handled_devices = []
+        created_images = []
+        
+        for supported_device_key, supported_device in supportedDevices.items():
+            if supported_device_key == 'Keyboard':
+                continue
             
-            if handled:
-                has_new_bindings = False
-                for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                    if device_key not in already_handled_devices:
-                        has_new_bindings = True
-                        break
+            for device_index in [0, 1]:
+                handled = False
+                device_key = None
+                for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                    if handled_device.find('::') > -1:
+                        if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
+                            handled = True
+                            device_key = handled_device
+                            break
+                    else:
+                        if devices.get(f'{handled_device}::{device_index}') is not None:
+                            handled = True
+                            device_key = f'{handled_device}::{device_index}'
+                            break
                 
-                if has_new_bindings:
-                    createHOTASImage(
-                        physical_keys, modifiers,
-                        supported_device['Template'],
-                        supported_device['HandledDevices'],
-                        40, config, True, styling, device_index,
-                        errors.misconfigurationWarnings
-                    )
-                    created_images.append(f'{supported_device_key}::{device_index}')
-                    for handled_device in supported_device['HandledDevices']:
-                        already_handled_devices.append(f'{handled_device}::{device_index}')
-    
-    if devices.get('Keyboard::0') is not None:
-        appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+                if handled:
+                    has_new_bindings = False
+                    for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                        if device_key not in already_handled_devices:
+                            has_new_bindings = True
+                            break
+                    
+                    if has_new_bindings:
+                        createHOTASImage(
+                            physical_keys, modifiers,
+                            supported_device['Template'],
+                            supported_device['HandledDevices'],
+                            40, config, True, styling, device_index,
+                            errors.misconfigurationWarnings
+                        )
+                        created_images.append(f'{supported_device_key}::{device_index}')
+                        for handled_device in supported_device['HandledDevices']:
+                            already_handled_devices.append(f'{handled_device}::{device_index}')
+        
+        if devices.get('Keyboard::0') is not None:
+            appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+
+    except RuntimeError as e:
+        logError(f'Runtime error in generation for {run_id}: {e}\n')
+        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+    except Exception as e:
+        logError(f'Unexpected error in generation for {run_id}: {e}\n')
+        import traceback
+        traceback.print_exc()
+        errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
     # Use url_for for reliable external links
     refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)

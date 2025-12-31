@@ -49,8 +49,13 @@ app.config['WWW_DIR'] = WWW_DIR
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Configure the bindings Config class for Flask
+# Configure the bindings Config class for Flask
 Config.setDirRoot(WWW_DIR)
-Config.setWebRoot('https://edrefcard.info/')
+web_root = os.environ.get('SCRIPT_URI', 'http://localhost:8080/')
+if not web_root.endswith('/'):
+    web_root += '/'
+Config.setWebRoot(web_root)
+print(f"Application configured with Web Root: {web_root}")
 
 # Initialize SQLite database
 # Initialize SQLite database

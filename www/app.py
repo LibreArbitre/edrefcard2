@@ -108,7 +108,7 @@ limiter = Limiter(
     app=app,
     key_func=get_remote_address,
     default_limits=["500 per day", "100 per hour"],
-    storage_uri="memory://",  # Use Redis in production for multi-worker
+    storage_uri="memory://",
     strategy="fixed-window"
 )
 
@@ -120,6 +120,14 @@ app.cli.add_command(migrate_legacy_command)
 app.cli.add_command(import_defaults_command)
 
 
+from flask_limiter.errors import RateLimitExceeded
+
+@app.errorhandler(RateLimitExceeded)
+def handle_ratelimit_error(e):
+    """Handle rate limit exceeded."""
+    return render_template('error.html', 
+                           error_message=f'<h1>Rate Limit Exceeded</h1><p>{e.description}</p>'), 429
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Handle uncaught exceptions and log them."""
@@ -127,19 +135,13 @@ def handle_exception(e):
     tb = traceback.format_exc()
     
     # Log to our memory buffer
-    # We need to import logError properly or access the buffer directly if circular imports issue
-    # Since app.py imports scripts, and scripts.utils has logError, we can try using it.
     try:
         from scripts import logError
         logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
     except:
         print(f"Failed to log to memory buffer: {e}")
         
-    # Pass through to default handler if we want standard 500 behavior, or render error page
-    # For diagnosis, rendering a generic error page with the error details (if admin) or generic if public
-    # But for now, just logging it is critical.
-    
-    # Re-raise so Flask handles the response (500)
+    # Re-raise key system exceptions
     if isinstance(e,  (KeyboardInterrupt, SystemExit)):
         raise e
         

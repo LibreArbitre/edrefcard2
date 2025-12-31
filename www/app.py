@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Get the www directory path
 WWW_DIR = Path(__file__).parent.resolve()
@@ -82,7 +84,15 @@ except Exception as e:
 from admin import admin_bp
 app.register_blueprint(admin_bp)
 
-# Register CLI commands
+# Rate limiting configuration
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["500 per day", "100 per hour"],
+    storage_uri="memory://",  # Use Redis in production for multi-worker
+    strategy="fixed-window"
+)
+
 # Register CLI commands
 from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command, import_defaults_command
 app.cli.add_command(clean_cache_command)
@@ -108,6 +118,46 @@ def inject_version():
     return {'version': __version__}
 
 
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # Prevent clickjacking
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    
+    # Prevent MIME sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
+    # XSS Protection (legacy browsers)
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # Content Security Policy
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self'; "
+        "frame-ancestors 'self'"
+    )
+    
+    # HSTS (only in production with HTTPS)
+    if not app.debug and request.is_secure:
+        response.headers['Strict-Transport-Security'] = (
+            'max-age=31536000; includeSubDomains; preload'
+        )
+    
+    # Referrer policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    # Permissions policy
+    response.headers['Permissions-Policy'] = (
+        'geolocation=(), microphone=(), camera=()'
+    )
+    
+    return response
+
+
+
 @app.route('/')
 def index():
     """Render the home page."""
@@ -115,6 +165,7 @@ def index():
 
 
 @app.route('/generate', methods=['POST'])
+@limiter.limit("10 per hour")  # Max 10 uploads per hour per IP
 def generate():
     """Process uploaded bindings file and generate reference cards."""
     errors = Errors()
@@ -131,9 +182,40 @@ def generate():
                                error_message='<h1>No bindings file supplied; please go back and select your binds file as per the instructions.</h1>')
     
     file = request.files['bindings']
-    if file.filename == '':
+    if not file or not file.filename:
         return render_template('error.html',
                                error_message='<h1>No bindings file supplied; please go back and select your binds file as per the instructions.</h1>')
+    
+    # Enhanced file validation
+    # Validate file extension
+    if not file.filename.endswith('.binds'):
+        return render_template('error.html',
+                               error_message='<h1>Only .binds files are allowed</h1>')
+    
+    # Read file with size limit
+    try:
+        xml_bytes = file.read()
+        
+        # Check file size (500KB max for a bindings file)
+        if len(xml_bytes) > 512000:
+            return render_template('error.html',
+                                   error_message='<h1>File too large. Maximum size is 500KB</h1>')
+        
+        # Decode with strict validation
+        xml = xml_bytes.decode('utf-8')
+        
+        # Basic XML bomb detection (excessive repetition)
+        if xml.count('<!ENTITY') > 10:
+            return render_template('error.html',
+                                   error_message='<h1>Invalid XML structure detected</h1>')
+        
+    except UnicodeDecodeError:
+        return render_template('error.html',
+                               error_message='<h1>Invalid file encoding. UTF-8 required</h1>')
+    except Exception as e:
+        logError(f"File validation error: {e}\n")
+        return render_template('error.html',
+                               error_message='<h1>File validation failed</h1>')
     
     # Parse form options
     display_groups = parseFormData(request.form)
@@ -149,13 +231,6 @@ def generate():
     config = Config.newRandom()
     config.makeDir()
     run_id = config.name
-    
-    # Read and save bindings file
-    try:
-        xml = file.read().decode('utf-8')
-    except UnicodeDecodeError:
-        return render_template('error.html',
-                               error_message='<h1>Could not decode the bindings file. Please ensure it is a valid XML file.</h1>')
     
     binds_path = config.pathWithSuffix('.binds')
     with open(str(binds_path), 'w', encoding='utf-8') as f:

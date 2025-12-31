@@ -705,45 +705,81 @@ def generate_pdf(run_id, page_format='A4'):
     pdf = FPDF(orientation='P', unit='mm', format=page_format)
     pdf.set_auto_page_break(False)
     
+    import tempfile
+    
     for img_path in ordered_images:
         try:
-            # Determine orientation
-            # Open with PIL to check dimensions
+            # Open with PIL to check dimensions and sanitize
             from PIL import Image
+            
             with Image.open(str(img_path)) as im:
+                # Convert to RGB to ensure compatibility (remove Alpha, handle CMYK)
+                if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
+                    # Create a white background
+                    bg = Image.new('RGB', im.size, (255, 255, 255))
+                    # Paste image on top (using alpha channel if available)
+                    if im.mode != 'RGBA':
+                        im = im.convert('RGBA')
+                    bg.paste(im, mask=im.split()[3])
+                    im = bg
+                elif im.mode != 'RGB':
+                    im = im.convert('RGB')
+                
                 width, height = im.size
                 ratio = width / height
                 
-            # Landscape if wider than tall (controllers), Portrait for keyboard usually
-            orientation = 'L' if ratio >= 1.2 else 'P'
-            
-            pdf.add_page(orientation=orientation)
-            
-            # Dimensions in mm
-            if orientation == 'L':
-                # For A4/Letter, roughly
-                # A4: 210x297
-                pw = 297 if page_format == 'A4' else 279 # Letter width in L
-                ph = 210 if page_format == 'A4' else 216 # Letter height in L
-            else:
-                pw = 210 if page_format == 'A4' else 216 
-                ph = 297 if page_format == 'A4' else 279
+                # Landscape if wider than tall
+                orientation = 'L' if ratio >= 1.2 else 'P'
                 
-            # Calculate scaling to fit
-            # FPDF auto-scales if we give w or h. 
-            # We want to fit within margins? No, we want full page usually or max fit.
-            # Let's blindly fit to width for now.
-            
-            # FPDF2 stores page width/height in w/h properties (accounting for orientation? Need to check version)
-            # PyFPDF/FPDF usually has w/h as current page dimensions.
-            
-            # Safe bet: use get_page_format or current variables if reliable.
-            # But simpler: rely on FPDF to fit if we say w=pdf.w
-            
-            # NOTE: "Insufficient data" often means the file isn't readable or FPDF can't parse header.
-            # Ensure path is string.
-            
-            pdf.image(str(img_path), x=0, y=0, w=pdf.w, h=pdf.h)
+                pdf.add_page(orientation=orientation)
+                
+                # Page dimensions in mm
+                if orientation == 'L':
+                    # A4: 297x210, Letter: 279x216
+                    pw = 297 if page_format == 'A4' else 279 
+                    ph = 210 if page_format == 'A4' else 216 
+                else:
+                    pw = 210 if page_format == 'A4' else 216 
+                    ph = 297 if page_format == 'A4' else 279
+                
+                # Calculate fit dimensions (keep aspect ratio)
+                # Available space (assuming small margin or full bleed)
+                # Let's target full bleed or slight margin
+                
+                # Setup target dimensions
+                target_w = pw
+                target_h = ph
+                
+                # Scale logic
+                # If image ratio > page ratio (Image constitutes "Wider"), fit to width
+                page_ratio = pw / ph
+                
+                if ratio > page_ratio:
+                    # Fit Width
+                    w = target_w
+                    h = target_w / ratio
+                else:
+                    # Fit Height
+                    h = target_h
+                    w = target_h * ratio
+                
+                # Center image
+                x = (pw - w) / 2
+                y = (ph - h) / 2
+                
+                # Save sanitized image to temp file for FPDF
+                # FPDF (pyfpdf) works best with files.
+                # using a temp file with .jpg extension
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_img:
+                    im.save(tmp_img, 'JPEG', quality=95)
+                    tmp_name = tmp_img.name
+                
+                try:
+                    pdf.image(tmp_name, x=x, y=y, w=w, h=h)
+                finally:
+                    # Cleanup temp file
+                    if os.path.exists(tmp_name):
+                        os.unlink(tmp_name)
             
         except Exception as e:
             logError(f"Error adding image {img_path} to PDF: {e}")

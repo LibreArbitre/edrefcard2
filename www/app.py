@@ -635,7 +635,8 @@ def generate_pdf(run_id, page_format='A4'):
     
     config = Config(run_id)
     pdf_filename = f"{run_id}-{page_format}.pdf"
-    pdf_path = config.path.parent / pdf_filename # Save in the same folder as images (e.g. configs/un/)
+    # Config.path is a method, not a property
+    pdf_path = config.path().parent / pdf_filename # Save in the same folder as images (e.g. configs/un/)
     
     # Return existing if cached
     if pdf_path.exists():
@@ -668,7 +669,7 @@ def generate_pdf(run_id, page_format='A4'):
     # However, for the PDF, just having them all is usually fine.
     # The standard naming is: {runID}-{template}.jpg or {runID}-{template}-{index}.jpg
     
-    candidate_files = sorted(list(config.path.parent.glob(f"{run_id}-*.jpg")))
+    candidate_files = sorted(list(config.path().parent.glob(f"{run_id}-*.jpg")))
     
     if not candidate_files:
         return None

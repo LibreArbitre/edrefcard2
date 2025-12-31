@@ -4,6 +4,7 @@
 ### Bug Fixes
 * **Template Error**: Fixed Jinja2 TemplateSyntaxError in `refcard.html` that caused 500 errors on configuration pages
 * **Data Migration**: Fixed auto-migration to handle partial database states (88 configs successfully restored)
+* **Error Handling**: Fixed `Config.path` method call error in Admin module that caused 500 errors
 * **CI/CD**: Resolved ruff linting failures by updating configuration (748 → 30 errors, 96% reduction)
 
 ### Features

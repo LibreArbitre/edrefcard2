@@ -619,18 +619,114 @@ def show_device(device_name):
     
     return render_template('refcard.html',
                            run_id='',
-                           errors={
-                               'unhandled_devices_warnings': '',
-                               'misconfiguration_warnings': '',
-                               'device_warnings': '',
-                               'errors': '',
-                           },
                            created_images=[],
                            device_for_block_image=device_name,
                            public=False,
                            refcard_url='',
                            binds_url='',
                            supported_devices=supportedDevices)
+
+
+def generate_pdf(run_id, page_format='A4'):
+    """Generate a PDF for the given run_id's images."""
+    from fpdf import FPDF
+    from scripts.models import Config
+    import os
+    
+    config = Config(run_id)
+    pdf_filename = f"{run_id}-{page_format}.pdf"
+    pdf_path = config.path.parent / pdf_filename # Save in the same folder as images (e.g. configs/un/)
+    
+    # Return existing if cached
+    if pdf_path.exists():
+        return str(pdf_path)
+
+    # Collect images
+    # Similar logic to show_binds to find all images
+    # We can actually just list directory and filter by run_id prefix and .jpg
+    # BUT we need to respect the order: Devices, Block, Keyboard
+    
+    # Simpler approach: Look for standard generated names
+    # Access supportedDevices to know what to look for
+    # This might be slow if we iterate everything. 
+    # Alternative: Config.get_generated_images(run_id) - but that doesn't exist.
+    
+    # Let's iterate supported devices like show_binds does, but purely checking files
+    # We can reuse the logic from show_binds loosely but we don't have the 'devices' dict from parsing
+    # UNLESS we parse again? No, that's heavy.
+    # We can just glob the directory for RunID*.jpg?
+    # Globbing might return partial matches or unordered.
+    
+    # Let's try to match existing logic:
+    # 1. Device images
+    # 2. Keyboard images
+    
+    found_images = []
+    
+    # We will search for all files starting with run_id in the folder
+    # Sort them to try and keep some order, but correct ordering is hard without metadata.
+    # However, for the PDF, just having them all is usually fine.
+    # The standard naming is: {runID}-{template}.jpg or {runID}-{template}-{index}.jpg
+    
+    candidate_files = sorted(list(config.path.parent.glob(f"{run_id}-*.jpg")))
+    
+    if not candidate_files:
+        return None
+        
+    # Create PDF
+    # Orientation is set per page
+    pdf = FPDF(orientation='P', unit='mm', format=page_format)
+    pdf.set_auto_page_break(False)
+    
+    for img_path in candidate_files:
+        # Determine orientation
+        try:
+            from PIL import Image
+            with Image.open(img_path) as im:
+                width, height = im.size
+                ratio = width / height
+                
+            orientation = 'L' if ratio >= 1.2 else 'P'
+            
+            pdf.add_page(orientation=orientation)
+            
+            # Fit to page
+            # FPDF2 handles this well with basic math
+            # Page dimensions
+            pw = pdf.w
+            ph = pdf.h
+            
+            # Add image filling the page
+            pdf.image(str(img_path), x=0, y=0, w=pw, h=ph)
+            
+        except Exception as e:
+            logError(f"Error adding image {img_path} to PDF: {e}")
+            continue
+
+    pdf.output(str(pdf_path))
+    return str(pdf_path)
+
+@app.route('/download/<run_id>/pdf')
+def download_pdf(run_id):
+    """Download existing or generate new PDF."""
+    format_type = request.args.get('format', 'A4')
+    if format_type not in ['A4', 'Letter']:
+        format_type = 'A4'
+        
+    try:
+        pdf_path = generate_pdf(run_id, format_type)
+        if pdf_path and os.path.exists(pdf_path):
+             return send_from_directory(
+                os.path.dirname(pdf_path),
+                os.path.basename(pdf_path),
+                as_attachment=True,
+                download_name=f"EDRefCard-{run_id}-{format_type}.pdf"
+            )
+        else:
+             return render_template('error.html', error_message='<h1>No images found to generate PDF</h1>')
+    except Exception as e:
+        logError(f"PDF Gen Error: {e}")
+        return render_template('error.html', error_message=f'<h1>Error generating PDF</h1><p>{e}</p>')
 
 
 @app.route('/configs/<path:path>')

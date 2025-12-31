@@ -11,3 +11,4 @@ ruff
 mypy
 types-Flask
 types-requests
+fpdf2

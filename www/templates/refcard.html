@@ -72,6 +72,13 @@
                 <strong>Download binds file:</strong><br>
                 <a href="{{ binds_url }}">{{ binds_url }}</a>
             </p>
+            <p>
+                <strong>Download PDF (Archived):</strong><br>
+                <a href="{{ url_for('download_pdf', run_id=run_id, format='A4') }}"
+                    class="btn btn-sm btn-outline-secondary">📄 A4 Format</a>
+                <a href="{{ url_for('download_pdf', run_id=run_id, format='Letter') }}"
+                    class="btn btn-sm btn-outline-secondary" style="margin-left: 10px;">📄 Letter Format</a>
+            </p>
             <p class="text-muted">
                 You can replace your existing custom binds file with this file to use these controls.
             </p>

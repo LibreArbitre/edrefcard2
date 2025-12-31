@@ -38,6 +38,7 @@ from scripts import (
     controllerNames,
     logError,
 )
+from scripts import database
 
 app = Flask(__name__, 
             static_folder=str(WWW_DIR), 
@@ -341,6 +342,21 @@ def generate():
     # Save replay info if public
     if public:
         saveReplayInfo(config, description, styling, display_groups, devices, errors)
+        
+        # Also save to SQLite database
+        try:
+            database.create_configuration(
+                config_id=run_id,
+                description=description,
+                styling=styling,
+                display_groups=display_groups,
+                devices=devices,
+                unhandled_warnings=errors.unhandledDevicesWarnings,
+                device_warnings=errors.deviceWarnings,
+                misc_warnings=errors.misconfigurationWarnings
+            )
+        except Exception as e:
+            logError(f"Database insertion error for {run_id}: {e}")
     
     # Use url_for for reliable external links
     refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)

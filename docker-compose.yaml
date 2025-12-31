@@ -3,8 +3,6 @@ version: '3.8'
 services:
   edrefcard:
     build: .
-    ports:
-      - "8080:8000"
     volumes:
       - ./configs:/app/www/configs
     environment:

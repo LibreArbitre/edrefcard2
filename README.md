@@ -32,22 +32,28 @@ python app.py
 # Access at http://localhost:5000
 ```
 
-### Docker (Recommended)
+### Docker (Recommended for Local Development)
 
 Build and run with Docker:
 
 ```bash
 docker build -t edrefcard .
 docker run -d --rm --name edrefcard -p 8080:8000 edrefcard
+# Access at http://localhost:8080
 ```
 
-Or with docker-compose:
+Or with docker-compose (add port mapping for local access):
 
 ```bash
+# For local development, add ports to docker-compose.yaml:
+# ports:
+#   - "8080:8000"
 docker-compose up -d
+# Access at http://localhost:8080
 ```
 
-EDRefCard can then be accessed at http://localhost:8080
+> [!NOTE]
+> For production deployment with Traefik/Dokploy, remove the `ports` section from docker-compose.yaml. Traefik connects directly to the container via Docker network on port 8000.
 
 ## Project Structure
 

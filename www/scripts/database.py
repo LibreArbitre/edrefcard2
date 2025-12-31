@@ -73,6 +73,10 @@ def init_db(db_path):
 @contextmanager
 def get_db():
     """Get a database connection context manager."""
+    # DIAGNOSTIC
+    if not DB_PATH.parent.exists():
+        print(f"DB_CRIT: Parent dir {DB_PATH.parent} DOES NOT EXIST!")
+    
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

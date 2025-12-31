@@ -53,9 +53,25 @@ Config.setDirRoot(WWW_DIR)
 Config.setWebRoot('https://edrefcard.info/')
 
 # Initialize SQLite database
-from scripts.database import init_db
+# Initialize SQLite database
+from scripts.database import init_db, get_configuration_stats, migrate_from_pickle
 DB_PATH = WWW_DIR / 'data' / 'edrefcard.db'
 init_db(DB_PATH)
+
+# Auto-migrate legacy data if database is empty
+try:
+    stats = get_configuration_stats()
+    if stats['total_configurations'] == 0:
+        print("Database empty. Checking for legacy configurations to migrate...")
+        configs_dir = WWW_DIR / 'configs'
+        if configs_dir.exists():
+            migrated, errors = migrate_from_pickle(configs_dir)
+            if migrated > 0:
+                print(f"Auto-migrated {migrated} legacy configurations ({errors} errors).")
+            else:
+                print("No legacy configurations found.")
+except Exception as e:
+    print(f"Warning: Auto-migration check failed: {e}")
 
 # Register admin blueprint
 from admin import admin_bp

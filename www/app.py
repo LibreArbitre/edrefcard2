@@ -438,10 +438,20 @@ def serve_config(path):
     configs_folder = get_configs_path()
     return send_from_directory(configs_folder, path)
 
+@app.route('/scripts/<path:filename>')
+def serve_scripts(filename):
+    """Serve script files."""
+    return send_from_directory(scripts_path, filename)
+
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files."""
-    return send_from_directory(WWW_DIR, filename)
+    # print(f"DEBUG: serve_static called with filename={filename}")
+    try:
+        return send_from_directory(WWW_DIR, filename)
+    except Exception as e:
+        # print(f"DEBUG: serve_static error for {filename}: {e}")
+        raise e
 
 
 # Serve CSS file
@@ -481,4 +491,4 @@ if __name__ == '__main__':
     print(f"WWW directory: {WWW_DIR}")
     print(f"Configs directory: {configs_path}")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8080)

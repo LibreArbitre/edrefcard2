@@ -658,6 +658,70 @@ main {
   margin-bottom: var(--spacing-sm);
 }
 
-.mb-2 {
-  margin-bottom: var(--spacing-md);
+
+/* ===== Lightbox ===== */
+.lightbox {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.lightbox.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lightbox-content {
+  max-width: 95%;
+  max-height: 95vh;
+  box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
+  border-radius: var(--radius-sm);
+  animation: zoom-in 0.3s ease;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 2rem;
+  color: var(--text-primary);
+  font-size: 3rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: color 0.3s ease;
+  line-height: 1;
+}
+
+.lightbox-close:hover {
+  color: var(--ed-orange);
+}
+
+.lightbox-trigger {
+  cursor: zoom-in;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lightbox-trigger:hover {
+  transform: scale(1.01);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes zoom-in {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }

@@ -52,13 +52,13 @@ jobs:
     - name: Test Docker build and startup
       if: matrix.python-version == '3.13'
       run: |
-        # Build the Docker image
-        docker-compose build
+        # Build the Docker image (using Docker Compose v2)
+        docker compose build
         # Start the container
-        docker-compose up -d
+        docker compose up -d
         # Wait for application to be ready
         sleep 10
         # Smoke test: verify the app responds
         curl -f http://localhost:8080/ || exit 1
         # Cleanup
-        docker-compose down
+        docker compose down

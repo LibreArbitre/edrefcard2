@@ -102,6 +102,34 @@ app.cli.add_command(migrate_legacy_command)
 app.cli.add_command(import_defaults_command)
 
 
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Handle uncaught exceptions and log them."""
+    import traceback
+    tb = traceback.format_exc()
+    
+    # Log to our memory buffer
+    # We need to import logError properly or access the buffer directly if circular imports issue
+    # Since app.py imports scripts, and scripts.utils has logError, we can try using it.
+    try:
+        from scripts import logError
+        logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
+    except:
+        print(f"Failed to log to memory buffer: {e}")
+        
+    # Pass through to default handler if we want standard 500 behavior, or render error page
+    # For diagnosis, rendering a generic error page with the error details (if admin) or generic if public
+    # But for now, just logging it is critical.
+    
+    # Re-raise so Flask handles the response (500)
+    if isinstance(e,  (KeyboardInterrupt, SystemExit)):
+        raise e
+        
+    # Prepare error message for user
+    return render_template('error.html', 
+                           error_message=f'<h1>Internal Server Error</h1><p>An unexpected error occurred.</p><!-- {str(e)} -->'), 500
+
+
 def get_configs_path():
     """Get the path to the configs directory."""
     return app.config['CONFIGS_FOLDER']

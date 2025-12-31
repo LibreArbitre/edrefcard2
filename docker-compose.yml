@@ -4,7 +4,10 @@ services:
   edrefcard:
     build: .
     volumes:
-      - ./configs:/app/www/configs
+      - edrefcard_data:/app/www/configs
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
+
+volumes:
+  edrefcard_data:

@@ -84,10 +84,11 @@ app.register_blueprint(admin_bp)
 
 # Register CLI commands
 # Register CLI commands
-from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command
+from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command, import_defaults_command
 app.cli.add_command(clean_cache_command)
 app.cli.add_command(find_unsupported_command)
 app.cli.add_command(migrate_legacy_command)
+app.cli.add_command(import_defaults_command)
 
 
 def get_configs_path():

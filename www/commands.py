@@ -86,3 +86,89 @@ def migrate_legacy_command():
     click.echo(f"Migrating from {configs_path}...")
     migrated, errors = database.migrate_from_pickle(configs_path)
     click.echo(f"Migration complete: {migrated} migrated, {errors} errors.")
+
+
+@click.command('import-defaults')
+@click.option('--limit', default=None, type=int, help='Limit number of files to import')
+@with_appcontext
+def import_defaults_command(limit):
+    """Import default bindings from bindings/Defaults 3.3."""
+    from flask import current_app
+    from scripts import database, parser
+    from scripts.models import Config, Errors
+    
+    # Path to Defaults 3.3 relative to www root (parent of www is project root)
+    # www/../bindings/Defaults 3.3
+    defaults_dir = current_app.config['WWW_DIR'].parent / 'bindings' / 'Defaults 3.3'
+    
+    if not defaults_dir.exists():
+        click.echo(f"Defaults directory not found: {defaults_dir}")
+        return
+
+    click.echo(f"Importing defaults from {defaults_dir}...")
+    
+    count = 0
+    errors_count = 0
+    
+    # Standard display groups for defaults
+    display_groups = ['Ship', 'SRV', 'OnFoot', 'UI', 'Galaxy map', 'Head look', 'Scanners', 'Fighter', 'Multicrew', 'Camera', 'Holo-Me', 'Misc']
+    
+    bind_files = list(defaults_dir.glob('*.binds'))
+    if limit:
+        bind_files = bind_files[:limit]
+        
+    for bind_file in bind_files:
+        try:
+            # Create a new config with random ID
+            config = Config.newRandom()
+            config.makeDir()
+            
+            # Read and parse
+            with bind_file.open('r', encoding='utf-8') as f:
+                xml = f.read()
+                
+            parse_errors = Errors()
+            (physicalKeys, modifiers, devices) = parser.parseBindings(
+                config.name, xml, display_groups, parse_errors
+            )
+            
+            if parse_errors.hasErrors():
+                click.echo(f"Skipping {bind_file.name}: Parsing error")
+                errors_count += 1
+                continue
+                
+            # Create description from filename
+            description = f"Default: {bind_file.stem}"
+            
+            # Save .replay file (crucial for rendering)
+            parser.saveReplayInfo(
+                config=config,
+                description=description,
+                styling='None',
+                displayGroups=display_groups,
+                devices=devices,
+                errors=parse_errors
+            )
+            
+            # Save to database
+            # Extract warnings for DB
+            database.create_configuration(
+                config_id=config.name,
+                description=description,
+                styling='None',
+                display_groups=display_groups,
+                devices=devices,
+                unhandled_warnings=parse_errors.unhandledDevicesWarnings,
+                device_warnings=parse_errors.deviceWarnings,
+                misc_warnings=parse_errors.misconfigurationWarnings
+            )
+            
+            count += 1
+            if count % 10 == 0:
+                click.echo(f"Imported {count} configurations...")
+                
+        except Exception as e:
+            click.echo(f"Error importing {bind_file.name}: {e}")
+            errors_count += 1
+
+    click.echo(f"Import complete: {count} imported, {errors_count} errors.")

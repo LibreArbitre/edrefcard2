@@ -2,7 +2,7 @@
 
 Elite: Dangerous has a great many command bindings to learn. To help with that, EDRefCard generates a printable reference card from your Elite: Dangerous bindings file.
 
-Currently hosted at [https://edrefcard.info/](https://edrefcard.info/).
+Currently hosted at [https://edrefcard.dp.l0l.fr/](https://edrefcard.dp.l0l.fr/).
 
 ## Dependencies
 

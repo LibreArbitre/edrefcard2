@@ -5,3 +5,8 @@ lxml
 wand
 flask
 gunicorn
+
+ruff
+mypy
+types-Flask
+types-requests

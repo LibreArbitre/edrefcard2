@@ -59,14 +59,30 @@ web_root = os.environ.get('APP_URL') or os.environ.get('SCRIPT_URI', 'http://loc
 if not web_root.endswith('/'):
     web_root += '/'
 Config.setWebRoot(web_root)
+
+# Configure usage of external configs directory (for persistence in containers)
+configs_dir_env = os.environ.get('EDREFCARD_CONFIGS_DIR')
+if configs_dir_env:
+    configs_dir = Path(configs_dir_env).resolve()
+    # Ensure it exists
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    # Tell Config class to use it
+    Config.setConfigsPath(configs_dir)
+    # Update Flask config
+    app.config['CONFIGS_FOLDER'] = configs_dir
+    print(f"Using persistent configs directory: {configs_dir}")
+else:
+    # Default behavior
+    app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 print(f"Application configured with Web Root: {web_root}")
 
 # Initialize SQLite database
 # Initialize SQLite database
 from scripts.database import init_db, get_configuration_stats, migrate_from_pickle
-# Store DB in configs folder for persistence
-DB_PATH = WWW_DIR / 'configs' / 'edrefcard.db'
-init_db(DB_PATH)
+# Store DB# Initialize database
+with app.app_context():
+    db_path = app.config['CONFIGS_FOLDER'] / 'edrefcard.db'
+    database.init_db(str(db_path))
 
 # Auto-migrate legacy data if database is empty
 try:

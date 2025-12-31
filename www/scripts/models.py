@@ -24,11 +24,17 @@ class Config:
     # Class-level configuration - can be overridden by Flask app
     _dir_root = None
     _web_root = None
+    _configs_path = None
     
     @classmethod
     def setDirRoot(cls, path):
         """Set the root directory for configs (for Flask integration)."""
         cls._dir_root = Path(path).resolve()
+        
+    @classmethod
+    def setConfigsPath(cls, path):
+        """Set the explicit path to the configs directory."""
+        cls._configs_path = Path(path).resolve()
     
     @classmethod
     def setWebRoot(cls, url):
@@ -41,6 +47,13 @@ class Config:
         if Config._dir_root is not None:
             return Config._dir_root
         return Path(os.environ.get('CONTEXT_DOCUMENT_ROOT', '..')).resolve()
+    
+    @staticmethod
+    def configsPath():
+        """Get the path to the configs directory."""
+        if Config._configs_path is not None:
+            return Config._configs_path
+        return Config.dirRoot() / 'configs'
     
     @staticmethod    
     def webRoot():

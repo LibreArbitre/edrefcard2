@@ -48,3 +48,17 @@ jobs:
       continue-on-error: true
       run: |
         pytest
+
+    - name: Test Docker build and startup
+      if: matrix.python-version == '3.12'
+      run: |
+        # Build the Docker image
+        docker-compose build
+        # Start the container
+        docker-compose up -d
+        # Wait for application to be ready
+        sleep 10
+        # Smoke test: verify the app responds
+        curl -f http://localhost:8080/ || exit 1
+        # Cleanup
+        docker-compose down

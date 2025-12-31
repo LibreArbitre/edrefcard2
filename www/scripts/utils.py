@@ -99,6 +99,8 @@ def transKey(key):
     return trans
 
 
+RECENT_ERRORS = []
+
 def logError(message):
     """Log an error message to stderr.
     
@@ -106,3 +108,11 @@ def logError(message):
         message: The error message to log
     """
     sys.stderr.write("EDRefCard: " + message)
+    
+    # Keep last 20 errors in memory
+    global RECENT_ERRORS
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    RECENT_ERRORS.append(f"[{timestamp}] {message}")
+    if len(RECENT_ERRORS) > 50:
+        RECENT_ERRORS.pop(0)

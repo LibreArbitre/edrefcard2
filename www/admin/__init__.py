@@ -182,6 +182,7 @@ def debug_info():
     import sys
     import shutil
     from scripts.models import Config
+    from scripts.utils import RECENT_ERRORS
     
     # Check Wand status
     wand_status = "Not Installed"
@@ -202,15 +203,21 @@ def debug_info():
     
     # Directory listing
     config_files = []
-    if configs_path.exists():
+    subdir = request.args.get('subdir')
+    
+    list_path = configs_path
+    if subdir:
+        list_path = configs_path / subdir
+        
+    if list_path.exists():
         try:
             # List top level standard dirs or files
-            for p in sorted(configs_path.glob('*')):
+            for p in sorted(list_path.glob('*')):
                 config_files.append(f"{p.name} ({'DIR' if p.is_dir() else 'FILE'})")
         except Exception as e:
             config_files.append(f"Error listing files: {e}")
     else:
-        config_files.append("Configs directory does not exist!")
+        config_files.append(f"Directory {list_path} does not exist!")
         
     return render_template('admin/debug.html',
                            www_dir=www_dir,
@@ -219,4 +226,6 @@ def debug_info():
                            wand_path=wand_path,
                            wand_error=wand_error,
                            config_files=config_files,
-                           sys_path=sys.path)
+                           sys_path=sys.path,
+                           recent_errors=RECENT_ERRORS,
+                           subdir=subdir)

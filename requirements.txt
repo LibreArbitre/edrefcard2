@@ -5,6 +5,7 @@ lxml
 wand
 flask
 gunicorn
+Flask-Limiter==3.5.0
 
 ruff
 mypy

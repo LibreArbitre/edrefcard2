@@ -126,6 +126,11 @@ def import_defaults_command(limit):
             # Read and parse
             with bind_file.open('r', encoding='utf-8') as f:
                 xml = f.read()
+            
+            # Save the .binds file (required for display)
+            binds_path = config.pathWithSuffix('.binds')
+            with open(str(binds_path), 'w', encoding='utf-8') as f:
+                f.write(xml)
                 
             parse_errors = Errors()
             (physicalKeys, modifiers, devices) = parser.parseBindings(

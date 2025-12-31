@@ -123,8 +123,8 @@ def logError(message):
 
     # Persist to file in configs (which is a volume)
     try:
-        # Assuming we are in www/scripts, go up to www/configs
-        log_path = Path(__file__).parent.parent / 'configs' / 'error.log'
+        from scripts.models import Config
+        log_path = Config.configsPath() / 'error.log'
         with open(log_path, 'a', encoding='utf-8') as f:
             f.write(formatted_msg)
     except Exception as e:

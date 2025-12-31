@@ -100,10 +100,7 @@ class Config:
         name = ''.join(random.choice(string.ascii_lowercase) for x in range(6))
         return name
     
-    @staticmethod
-    def configsPath():
-        """Get the path to the configs directory."""
-        return Config.dirRoot() / 'configs'
+
         
     def path(self):
         """Get the base path for this config's files."""

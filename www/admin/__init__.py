@@ -18,19 +18,16 @@ admin_bp = Blueprint('admin', __name__,
                      template_folder='templates')
 
 
-# Import database lazily to avoid circular imports
-def get_db_module():
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-    from scripts import database
-    return database
+# Import database
+# We expect 'scripts' to be in the python path (set up by app.py)
+from scripts import database
 
 
 @admin_bp.route('/')
 @require_admin
 def dashboard():
     """Admin dashboard with statistics."""
-    db = get_db_module()
+    db = database
     stats = db.get_configuration_stats()
     return render_template('admin/dashboard.html', stats=stats)
 
@@ -39,7 +36,7 @@ def dashboard():
 @require_admin
 def list_configs():
     """List all configurations with pagination."""
-    db = get_db_module()
+    db = database
     
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
@@ -70,7 +67,7 @@ def list_configs():
 @require_admin
 def delete_config(config_id):
     """Delete a configuration."""
-    db = get_db_module()
+    db = database
     
     # Get config path to delete files
     from scripts.models import Config
@@ -125,7 +122,7 @@ def purge_pdf(config_id):
 @require_admin
 def edit_config(config_id):
     """Edit a configuration's description or visibility."""
-    db = get_db_module()
+    db = database
     
     description = request.form.get('description', '')
     is_public = request.form.get('is_public') == 'on'
@@ -146,7 +143,7 @@ def edit_config(config_id):
 @require_admin
 def toggle_public(config_id):
     """Toggle a configuration's public status."""
-    db = get_db_module()
+    db = database
     
     config = db.get_configuration(config_id)
     if config:
@@ -174,7 +171,7 @@ def list_devices():
 @require_admin
 def migrate_data():
     """Migrate pickle files to SQLite."""
-    db = get_db_module()
+    db = database
     
     if request.method == 'POST':
         from scripts.models import Config
@@ -212,7 +209,7 @@ def migrate_data():
 @require_admin
 def stats():
     """Detailed statistics page."""
-    db = get_db_module()
+    db = database
     stats = db.get_configuration_stats()
     device_names = db.get_all_device_names()
     
@@ -266,7 +263,7 @@ def debug_info():
     # Read persistent log file
     persistent_logs = []
     try:
-        log_path = Path(__file__).parent.parent / 'configs' / 'error.log'
+        log_path = Config.configsPath() / 'error.log'
         if log_path.exists():
             with open(log_path, 'r', encoding='utf-8') as f:
                 # Read last 50 lines

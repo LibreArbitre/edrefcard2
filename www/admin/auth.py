@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from functools import wraps
 from flask import request, Response
+from scripts.models import Config
 
 
 # Default credentials (override with environment variables)
@@ -19,8 +20,15 @@ ADMIN_USERNAME = os.environ.get('EDREFCARD_ADMIN_USER', 'admin')
 ADMIN_PASSWORD = os.environ.get('EDREFCARD_ADMIN_PASS', 'changeme')
 
 # Configure admin access logging
-log_dir = Path(__file__).parent.parent / 'data'
-log_dir.mkdir(exist_ok=True)
+# Configure admin access logging
+# Use persistent configs directory
+log_dir = Config.configsPath()
+# Note: mkdir should be handled by app startup, but safe to allow existing
+try:
+    log_dir.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass # Assume exists or permission issue will be caught later
+
 log_file = log_dir / 'admin_access.log'
 
 admin_logger = logging.getLogger('admin_access')

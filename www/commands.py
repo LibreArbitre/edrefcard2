@@ -69,3 +69,20 @@ def find_unsupported_command(logfile):
             
     except Exception as e:
         click.echo(f"Error reading log file: {e}")
+
+
+@click.command('migrate-legacy')
+@with_appcontext
+def migrate_legacy_command():
+    """Migrate legacy pickle configurations to SQLite."""
+    from scripts import database
+    from scripts.models import Config
+    
+    configs_path = Config.configsPath()
+    if not configs_path.exists():
+        click.echo(f"Configs directory not found: {configs_path}")
+        return
+        
+    click.echo(f"Migrating from {configs_path}...")
+    migrated, errors = database.migrate_from_pickle(configs_path)
+    click.echo(f"Migration complete: {migrated} migrated, {errors} errors.")

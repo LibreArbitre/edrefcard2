@@ -150,6 +150,9 @@ flask --app www/app.py clean-cache --days 1
 
 # Find unsupported controls in a log file
 flask --app www/app.py find-unsupported error.log
+
+# Import legacy configurations (pickle) to SQLite
+flask --app www/app.py migrate-legacy
 ```
 
 ## Development

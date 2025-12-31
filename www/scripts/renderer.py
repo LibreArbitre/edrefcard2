@@ -14,7 +14,10 @@ try:
     from wand.image import Image
     from wand.font import Font
     from wand.color import Color
-except ImportError:
+    from wand.color import Color
+except ImportError as e:
+    # Log the error but don't fail immediately to allow app to start
+    print(f"Warning: Failed to import wand (ImageMagick): {e}")
     Drawing = None
     Image = None
     Font = None
@@ -83,6 +86,9 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
     Returns:
         True if image was created successfully
     """
+    if Drawing is None:
+        raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed or failed to load.")
+        
     _init_styles()
     config = Config(runId)
     filePath = config.pathWithNameAndSuffix(source, '.jpg')
@@ -286,6 +292,9 @@ def createBlockImage(supportedDeviceKey, strokeColor='Red', fillColor='LightGree
     Raises:
         KeyError: If device is not supported
     """
+    if Drawing is None and not dryRun:
+        raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed or failed to load.")
+        
     _init_styles()
     supportedDevice = supportedDevices[supportedDeviceKey]
     templateName = supportedDevice['Template']
@@ -368,12 +377,17 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
         public: Whether this is public
         styling: Styling mode ('None', 'Group', 'Category', 'Modifier')
         deviceIndex: Device index (0 or 1)
+```
         misconfigurationWarnings: Current misconfiguration warnings string
     
     Returns:
         True if image was created successfully
     """
+    if Drawing is None:
+        raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed or failed to load.")
+
     _init_styles()
+
     runId = config.name
     
     if deviceIndex == 0:

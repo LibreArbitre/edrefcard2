@@ -53,7 +53,8 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-pr
 # Configure the bindings Config class for Flask
 # Configure the bindings Config class for Flask
 Config.setDirRoot(WWW_DIR)
-web_root = os.environ.get('SCRIPT_URI', 'http://localhost:8080/')
+# Prioritize APP_URL, then SCRIPT_URI, then default
+web_root = os.environ.get('APP_URL') or os.environ.get('SCRIPT_URI', 'http://localhost:8080/')
 if not web_root.endswith('/'):
     web_root += '/'
 Config.setWebRoot(web_root)
@@ -239,51 +240,61 @@ def generate():
     public = len(description) > 0
     
     # Parse bindings and generate images
-    (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
-    
-    already_handled_devices = []
-    created_images = []
-    
-    for supported_device_key, supported_device in supportedDevices.items():
-        if supported_device_key == 'Keyboard':
-            continue
+    try:
+        (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
         
-        for device_index in [0, 1]:
-            handled = False
-            device_key = None
-            for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                if handled_device.find('::') > -1:
-                    if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                        handled = True
-                        device_key = handled_device
-                        break
-                else:
-                    if devices.get(f'{handled_device}::{device_index}') is not None:
-                        handled = True
-                        device_key = f'{handled_device}::{device_index}'
-                        break
+        already_handled_devices = []
+        created_images = []
+        
+        for supported_device_key, supported_device in supportedDevices.items():
+            if supported_device_key == 'Keyboard':
+                continue
             
-            if handled:
-                has_new_bindings = False
-                for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                    if device_key not in already_handled_devices:
-                        has_new_bindings = True
-                        break
+            for device_index in [0, 1]:
+                handled = False
+                device_key = None
+                for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                    if handled_device.find('::') > -1:
+                        if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
+                            handled = True
+                            device_key = handled_device
+                            break
+                    else:
+                        if devices.get(f'{handled_device}::{device_index}') is not None:
+                            handled = True
+                            device_key = f'{handled_device}::{device_index}'
+                            break
                 
-                if has_new_bindings:
-                    createHOTASImage(
-                        physical_keys, modifiers, 
-                        supported_device['Template'], 
-                        supported_device['HandledDevices'], 
-                        40, config, public, styling, device_index, 
-                        errors.misconfigurationWarnings
-                    )
-                    created_images.append(f'{supported_device_key}::{device_index}')
-                    for handled_device in supported_device['HandledDevices']:
-                        already_handled_devices.append(f'{handled_device}::{device_index}')
-    
-    if devices.get('Keyboard::0') is not None:
-        appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
+                if handled:
+                    has_new_bindings = False
+                    for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                        if device_key not in already_handled_devices:
+                            has_new_bindings = True
+                            break
+                    
+                    if has_new_bindings:
+                        createHOTASImage(
+                            physical_keys, modifiers, 
+                            supported_device['Template'], 
+                            supported_device['HandledDevices'], 
+                            40, config, public, styling, device_index, 
+                            errors.misconfigurationWarnings
+                        )
+                        created_images.append(f'{supported_device_key}::{device_index}')
+                        for handled_device in supported_device['HandledDevices']:
+                            already_handled_devices.append(f'{handled_device}::{device_index}')
+        
+        if devices.get('Keyboard::0') is not None:
+            appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
+            
+    except RuntimeError as e:
+        logError(f'Runtime error in generation for {run_id}: {e}\n')
+        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+    except Exception as e:
+        logError(f'Unexpected error in generation for {run_id}: {e}\n')
+        import traceback
+        traceback.print_exc()
+        errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
     # Check for unsupported devices
     for device_key, device in devices.items():
@@ -302,6 +313,10 @@ def generate():
     if public:
         saveReplayInfo(config, description, styling, display_groups, devices, errors)
     
+    # Use url_for for reliable external links
+    refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)
+    binds_url_dynamic = url_for('serve_config', path=f"{run_id}.binds", _external=True)
+
     return render_template('refcard.html',
                            run_id=run_id,
                            errors={
@@ -313,8 +328,8 @@ def generate():
                            created_images=created_images,
                            device_for_block_image=None,
                            public=public,
-                           refcard_url=config.refcardURL(),
-                           binds_url=config.bindsURL(),
+                           refcard_url=refcard_url_dynamic,
+                           binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)
 
 
@@ -351,7 +366,7 @@ def list_configs():
                     continue
             
             items.append({
-                'url': config.refcardURL(),
+                'url': url_for('show_binds', run_id=config.name, _external=True),
                 'description': name,
                 'controllers': ', '.join(sorted(controllers)),
                 'date': str(obj['timestamp'].ctime()),
@@ -451,6 +466,10 @@ def show_binds(run_id):
     if devices.get('Keyboard::0') is not None:
         appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
     
+    # Use url_for for reliable external links
+    refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)
+    binds_url_dynamic = url_for('serve_config', path=f"{run_id}.binds", _external=True)
+
     return render_template('refcard.html',
                            run_id=run_id,
                            errors={
@@ -462,8 +481,8 @@ def show_binds(run_id):
                            created_images=created_images,
                            device_for_block_image=None,
                            public=True,
-                           refcard_url=config.refcardURL(),
-                           binds_url=config.bindsURL(),
+                           refcard_url=refcard_url_dynamic,
+                           binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)
 
 

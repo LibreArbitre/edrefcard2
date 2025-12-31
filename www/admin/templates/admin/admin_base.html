@@ -406,6 +406,10 @@
                 class="nav-item {% if request.endpoint == 'admin.migrate_data' %}active{% endif %}">
                 <span>🔄</span> Migration
             </a>
+            <a href="{{ url_for('admin.batch_import') }}"
+                class="nav-item {% if request.endpoint == 'admin.batch_import' %}active{% endif %}">
+                <span>📤</span> Batch Import
+            </a>
 
             <hr style="border-color: var(--border-color); margin: 1rem 0;">
 

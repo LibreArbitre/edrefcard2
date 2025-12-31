@@ -21,3 +21,6 @@ Schimz.4.2.binds
 www/list.html
 www/data/
 www/data/admin_access.log
+
+# Local documentation (not translated yet)
+ADDING_NEW_CONTROLLER.md

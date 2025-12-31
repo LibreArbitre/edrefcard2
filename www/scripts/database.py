@@ -63,10 +63,25 @@ def init_db(db_path):
                 UNIQUE(config_id, group_name)
             );
             
+            -- Controller template mappings (for admin mapping tool)
+            CREATE TABLE IF NOT EXISTS controller_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL UNIQUE,
+                device_name TEXT NOT NULL,
+                template_name TEXT NOT NULL,
+                image_filename TEXT NOT NULL,
+                image_width INTEGER NOT NULL,
+                image_height INTEGER NOT NULL,
+                mapping_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_config_created ON configurations(created_at);
             CREATE INDEX IF NOT EXISTS idx_config_public ON configurations(is_public);
             CREATE INDEX IF NOT EXISTS idx_config_devices_config ON config_devices(config_id);
+            CREATE INDEX IF NOT EXISTS idx_controller_mappings_device ON controller_mappings(device_id);
         """)
 
 
@@ -379,3 +394,128 @@ def get_all_config_ids():
     with get_db() as conn:
         rows = conn.execute("SELECT id FROM configurations").fetchall()
         return {r['id'] for r in rows}
+#!/usr/bin/env python3
+"""
+Controller Mappings CRUD functions for database.py
+Append these functions to www/scripts/database.py
+"""
+
+# ============== Controller Mapping CRUD ==============
+
+def create_controller_mapping(device_id, device_name, template_name, image_filename,
+                               image_width, image_height, mapping_json):
+    """Create a new controller mapping.
+    
+    Args:
+        device_id: Device ID (e.g., '231D0300')
+        device_name: Display name (e.g., 'VKB Gladiator Ultra 2026')
+        template_name: Template filename without extension
+        image_filename: Filename of the controller image
+        image_width: Image width in pixels
+        image_height: Image height in pixels
+        mapping_json: JSON string with button mappings
+        
+    Returns:
+        ID of created mapping
+    """
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    with get_db() as conn:
+        cursor = conn.execute("""
+            INSERT INTO controller_mappings 
+            (device_id, device_name, template_name, image_filename,
+             image_width, image_height, mapping_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (device_id, device_name, template_name, image_filename,
+              image_width, image_height, mapping_json, now, now))
+        
+        return cursor.lastrowid
+
+
+def get_controller_mapping(mapping_id):
+    """Get a controller mapping by ID.
+    
+    Args:
+        mapping_id: Mapping ID
+        
+    Returns:
+        Dictionary with mapping data or None
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM controller_mappings WHERE id = ?", (mapping_id,)
+        ).fetchone()
+        
+        return dict(row) if row else None
+
+
+def get_controller_mapping_by_device_id(device_id):
+    """Get a controller mapping by device ID.
+    
+    Args:
+        device_id: Device ID (e.g., '231D0300')
+        
+    Returns:
+        Dictionary with mapping data or None
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM controller_mappings WHERE device_id = ?", (device_id,)
+        ).fetchone()
+        
+        return dict(row) if row else None
+
+
+def list_controller_mappings():
+    """List all controller mappings.
+    
+    Returns:
+        List of mapping dictionaries
+    """
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, device_id, device_name, template_name, created_at, updated_at
+            FROM controller_mappings
+            ORDER BY created_at DESC
+        """).fetchall()
+        
+        return [dict(row) for row in rows]
+
+
+def update_controller_mapping(mapping_id, **kwargs):
+    """Update a controller mapping.
+    
+    Args:
+        mapping_id: Mapping ID
+        **kwargs: Fields to update
+    """
+    import datetime
+    
+    allowed_fields = {'device_name', 'template_name', 'image_filename',
+                      'image_width', 'image_height', 'mapping_json'}
+    updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+    
+    if not updates:
+        return
+    
+    updates['updated_at'] = datetime.datetime.now(datetime.timezone.utc)
+    
+    set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+    values = list(updates.values()) + [mapping_id]
+    
+    with get_db() as conn:
+        conn.execute(
+            f"UPDATE controller_mappings SET {set_clause} WHERE id = ?",
+            values
+        )
+
+
+def delete_controller_mapping(mapping_id):
+    """Delete a controller mapping.
+    
+    Args:
+        mapping_id: Mapping ID
+    """
+    with get_db() as conn:
+        conn.execute("DELETE FROM controller_mappings WHERE id = ?", (mapping_id,))

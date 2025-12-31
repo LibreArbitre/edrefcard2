@@ -284,3 +284,76 @@ def debug_info():
                            recent_errors=RECENT_ERRORS,
                            persistent_logs=persistent_logs,
                            subdir=subdir)
+
+@admin_bp.route('/batch-import', methods=['GET', 'POST'])
+@require_admin
+def batch_import():
+    """Batch import multiple .binds files."""
+    if request.method == 'GET':
+        return render_template('admin/batch_import.html')
+    
+    # POST: Process uploaded files
+    from scripts import parseBindings, parseFormData, createBlockImage, saveReplayInfo
+    from scripts.models import Config, Errors
+    
+    files = request.files.getlist('binds_files')
+    if not files:
+        flash('No files selected.', 'error')
+        return redirect(url_for('admin.batch_import'))
+    
+    results = {
+        'success': [],
+        'failed': []
+    }
+    
+    for file in files:
+        if not file or not file.filename:
+            continue
+            
+        if not file.filename.endswith('.binds'):
+            results['failed'].append((file.filename, 'Not a .binds file'))
+            continue
+        
+        try:
+            # Read file
+            xml = file.read().decode('utf-8')
+            
+            # Generate config
+            config = Config.generateRunId()
+            errors = Errors()
+            
+            # Parse bindings (from app.py logic)
+            devices, bindings = parseBindings(config.runId, xml, [], errors)
+            
+            # Save if parsing successful
+            if devices is not None:
+                # Save replay info to database
+                from scripts.database import create_configuration
+                create_configuration(
+                    config_id=config.runId,
+                    description=f"Batch import: {file.filename}",
+                    display_groups=[],
+                    devices=devices,
+                    unhandled_warnings=errors.unhandledDevicesWarnings,
+                    device_warnings=errors.deviceWarnings,
+                    misc_warnings=errors.misconfigurationWarnings
+                )
+                
+                # Save binds file
+                config.create()
+                with config.bindsPath().open('w', encoding='utf-8') as f:
+                    f.write(xml)
+                
+                results['success'].append((file.filename, config.runId))
+            else:
+                results['failed'].append((file.filename, 'Parsing failed'))
+                
+        except Exception as e:
+            results['failed'].append((file.filename, str(e)))
+    
+    # Show results
+    flash(f"Imported {len(results['success'])} files successfully.", 'success')
+    if results['failed']:
+        flash(f"Failed to import {len(results['failed'])} files.", 'warning')
+    
+    return render_template('admin/batch_import_results.html', results=results)

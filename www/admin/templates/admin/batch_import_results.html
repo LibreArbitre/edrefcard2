@@ -1,0 +1,74 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Batch Import Results - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Batch Import Results</h1>
+
+    {% if results.success %}
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">✓ Successfully Imported ({{ results.success|length }})</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Config ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for filename, config_id in results.success %}
+                    <tr>
+                        <td>{{ filename }}</td>
+                        <td><code>{{ config_id }}</code></td>
+                        <td>
+                            <a href="{{ url_for('bindings', config_id=config_id) }}" class="btn btn-sm btn-primary"
+                                target="_blank">
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if results.failed %}
+    <div class="card mb-4">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0">⚠ Failed Imports ({{ results.failed|length }})</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for filename, error in results.failed %}
+                    <tr>
+                        <td>{{ filename }}</td>
+                        <td><small class="text-danger">{{ error }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('admin.batch_import') }}" class="btn btn-primary">Import More Files</a>
+        <a href="{{ url_for('admin.list_configs') }}" class="btn btn-secondary">View All Configurations</a>
+        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

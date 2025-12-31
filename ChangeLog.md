@@ -1,3 +1,18 @@
+# Change Log
+
+## 2.0.0 (2025-12-31)
+### Major Features
+* **Admin Panel**: Introduced a secured Admin Dashboard (`/admin`) for managing configurations and devices.
+* **SQLite Database**: Migrated from file-based storage (Pickle) to a structured SQLite database for better performance and data integrity.
+* **Docker Support**: Added `Dockerfile` and `docker-compose.yaml` for streamlined deployment and development.
+* **Authentication**: Implemented HTTP Basic Auth for admin routes.
+
+### Improvements
+* **Architecture**: Refactored into Flask Blueprints for better modularity.
+* **CI/CD**: Added GitHub Actions workflows for automated testing and linting.
+* **Code Quality**: Integrated `ruff` for code style enforcement.
+* **Modernization**: Updated dependencies and removed legacy code.
+
 ## 1.4
   * Completed all the outstanding pull requests from GitHub and merged them
   * Adjusted for Python 3.10 compatibility

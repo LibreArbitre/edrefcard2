@@ -6,10 +6,16 @@ from lxml import etree
 
 from collections import OrderedDict
 
-from wand.drawing import Drawing
-from wand.image import Image
-from wand.font import Font
-from wand.color import Color
+try:
+    from wand.drawing import Drawing
+    from wand.image import Image
+    from wand.font import Font
+    from wand.color import Color
+except ImportError:
+    Drawing = None
+    Image = None
+    Font = None
+    Color = None
 
 import html
 import sys
@@ -168,6 +174,12 @@ def getFontPath(weight, style):
     if weight == 'Regular' and style != '':
         weight = ''
     return '../fonts/Exo2.0-%s%s.otf' % (weight, style)
+
+# Mock Color if wand is missing
+if Color is None:
+    class Color:
+        def __init__(self, color):
+            self.color = color
 
 # Command group styling
 groupStyles = {

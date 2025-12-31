@@ -61,6 +61,11 @@ init_db(DB_PATH)
 from admin import admin_bp
 app.register_blueprint(admin_bp)
 
+# Register CLI commands
+from commands import clean_cache_command, find_unsupported_command
+app.cli.add_command(clean_cache_command)
+app.cli.add_command(find_unsupported_command)
+
 
 def get_configs_path():
     """Get the path to the configs directory."""

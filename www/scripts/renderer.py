@@ -9,10 +9,16 @@ using the Wand/ImageMagick library.
 import re
 from collections import OrderedDict
 
-from wand.drawing import Drawing
-from wand.image import Image
-from wand.font import Font
-from wand.color import Color
+try:
+    from wand.drawing import Drawing
+    from wand.image import Image
+    from wand.font import Font
+    from wand.color import Color
+except ImportError:
+    Drawing = None
+    Image = None
+    Font = None
+    Color = None
 
 from .models import Config
 from .utils import getFontPath, transKey, logError

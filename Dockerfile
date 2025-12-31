@@ -8,6 +8,15 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
+# Set work directory for build
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Copy application code
 COPY ./www/ /app/www/
 COPY ./bindings/ /app/bindings/

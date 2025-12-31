@@ -1,6 +1,7 @@
 ignored
 *.pyc
 www/configs
+configs/
 .cache
 .coverage
 htmlcov

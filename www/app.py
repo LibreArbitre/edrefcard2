@@ -635,76 +635,110 @@ def generate_pdf(run_id, page_format='A4'):
     
     config = Config(run_id)
     pdf_filename = f"{run_id}-{page_format}.pdf"
-    # Config.path is a method, not a property
-    pdf_path = config.path().parent / pdf_filename # Save in the same folder as images (e.g. configs/un/)
+    pdf_path = config.path().parent / pdf_filename
     
-    # Return existing if cached
+    # Return existing if cached (optional, can force regen for debugging)
+    # in dev/hotfix we might want to force regen, but for prod use cache
     if pdf_path.exists():
-        return str(pdf_path)
+         return str(pdf_path)
 
-    # Collect images
-    # Similar logic to show_binds to find all images
-    # We can actually just list directory and filter by run_id prefix and .jpg
-    # BUT we need to respect the order: Devices, Block, Keyboard
+    # Collect images in specific order:
+    # 1. Device 0
+    # 2. Device 1 (if exists)
+    # 3. Keyboard
     
-    # Simpler approach: Look for standard generated names
-    # Access supportedDevices to know what to look for
-    # This might be slow if we iterate everything. 
-    # Alternative: Config.get_generated_images(run_id) - but that doesn't exist.
+    images_to_process = []
     
-    # Let's iterate supported devices like show_binds does, but purely checking files
-    # We can reuse the logic from show_binds loosely but we don't have the 'devices' dict from parsing
-    # UNLESS we parse again? No, that's heavy.
-    # We can just glob the directory for RunID*.jpg?
-    # Globbing might return partial matches or unordered.
+    # We don't have the parsed 'devices' list easily available here without re-parsing.
+    # However, we can scan the directory for files matching the run_id.
+    # But we want a specific order.
+    # Pattern: {run_id}-{template}.jpg OR {run_id}-{template}-{index}.jpg
+    # Keyboard: {run_id}-keyboard.jpg
     
-    # Let's try to match existing logic:
-    # 1. Device images
-    # 2. Keyboard images
+    # Get all jpgs for this run
+    all_files = list(config.path().parent.glob(f"{run_id}-*.jpg"))
     
-    found_images = []
+    # Sort them to ensure determinism
+    # Typically: runID-template.jpg (main device)
+    # runID-template-1.jpg (secondary device)
+    # runID-keyboard.jpg (keyboard)
     
-    # We will search for all files starting with run_id in the folder
-    # Sort them to try and keep some order, but correct ordering is hard without metadata.
-    # However, for the PDF, just having them all is usually fine.
-    # The standard naming is: {runID}-{template}.jpg or {runID}-{template}-{index}.jpg
+    # Naive sort might put keyboard in middle.
+    # Let's separate them.
     
-    candidate_files = sorted(list(config.path().parent.glob(f"{run_id}-*.jpg")))
+    keyboard_img = None
+    device_images = []
     
-    if not candidate_files:
+    for p in all_files:
+        if p.name.endswith('keyboard.jpg'):
+            keyboard_img = p
+        else:
+            device_images.append(p)
+            
+    # Sort device images by name (should usually put -1 after base)
+    device_images.sort()
+    
+    ordered_images = device_images
+    if keyboard_img:
+        ordered_images.append(keyboard_img)
+    
+    if not ordered_images:
         return None
         
     # Create PDF
-    # Orientation is set per page
     pdf = FPDF(orientation='P', unit='mm', format=page_format)
     pdf.set_auto_page_break(False)
     
-    for img_path in candidate_files:
-        # Determine orientation
+    for img_path in ordered_images:
         try:
+            # Determine orientation
+            # Open with PIL to check dimensions
             from PIL import Image
-            with Image.open(img_path) as im:
+            with Image.open(str(img_path)) as im:
                 width, height = im.size
                 ratio = width / height
                 
+            # Landscape if wider than tall (controllers), Portrait for keyboard usually
             orientation = 'L' if ratio >= 1.2 else 'P'
             
             pdf.add_page(orientation=orientation)
             
-            # Fit to page
-            # FPDF2 handles this well with basic math
-            # Page dimensions
-            pw = pdf.w
-            ph = pdf.h
+            # Dimensions in mm
+            if orientation == 'L':
+                # For A4/Letter, roughly
+                # A4: 210x297
+                pw = 297 if page_format == 'A4' else 279 # Letter width in L
+                ph = 210 if page_format == 'A4' else 216 # Letter height in L
+            else:
+                pw = 210 if page_format == 'A4' else 216 
+                ph = 297 if page_format == 'A4' else 279
+                
+            # Calculate scaling to fit
+            # FPDF auto-scales if we give w or h. 
+            # We want to fit within margins? No, we want full page usually or max fit.
+            # Let's blindly fit to width for now.
             
-            # Add image filling the page
-            pdf.image(str(img_path), x=0, y=0, w=pw, h=ph)
+            # FPDF2 stores page width/height in w/h properties (accounting for orientation? Need to check version)
+            # PyFPDF/FPDF usually has w/h as current page dimensions.
+            
+            # Safe bet: use get_page_format or current variables if reliable.
+            # But simpler: rely on FPDF to fit if we say w=pdf.w
+            
+            # NOTE: "Insufficient data" often means the file isn't readable or FPDF can't parse header.
+            # Ensure path is string.
+            
+            pdf.image(str(img_path), x=0, y=0, w=pdf.w, h=pdf.h)
             
         except Exception as e:
             logError(f"Error adding image {img_path} to PDF: {e}")
             continue
 
-    pdf.output(str(pdf_path))
+    try:
+        pdf.output(str(pdf_path))
+    except Exception as e:
+         logError(f"Error saving PDF {pdf_path}: {e}")
+         return None
+         
     return str(pdf_path)
 
 @app.route('/download/<run_id>/pdf')

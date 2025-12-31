@@ -91,6 +91,36 @@ def delete_config(config_id):
     return redirect(url_for('admin.list_configs'))
 
 
+@admin_bp.route('/configs/<config_id>/purge-pdf', methods=['POST'])
+@require_admin
+def purge_pdf(config_id):
+    """Purge generated PDF files for a configuration."""
+    from scripts.models import Config
+    config = Config(config_id)
+    config_path = config.path().parent
+    
+    purged_count = 0
+    errors = []
+    
+    # Look for PDF files in the config directory
+    if config_path.exists():
+        for pdf_file in config_path.glob('*.pdf'):
+            try:
+                pdf_file.unlink()
+                purged_count += 1
+            except Exception as e:
+                errors.append(f"Could not delete {pdf_file.name}: {e}")
+    
+    if errors:
+        flash(f'Purged {purged_count} PDFs, but encountered errors: {"; ".join(errors)}', 'warning')
+    elif purged_count > 0:
+        flash(f'Successfully purged {purged_count} PDF files for {config_id}.', 'success')
+    else:
+        flash(f'No PDF files found to purge for {config_id}.', 'info')
+        
+    return redirect(url_for('admin.list_configs'))
+
+
 @admin_bp.route('/configs/<config_id>/edit', methods=['POST'])
 @require_admin
 def edit_config(config_id):

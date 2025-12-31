@@ -70,6 +70,10 @@
                             {% if config.is_public %}🔒{% else %}🔓{% endif %}
                         </button>
                     </form>
+                    <form method="post" action="{{ url_for('admin.purge_pdf', config_id=config.id) }}"
+                        style="display: inline;" onsubmit="return confirm('Regenerate PDFs for {{ config.id }}?');">
+                        <button type="submit" class="btn btn-sm btn-outline" title="Purge/Regenerate PDFs">📄</button>
+                    </form>
                     <form method="post" action="{{ url_for('admin.delete_config', config_id=config.id) }}"
                         style="display: inline;"
                         onsubmit="return confirm('Delete configuration {{ config.id }}? This cannot be undone.');">

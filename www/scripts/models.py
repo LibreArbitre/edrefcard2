@@ -45,6 +45,14 @@ class Config:
     @staticmethod    
     def webRoot():
         """Get the web root URL for generating links."""
+        # Try to use Flask request context if available
+        try:
+            from flask import has_request_context, request
+            if has_request_context():
+                return request.url_root
+        except ImportError:
+            pass
+            
         if Config._web_root is not None:
             return Config._web_root
         return urljoin(os.environ.get('SCRIPT_URI', 'https://edrefcard.info/'), '/')

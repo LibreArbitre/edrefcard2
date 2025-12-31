@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  edrefcard:
+    build: .
+    volumes:
+      - ./configs:/app/www/configs
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

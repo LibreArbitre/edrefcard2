@@ -6,7 +6,7 @@ Currently hosted at [https://edrefcard.info/](https://edrefcard.info/).
 
 ## Dependencies
 
-* Python 3.10 or later
+* Python 3.12 or later (Python 3.13+ recommended)
 * Python modules (see `requirements.txt`):
   * `flask` - Web framework
   * `gunicorn` - WSGI HTTP server
@@ -87,6 +87,25 @@ edrefcard/
 | `/devices` | GET | List all supported controllers |
 | `/device/<name>` | GET | View a device's button layout |
 | `/configs/<path>` | GET | Static files (generated images) |
+
+## Features
+
+### Lightbox Image Viewer
+Reference card images can be viewed in full-screen mode:
+- **Click** any reference card image to open lightbox
+- **Close** with × button or `Escape` key
+- **Keyboard support** for accessibility
+- **Responsive** design works on all screen sizes
+
+### Admin Dashboard
+Comprehensive admin panel for configuration management:
+- View usage statistics and popular devices
+- Search and filter configurations
+- Toggle public/private visibility
+- Bulk operations and data migration tools
+
+### Auto-Migration
+Legacy pickle-based configurations are automatically migrated to SQLite on first startup.
 
 ## Configuration
 

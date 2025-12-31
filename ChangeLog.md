@@ -1,5 +1,26 @@
 # Change Log
 
+## 2.0.1 (2025-12-31)
+### Bug Fixes
+* **Template Error**: Fixed Jinja2 TemplateSyntaxError in `refcard.html` that caused 500 errors on configuration pages
+* **Data Migration**: Fixed auto-migration to handle partial database states (88 configs successfully restored)
+* **CI/CD**: Resolved ruff linting failures by updating configuration (748 → 30 errors, 96% reduction)
+
+### Features
+* **Lightbox**: Added full-screen image viewer for reference cards
+  - Click-to-zoom on any reference card image
+  - Close with X button or Escape key
+  - Smooth animations and responsive design
+* **Docker Testing**: Added automated Docker build and startup tests to CI pipeline
+
+### Improvements
+* **Python Version**: Upgraded to Python 3.13 for better performance and longer support
+  - Updated base Docker image to `python:3.13-slim`
+  - CI now tests Python 3.12, 3.13, and 3.14
+  - Support lifecycle extended until October 2029
+* **Code Quality**: Updated ruff and mypy configurations for modern Python
+* **Documentation**: Updated README with current Python requirements and features
+
 ## 2.0.0 (2025-12-31)
 ### Major Features
 * **Admin Panel**: Introduced a secured Admin Dashboard (`/admin`) for managing configurations and devices.

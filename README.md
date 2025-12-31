@@ -109,6 +109,37 @@ EDRefCard supports 68+ controllers including:
 
 See the full list at `/devices` on the running application.
 
+## Admin Panel
+
+EDRefCard v2.0 includes a built-in admin panel for managing configurations and devices.
+
+### Access
+- URL: `/admin/`
+- Authentication: HTTP Basic Auth
+
+### Configuration
+Set the following environment variables to configure admin access:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EDREFCARD_ADMIN_USER` | Admin username | `admin` |
+| `EDREFCARD_ADMIN_PASS` | Admin password | `changeme` |
+| `FLASK_SECRET_KEY` | Secret key for sessions | `dev-secret-key...` |
+
+### Features
+- **Dashboard**: View statistics on configuration usage and popular devices
+- **Configurations**: List, search, delete, and toggle visibility of user configurations
+- **Devices**: View list of supported devices and their template mappings
+- **Data Migration**: Tool to import legacy pickle files into the SQLite database
+
+## Data Storage
+
+EDRefCard v2.0 uses a hybrid storage approach:
+- **SQLite Database (`edrefcard.db`)**: Stores configuration metadata (id, description, status, devices used).
+- **Filesystem**: Stores generated images (`.jpg`) and original bindings files (`.binds`) in the `configs/` directory.
+
+When upgrading from v1.0, use the `/admin/migrate` tool to import existing pickle files into the database.
+
 ## Development
 
 ### Running Tests

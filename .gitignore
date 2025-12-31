@@ -20,3 +20,4 @@ AGENTS.md
 .env
 www/list.html
 www/data/
+www/data/admin_access.log

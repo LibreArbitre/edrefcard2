@@ -73,10 +73,6 @@ def init_db(db_path):
 @contextmanager
 def get_db():
     """Get a database connection context manager."""
-    # DIAGNOSTIC
-    if not DB_PATH.parent.exists():
-        print(f"DB_CRIT: Parent dir {DB_PATH.parent} DOES NOT EXIST!")
-    
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -298,6 +294,21 @@ def get_configuration_stats():
             'daily_stats': [dict(d) for d in daily],
             'popular_devices': [dict(d) for d in popular_devices]
         }
+
+def get_device_counts():
+    """Get count of configurations for each device type.
+    
+    Returns:
+        Dictionary mapping device_display_name to count
+    """
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT device_display_name, COUNT(*) as count
+            FROM config_devices
+            WHERE device_display_name IS NOT NULL
+            GROUP BY device_display_name
+        """).fetchall()
+        return {r['device_display_name']: r['count'] for r in rows}
 
 
 # ============== Migration from Pickle ==============

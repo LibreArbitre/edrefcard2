@@ -128,13 +128,4 @@ def logError(message):
         with open(log_path, 'a', encoding='utf-8') as f:
             f.write(formatted_msg)
     except Exception as e:
-        # DIAGNOSTIC: Check why log failed
-        try:
-            parent = Path(__file__).parent.parent / 'configs'
-            sys.stderr.write(f"LOG_FAIL: Path '{log_path}' - Parent '{parent}' Exists? {parent.exists()} IsDir? {parent.is_dir()}\n")
-            if parent.exists():
-                 import os
-                 sys.stderr.write(f"LOG_FAIL_LS: {os.listdir(str(parent))[:5]}\n")
-        except:
-            pass
         sys.stderr.write(f"Failed to log to file: {e}\n")

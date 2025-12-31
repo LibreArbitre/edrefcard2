@@ -558,7 +558,7 @@ def show_binds(run_id):
     
     # Use url_for for reliable external links
     refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)
-    binds_url_dynamic = url_for('serve_config', path=f"{run_id}.binds", _external=True)
+    binds_url_dynamic = url_for('serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
 
     return render_template('refcard.html',
                            run_id=run_id,
@@ -579,10 +579,27 @@ def show_binds(run_id):
 @app.route('/devices')
 def list_devices():
     """List all supported devices."""
+    from scripts.database import get_device_counts
+    
+    try:
+        counts = get_device_counts()
+    except:
+        counts = {}
+
     devices = []
     for name in sorted(supportedDevices.keys()):
+        # Map device key to template name which is often used as display name in DB
+        # Note: DB 'device_display_name' is usually the Template name (e.g., 'x52pro') 
+        # OR the device key? Let's check create_configuration in database.py
+        # It uses: device_info.get('Template', device_key)
+        
+        template = supportedDevices[name].get('Template', name)
+        # Try to find count by template, or fall back to name
+        count = counts.get(template, counts.get(name, 0))
+        
         devices.append({
             'name': name,
+            'count': count,
             'handled_devices': supportedDevices[name]['HandledDevices'],
         })
     

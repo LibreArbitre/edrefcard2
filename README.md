@@ -140,6 +140,18 @@ EDRefCard v2.0 uses a hybrid storage approach:
 
 When upgrading from v1.0, use the `/admin/migrate` tool to import existing pickle files into the database.
 
+## Maintenance
+
+The application includes CLI commands for maintenance tasks:
+
+```bash
+# Clean generated images older than 1 day
+flask --app www/app.py clean-cache --days 1
+
+# Find unsupported controls in a log file
+flask --app www/app.py find-unsupported error.log
+```
+
 ## Development
 
 ### Running Tests

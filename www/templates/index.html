@@ -139,42 +139,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // Drag and drop enhancement
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileupload');
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-        });
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        const files = e.dataTransfer.files;
-        if (files.length) {
-            fileInput.files = files;
-            updateFileLabel(files[0].name);
-        }
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length) {
-            updateFileLabel(e.target.files[0].name);
-        }
-    });
-
-    function updateFileLabel(filename) {
-        dropZone.querySelector('.file-upload-text').innerHTML =
-            '<strong>Selected:</strong> ' + filename;
-    }
-</script>
+<script src="{{ url_for('serve_static', filename='file-upload.js') }}"></script>
 {% endblock %}

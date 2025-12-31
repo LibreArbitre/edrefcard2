@@ -7,4 +7,8 @@ services:
       - ./configs:/app/www/configs
     environment:
       - PYTHONUNBUFFERED=1
+      - EDREFCARD_ADMIN_USER
+      - EDREFCARD_ADMIN_PASS
+      - FLASK_SECRET_KEY
+      - APP_URL
     restart: unless-stopped

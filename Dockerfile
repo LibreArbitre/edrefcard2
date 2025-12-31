@@ -8,20 +8,17 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set work directory
-WORKDIR /app
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy application code
-COPY ./www/ /app/
+COPY ./www/ /app/www/
+COPY ./bindings/ /app/bindings/
+
+# Set work directory to where app.py is
+WORKDIR /app/www
 
 # Create configs and data directories
-RUN mkdir -p /app/configs /app/data \
-    && chmod 755 /app/configs /app/data
+# Note: configs is now at /app/www/configs to match relative paths, or we adjust
+RUN mkdir -p /app/www/configs /app/www/data \
+    && chmod 755 /app/www/configs /app/www/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

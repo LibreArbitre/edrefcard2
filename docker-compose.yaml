@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8000"
     volumes:
-      - ./configs:/app/configs
+      - ./configs:/app/www/configs
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped

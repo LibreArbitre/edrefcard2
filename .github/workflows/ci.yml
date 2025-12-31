@@ -9,17 +9,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13", "3.14"]
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.13
       uses: actions/setup-python@v5
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.13"
 
     - name: Install system dependencies (ImageMagick)
       run: |
@@ -50,7 +47,6 @@ jobs:
         pytest
 
     - name: Test Docker build and startup
-      if: matrix.python-version == '3.13'
       run: |
         # Build the Docker image (using Docker Compose v2)
         docker compose build

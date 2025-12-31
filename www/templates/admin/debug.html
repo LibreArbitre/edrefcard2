@@ -96,6 +96,23 @@ No recent errors logged in memory.
         </div>
 
         <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Persistent Log File (configs/error.log)</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded text-dark" style="max-height: 300px; overflow-y: auto;">
+{% if persistent_logs %}
+{% for log in persistent_logs %}
+{{ log }}
+{% endfor %}
+{% else %}
+No persistent logs found.
+{% endif %}
+                </pre>
+            </div>
+        </div>
+
+        <div class="card mb-4">
             <div class="card-header bg-dark text-white">
                 <h5 class="mb-0">System Path</h5>
             </div>

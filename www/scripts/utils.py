@@ -102,7 +102,7 @@ def transKey(key):
 RECENT_ERRORS = []
 
 def logError(message):
-    """Log an error message to stderr.
+    """Log an error message to stderr and a persistent file.
     
     Args:
         message: The error message to log
@@ -112,7 +112,20 @@ def logError(message):
     # Keep last 20 errors in memory
     global RECENT_ERRORS
     import datetime
+    from pathlib import Path
+    
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_msg = f"[{timestamp}] {message}\n"
+    
     RECENT_ERRORS.append(f"[{timestamp}] {message}")
     if len(RECENT_ERRORS) > 50:
         RECENT_ERRORS.pop(0)
+
+    # Persist to file in configs (which is a volume)
+    try:
+        # Assuming we are in www/scripts, go up to www/configs
+        log_path = Path(__file__).parent.parent / 'configs' / 'error.log'
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(formatted_msg)
+    except Exception as e:
+        sys.stderr.write(f"Failed to log to file: {e}\n")

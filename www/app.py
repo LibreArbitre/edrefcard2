@@ -419,6 +419,7 @@ def show_binds(run_id):
     import pickle
     
     errors = Errors()
+    logError(f"DEBUG: Starting show_binds for {run_id}")
     
     try:
         config = Config(run_id)

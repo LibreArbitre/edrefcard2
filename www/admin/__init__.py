@@ -218,6 +218,19 @@ def debug_info():
             config_files.append(f"Error listing files: {e}")
     else:
         config_files.append(f"Directory {list_path} does not exist!")
+
+    # Read persistent log file
+    persistent_logs = []
+    try:
+        log_path = Path(__file__).parent.parent / 'configs' / 'error.log'
+        if log_path.exists():
+            with open(log_path, 'r', encoding='utf-8') as f:
+                # Read last 50 lines
+                lines = f.readlines()
+                persistent_logs = lines[-50:]
+                persistent_logs.reverse() # Show newest first
+    except Exception as e:
+        persistent_logs = [f"Error reading log file: {e}"]
         
     return render_template('admin/debug.html',
                            www_dir=www_dir,
@@ -228,4 +241,5 @@ def debug_info():
                            config_files=config_files,
                            sys_path=sys.path,
                            recent_errors=RECENT_ERRORS,
+                           persistent_logs=persistent_logs,
                            subdir=subdir)

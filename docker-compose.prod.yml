@@ -11,4 +11,5 @@ services:
       - EDREFCARD_ADMIN_PASS
       - FLASK_SECRET_KEY
       - APP_URL
+    user: root
     restart: unless-stopped

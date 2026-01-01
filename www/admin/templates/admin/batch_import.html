@@ -1,0 +1,41 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Batch Import - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Batch Import .binds Files</h1>
+    <p class="text-muted">Upload multiple .binds files at once for batch processing.</p>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="binds_files" class="form-label">Select .binds Files</label>
+                    <input class="form-control" type="file" id="binds_files" name="binds_files" multiple accept=".binds"
+                        required>
+                    <div class="form-text">
+                        Select one or more .binds files. Hold Ctrl/Cmd to select multiple files.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Import Files
+                </button>
+                <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <h5>What happens during batch import?</h5>
+        <ul>
+            <li>Each file is parsed and validated</li>
+            <li>A unique configuration ID is generated for each file</li>
+            <li>File is saved in the configs directory</li>
+            <li>Configuration is added to the database</li>
+            <li>Reference cards can be generated normally afterward</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

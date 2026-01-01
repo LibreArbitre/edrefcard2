@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Debug - EDRefCard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">System Debug Info</h1>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Paths</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">WWW Directory</dt>
+                    <dd class="col-sm-9"><code>{{ www_dir }}</code></dd>
+
+                    <dt class="col-sm-3">Configs Directory</dt>
+                    <dd class="col-sm-9"><code>{{ configs_path }}</code></dd>
+
+                    <dt class="col-sm-3">Configs Exists?</dt>
+                    <dd class="col-sm-9">
+                        {% if configs_path.exists() %}
+                        <span class="badge bg-success">Yes</span>
+                        {% else %}
+                        <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">ImageMagick (Wand)</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Status</dt>
+                    <dd class="col-sm-9">
+                        {% if 'Installed' in wand_status %}
+                        <span class="badge bg-success">{{ wand_status }}</span>
+                        {% else %}
+                        <span class="badge bg-danger">{{ wand_status }}</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-3">Path</dt>
+                    <dd class="col-sm-9"><code>{{ wand_path }}</code></dd>
+
+                    {% if wand_error %}
+                    <dt class="col-sm-3">Error</dt>
+                    <dd class="col-sm-9 text-danger">{{ wand_error }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Configs Directory Listing ({% if subdir %}/{{ subdir }}{% else %}Root{% endif %})</h5>
+                <form action="{{ url_for('admin.debug_info') }}" method="get" class="d-inline-flex">
+                    <input type="text" name="subdir" class="form-control form-control-sm me-2"
+                        placeholder="Subdir (e.g. un)" value="{{ subdir or '' }}">
+                    <button type="submit" class="btn btn-sm btn-light">Go</button>
+                    {% if subdir %}
+                    <a href="{{ url_for('admin.debug_info') }}" class="btn btn-sm btn-secondary ms-2">Reset</a>
+                    {% endif %}
+                </form>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded" style="max-height: 300px; overflow-y: auto;">
+{% for f in config_files %}
+{{ f }}
+{% endfor %}
+                </pre>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Recent App Errors (Memory Buffer)</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded text-danger" style="max-height: 300px; overflow-y: auto;">
+{% if recent_errors %}
+{% for error in recent_errors %}
+{{ error }}
+{% endfor %}
+{% else %}
+No recent errors logged in memory.
+{% endif %}
+                </pre>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Persistent Log File (configs/error.log)</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded text-dark" style="max-height: 300px; overflow-y: auto;">
+{% if persistent_logs %}
+{% for log in persistent_logs %}
+{{ log }}
+{% endfor %}
+{% else %}
+No persistent logs found.
+{% endif %}
+                </pre>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">System Path</h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 border rounded" style="max-height: 200px; overflow-y: auto;">
+{% for p in sys_path %}
+{{ p }}
+{% endfor %}
+                </pre>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

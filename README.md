@@ -1,60 +1,203 @@
-# Build status
-* live  [![Build Status](https://travis-ci.org/richardbuckle/EDRefCard.svg?branch=live)](https://travis-ci.org/richardbuckle/EDRefCard)  [![Coverage Status](https://coveralls.io/repos/github/richardbuckle/EDRefCard/badge.svg?branch=live)](https://coveralls.io/github/richardbuckle/EDRefCard?branch=live)
-* beta  [![Build Status](https://travis-ci.org/richardbuckle/EDRefCard.svg?branch=beta)](https://travis-ci.org/richardbuckle/EDRefCard)  [![Coverage Status](https://coveralls.io/repos/github/richardbuckle/EDRefCard/badge.svg?branch=beta)](https://coveralls.io/github/richardbuckle/EDRefCard?branch=beta)
-* dev [![Build Status](https://travis-ci.org/richardbuckle/EDRefCard.svg?branch=dev)](https://travis-ci.org/richardbuckle/EDRefCard)  [![Coverage Status](https://coveralls.io/repos/github/richardbuckle/EDRefCard/badge.svg?branch=dev)](https://coveralls.io/github/richardbuckle/EDRefCard?branch=dev)
+# EDRefCard
 
-# Purpose
-Elite: Dangerous has a great many command bindings to learn. To help with that, EDFRefCard generates a printable reference card from your Elite: Dangerous bindings file.
+Elite: Dangerous has a great many command bindings to learn. To help with that, EDRefCard generates a printable reference card from your Elite: Dangerous bindings file.
 
-Currently hosted at [https://edrefcard.info/](https://edrefcard.info/).
+Currently hosted at [https://edrefcard.dp.l0l.fr/](https://edrefcard.dp.l0l.fr/).
 
-# Dependencies
+## Dependencies
 
-* Python 3.6 or later
-	* Python3 module `lxml`
-	* Python3 module `wand`
-	* Python3 module `pytest`
-	* Python3 module `pytest-cov`
-	* Python3 module `coveralls`
+* Python 3.12 or later (Python 3.13+ recommended)
+* Python modules (see `requirements.txt`):
+  * `flask` - Web framework
+  * `gunicorn` - WSGI HTTP server
+  * `lxml` - XML parsing
+  * `wand` - ImageMagick bindings
+  * `pytest`, `pytest-cov` - Testing
 
-* ImageMagick v6 (at the time of writing python wand doesn't support ImageMagick v7)
-	* you may need to configure the `MAGICK_HOME` env var to get `wand` to see the ImageMagick libraries.
+* ImageMagick 6 or 7
+  * You may need to configure the `MAGICK_HOME` env var to get `wand` to see the ImageMagick libraries.
 
-# Installation in a web server
+## Quick Start
 
-* Base the server on the `www` subdirectory of this repo.
-* Check that your server is supplying the env vars `CONTEXT_DOCUMENT_ROOT` and `SCRIPT_URI` so that `Config.dirRoot` and `Config.webRoot` in `www/scripts/bindings.py` get set correctly. Apache 2 does this by default. Python's `cgi.test()` is useful here.
-* Enable Apache's `rewrite` and `cgi` or `cgid` mods.
-* Add redirects as follows (in Apache 2 notation):
+### Local Development
 
-```
-RewriteEngine On
-RewriteRule ^/list$ /scripts/bindings.py?list=all
-RewriteRule ^/binds/(.+)$ /scripts/bindings.py?replay=$1
-RewriteRule ^/configs/([a-z][a-z])([^/]+)$ /configs/$1/$1$2
-RewriteRule ^/devices$ /scripts/bindings.py?devicelist=all
-RewriteRule ^/device/(.+)$ /scripts/bindings.py?blocks=$1
-```
-* Certain web servers, including Apache 2 on Debian 9, are prone to set brain-dead IO encodings, such as ANSI_X3.4-1968. To fix this, add the following at the end of `/etc/apache2/apache2.conf`:
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-```
-SetEnv PYTHONIOENCODING utf-8
+# Run the Flask development server
+cd www
+python app.py
+
+# Access at http://localhost:5000
 ```
 
-# Docker
+### Docker (Recommended for Local Development)
 
-Build a docker container:
-```
+Build and run with Docker:
+
+```bash
 docker build -t edrefcard .
+docker run -d --rm --name edrefcard -p 8080:8000 edrefcard
+# Access at http://localhost:8080
 ```
 
-Run the docker container in the background, exposed on port 8080 on the host:
-```
-docker run -d --rm --name edrefcard -p 8080:80 edrefcard
+Or with docker-compose (add port mapping for local access):
+
+```bash
+# For local development, add ports to docker-compose.yaml:
+# ports:
+#   - "8080:8000"
+docker-compose up -d
+# Access at http://localhost:8080
 ```
 
-EDRefCard can then be accessed at http://localhost:8080
+> [!NOTE]
+> For production deployment with Traefik/Dokploy, remove the `ports` section from docker-compose.yaml. Traefik connects directly to the container via Docker network on port 8000.
 
-# Credits
+## Project Structure
+
+```
+edrefcard/
+├── www/
+│   ├── app.py              # Flask application entry point
+│   ├── templates/          # Jinja2 HTML templates
+│   │   ├── base.html
+│   │   ├── index.html
+│   │   ├── refcard.html
+│   │   ├── list.html
+│   │   ├── devices.html
+│   │   └── error.html
+│   ├── scripts/
+│   │   ├── bindings.py     # Core binding parsing logic
+│   │   ├── bindingsData.py # Device definitions
+│   │   └── controlsData.py # Control mappings
+│   ├── configs/            # Generated configurations (created at runtime)
+│   ├── res/                # Image templates for devices
+│   ├── fonts/              # Font files
+│   └── ed.css              # Stylesheet
+├── bindings/               # Test binding files
+├── Dockerfile
+├── docker-compose.yaml
+└── requirements.txt
+```
+
+## API Routes
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/` | GET | Home page with upload form |
+| `/generate` | POST | Upload .binds file and generate reference card |
+| `/list` | GET | List all public configurations |
+| `/binds/<id>` | GET | View a saved configuration |
+| `/devices` | GET | List all supported controllers |
+| `/device/<name>` | GET | View a device's button layout |
+| `/configs/<path>` | GET | Static files (generated images) |
+
+## Features
+
+### Lightbox Image Viewer
+Reference card images can be viewed in full-screen mode:
+- **Click** any reference card image to open lightbox
+- **Close** with × button or `Escape` key
+- **Keyboard support** for accessibility
+- **Responsive** design works on all screen sizes
+
+### Admin Dashboard
+Comprehensive admin panel for configuration management:
+- View usage statistics and popular devices
+- Search and filter configurations
+- Toggle public/private visibility
+- Bulk operations and data migration tools
+
+### Auto-Migration
+Legacy pickle-based configurations are automatically migrated to SQLite on first startup.
+
+## Configuration
+
+The application can be configured via environment variables or by modifying the Flask app configuration in `www/app.py`:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PYTHONIOENCODING` | Character encoding | `utf-8` |
+
+## Supported Controllers
+
+EDRefCard supports 68+ controllers including:
+- Thrustmaster (T16000M, HOTAS Warthog, T-Flight, etc.)
+- Logitech (Extreme 3D Pro, X52, X56, etc.)
+- VKB (Gladiator, Kosmosima, etc.)
+- Virpil (WarBRD, Alpha, MongoosT, etc.)
+- CH Products (Fighterstick, Pro Throttle, etc.)
+- Xbox 360 / PlayStation controllers
+- Standard keyboard
+
+See the full list at `/devices` on the running application.
+
+## Admin Panel
+
+EDRefCard v2.0 includes a built-in admin panel for managing configurations and devices.
+
+### Access
+- URL: `/admin/`
+- Authentication: HTTP Basic Auth
+
+### Configuration
+Set the following environment variables to configure admin access:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EDREFCARD_ADMIN_USER` | Admin username | `admin` |
+| `EDREFCARD_ADMIN_PASS` | Admin password | `changeme` |
+| `FLASK_SECRET_KEY` | Secret key for sessions | `dev-secret-key...` |
+
+### Features
+- **Dashboard**: View statistics on configuration usage and popular devices
+- **Configurations**: List, search, delete, and toggle visibility of user configurations
+- **Devices**: View list of supported devices and their template mappings
+- **Data Migration**: Tool to import legacy pickle files into the SQLite database
+
+## Data Storage
+
+EDRefCard v2.0 uses a hybrid storage approach:
+- **SQLite Database (`edrefcard.db`)**: Stores configuration metadata (id, description, status, devices used).
+- **Filesystem**: Stores generated images (`.jpg`) and original bindings files (`.binds`) in the `configs/` directory.
+
+When upgrading from v1.0, use the `/admin/migrate` tool to import existing pickle files into the database.
+
+## Maintenance
+
+The application includes CLI commands for maintenance tasks:
+
+```bash
+# Clean generated images older than 1 day
+flask --app www/app.py clean-cache --days 1
+
+# Find unsupported controls in a log file
+flask --app www/app.py find-unsupported error.log
+
+# Import legacy configurations (pickle) to SQLite
+flask --app www/app.py migrate-legacy
+```
+
+## Development
+
+### Running Tests
+
+```bash
+pytest --cov=. --cov-report term-missing
+```
+
+### Adding New Controllers
+
+1. Add device definition to `www/scripts/bindingsData.py`
+2. Add button/axis image template to `www/res/`
+3. Run tests to validate
+
+## Credits
 
 EDRefCard is derived with permission from code originally developed by CMDR jgm.
+
+## License
+
+See [LICENSE](LICENSE) file.

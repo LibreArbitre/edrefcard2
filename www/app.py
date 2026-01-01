@@ -285,7 +285,12 @@ def generate():
     with open(str(binds_path), 'w', encoding='utf-8') as f:
         f.write(xml)
     
-    public = len(description) > 0
+    # Always publish configurations, but use auto-generated description if none provided
+    if not description or len(description.strip()) == 0:
+        # Generate automatic description based on detected devices
+        description = f"Configuration {run_id[:6]}"
+    
+    public = True  # Always public now
     
     # Parse bindings and generate images
     try:
@@ -357,24 +362,23 @@ def generate():
     if len(created_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
         errors.errors = '<h1>The file supplied does not have any bindings for a supported controller or keyboard.</h1>'
     
-    # Save replay info if public
-    if public:
-        saveReplayInfo(config, description, styling, display_groups, devices, errors)
-        
-        # Also save to SQLite database
-        try:
-            database.create_configuration(
-                config_id=run_id,
-                description=description,
-                styling=styling,
-                display_groups=display_groups,
-                devices=devices,
-                unhandled_warnings=errors.unhandledDevicesWarnings,
-                device_warnings=errors.deviceWarnings,
-                misc_warnings=errors.misconfigurationWarnings
-            )
-        except Exception as e:
-            logError(f"Database insertion error for {run_id}: {e}")
+    # Always save replay info and database entry (now that public is always True)
+    saveReplayInfo(config, description, styling, display_groups, devices, errors)
+    
+    # Also save to SQLite database
+    try:
+        database.create_configuration(
+            config_id=run_id,
+            description=description,
+            styling=styling,
+            display_groups=display_groups,
+            devices=devices,
+            unhandled_warnings=errors.unhandledDevicesWarnings,
+            device_warnings=errors.deviceWarnings,
+            misc_warnings=errors.misconfigurationWarnings
+        )
+    except Exception as e:
+        logError(f"Database insertion error for {run_id}: {e}")
     
     # Use url_for for reliable external links
     refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)

@@ -319,18 +319,19 @@ def batch_import():
             xml = file.read().decode('utf-8')
             
             # Generate config
-            config = Config.generateRunId()
+            config = Config.newRandom()
+            config.makeDir()
             errors = Errors()
             
             # Parse bindings (from app.py logic)
-            devices, bindings = parseBindings(config.runId, xml, [], errors)
+            devices, bindings = parseBindings(config.name, xml, [], errors)
             
             # Save if parsing successful
             if devices is not None:
                 # Save replay info to database
                 from scripts.database import create_configuration
                 create_configuration(
-                    config_id=config.runId,
+                    config_id=config.name,
                     description=f"Batch import: {file.filename}",
                     display_groups=[],
                     devices=devices,
@@ -340,11 +341,11 @@ def batch_import():
                 )
                 
                 # Save binds file
-                config.create()
-                with config.bindsPath().open('w', encoding='utf-8') as f:
+                binds_path = config.pathWithSuffix('.binds')
+                with binds_path.open('w', encoding='utf-8') as f:
                     f.write(xml)
                 
-                results['success'].append((file.filename, config.runId))
+                results['success'].append((file.filename, config.name))
             else:
                 results['failed'].append((file.filename, 'Parsing failed'))
                 

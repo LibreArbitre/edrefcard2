@@ -135,6 +135,7 @@ a:hover {
   text-align: center;
   margin-bottom: var(--spacing-xl);
   padding: var(--spacing-xl) 0;
+  position: relative;
 }
 
 #banner h1 {
@@ -150,6 +151,34 @@ a:hover {
   height: 3px;
   background: linear-gradient(90deg, transparent, var(--ed-orange), transparent);
   margin: var(--spacing-lg) auto 0;
+}
+
+/* Banner home/close button */
+.banner-home-link {
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 140, 0, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--ed-orange);
+  font-size: 1.5rem;
+  font-weight: 300;
+  text-decoration: none;
+  transition: all var(--transition-normal);
+}
+
+.banner-home-link:hover {
+  background: rgba(255, 140, 0, 0.2);
+  border-color: var(--ed-orange);
+  transform: rotate(90deg);
+  color: var(--ed-orange-light);
+  text-decoration: none;
 }
 
 #content {

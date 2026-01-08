@@ -103,6 +103,10 @@ except Exception as e:
 from admin import admin_bp
 app.register_blueprint(admin_bp)
 
+# Register API blueprint
+from api import api_bp
+app.register_blueprint(api_bp)
+
 # Rate limiting configuration
 limiter = Limiter(
     app=app,
@@ -398,6 +402,38 @@ def generate():
                            refcard_url=refcard_url_dynamic,
                            binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)
+
+
+@app.route('/stats')
+def stats():
+    """Show global statistics."""
+    from scripts.database import get_configuration_stats
+    import json
+    
+    try:
+        stats_data = get_configuration_stats()
+        
+        # Prepare data for charts
+        daily_labels = [row['date'] for row in stats_data['daily_stats']]
+        daily_values = [row['count'] for row in stats_data['daily_stats']]
+        daily_labels.reverse() # Oldest first for chart
+        daily_values.reverse()
+        
+        device_labels = [row['device_display_name'] for row in stats_data['popular_devices']]
+        device_values = [row['count'] for row in stats_data['popular_devices']]
+        
+        # Pass JSON data for JS
+        chart_data = {
+            'daily': {'labels': daily_labels, 'values': daily_values},
+            'devices': {'labels': device_labels, 'values': device_values}
+        }
+        
+    except Exception as e:
+        logError(f"Error fetching stats: {e}")
+        stats_data = {}
+        chart_data = {'daily': {'labels': [], 'values': []}, 'devices': {'labels': [], 'values': []}}
+
+    return render_template('stats.html', stats=stats_data, chart_data=chart_data)
 
 
 @app.route('/list')

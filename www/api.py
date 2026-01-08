@@ -15,13 +15,28 @@ import os
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
-@api_bp.route('/generate', methods=['POST'])
+@api_bp.route('/generate', methods=['GET', 'POST'])
 def generate_api():
     """
     API Endpoint to generate reference card.
     Expects 'bindings' file in multipart/form-data.
     Optional fields: description, styling (modifier|group|category|none)
     """
+    if request.method == 'GET':
+        return jsonify({
+            'message': 'This endpoint expects a POST request with a .binds file.',
+            'usage': {
+                'method': 'POST',
+                'url': url_for('api.generate_api', _external=True),
+                'body': 'multipart/form-data',
+                'fields': {
+                    'bindings': 'File (required)',
+                    'description': 'String (optional)',
+                    'styling': 'modifier|group|category|none (optional)'
+                }
+            }
+        }), 405
+
     errors = Errors()
     
     # 1. Validation
@@ -131,7 +146,7 @@ def generate_api():
         return jsonify({
             'status': 'success',
             'id': run_id,
-            'url': url_for('show_binds', run_id=run_id, _external=True),
+            'url': url_for('web.show_binds', run_id=run_id, _external=True),
             'images_created': created_images,
             'warnings': {
                 'unhandled': errors.unhandledDevicesWarnings,

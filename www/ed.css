@@ -741,6 +741,7 @@ main {
 
 .export-links {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-md);
   margin-top: var(--spacing-sm);
 }

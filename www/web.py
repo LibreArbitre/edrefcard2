@@ -1,34 +1,9 @@
-#!/usr/bin/env python3
-"""
-EDRefCard Flask Application
-
-This module provides the Flask web application for generating Elite: Dangerous
-reference cards from controller bindings files.
-"""
-
-import os
-import sys
-from pathlib import Path
-
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-
-# Get the www directory path
-WWW_DIR = Path(__file__).parent.resolve()
-
-# Add scripts directory to path for imports
-scripts_path = WWW_DIR / 'scripts'
-sys.path.insert(0, str(scripts_path))
-
-# Import from the modular package
+from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, current_app
+from extensions import limiter
 from scripts import (
-    __version__,
     Config,
-    Mode,
     Errors,
     supportedDevices,
-    groupStyles,
     parseBindings,
     parseFormData,
     createHOTASImage,
@@ -37,293 +12,24 @@ from scripts import (
     saveReplayInfo,
     controllerNames,
     logError,
+    __version__
 )
 from scripts import database
+import os
+import tempfile
+from pathlib import Path
 
-app = Flask(__name__, 
-            static_folder=str(WWW_DIR), 
-            static_url_path='',
-            template_folder=str(WWW_DIR / 'templates'))
+web_bp = Blueprint('web', __name__)
 
-# Configure the application
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
-app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
-app.config['WWW_DIR'] = WWW_DIR
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+# Route handlers
 
-# Configure the bindings Config class for Flask
-# Configure the bindings Config class for Flask
-Config.setDirRoot(WWW_DIR)
-# Prioritize APP_URL, then SCRIPT_URI, then default
-web_root = os.environ.get('APP_URL') or os.environ.get('SCRIPT_URI', 'http://localhost:8080/')
-if not web_root.endswith('/'):
-    web_root += '/'
-Config.setWebRoot(web_root)
-
-# Configure usage of external configs directory (for persistence in containers)
-configs_dir_env = os.environ.get('EDREFCARD_CONFIGS_DIR')
-if configs_dir_env:
-    configs_dir = Path(configs_dir_env).resolve()
-    # Ensure it exists
-    configs_dir.mkdir(parents=True, exist_ok=True)
-    # Tell Config class to use it
-    Config.setConfigsPath(configs_dir)
-    # Update Flask config
-    app.config['CONFIGS_FOLDER'] = configs_dir
-    print(f"Using persistent configs directory: {configs_dir}")
-else:
-    # Default behavior
-    app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
-print(f"Application configured with Web Root: {web_root}")
-
-# Initialize SQLite database
-# Initialize SQLite database
-from scripts.database import init_db, get_configuration_stats, migrate_from_pickle
-# Store DB# Initialize database
-with app.app_context():
-    db_path = app.config['CONFIGS_FOLDER'] / 'edrefcard.db'
-    database.init_db(str(db_path))
-
-# Auto-migrate legacy data if database is empty
-try:
-    stats = get_configuration_stats()
-    if stats['total_configurations'] == 0:
-        print("Database empty. Checking for legacy configurations to migrate...")
-        configs_dir = WWW_DIR / 'configs'
-        if configs_dir.exists():
-            migrated, errors = migrate_from_pickle(configs_dir)
-            if migrated > 0:
-                print(f"Auto-migrated {migrated} legacy configurations ({errors} errors).")
-            else:
-                print("No legacy configurations found.")
-except Exception as e:
-    print(f"Warning: Auto-migration check failed: {e}")
-
-# Register admin blueprint
-from admin import admin_bp
-app.register_blueprint(admin_bp)
-
-# Register API blueprint
-from api import api_bp
-app.register_blueprint(api_bp)
-
-# Register Web blueprint
-from web import web_bp
-app.register_blueprint(web_bp)
-
-# Initialize Limiter
-# (Limiter is defined in extensions.py which web.py uses)
-from extensions import limiter
-limiter.init_app(app)
-
-# Register CLI commands
-from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command, import_defaults_command
-app.cli.add_command(clean_cache_command)
-app.cli.add_command(find_unsupported_command)
-app.cli.add_command(migrate_legacy_command)
-app.cli.add_command(import_defaults_command)
-
-
-from flask_limiter.errors import RateLimitExceeded
-
-@app.errorhandler(RateLimitExceeded)
-def handle_ratelimit_error(e):
-    """Handle rate limit exceeded."""
-    return render_template('error.html', 
-                           error_message=f'<h1>Rate Limit Exceeded</h1><p>{e.description}</p>'), 429
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    """Handle uncaught exceptions and log them."""
-    import traceback
-    tb = traceback.format_exc()
-    
-    # Log to our memory buffer
-    try:
-        from scripts import logError
-        logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
-    except:
-        print(f"Failed to log to memory buffer: {e}")
-        
-    # Re-raise key system exceptions
-    if isinstance(e,  (KeyboardInterrupt, SystemExit)):
-        raise e
-        
-    # Prepare error message for user
-    return render_template('error.html', 
-                           error_message=f'<h1>Internal Server Error</h1><p>An unexpected error occurred.</p><!-- {str(e)} -->'), 500
-
-
-def get_configs_path():
-    """Get the path to the configs directory."""
-    return app.config['CONFIGS_FOLDER']
-
-
-@app.before_request
-def set_working_directory():
-    """Set working directory for image generation paths."""
-    os.chdir(app.config['WWW_DIR'] / 'scripts')
-
-
-@app.context_processor
-def inject_version():
-    """Inject version into all templates."""
-    return {'version': __version__}
-
-
-@app.after_request
-def add_security_headers(response):
-    """Add security headers to all responses."""
-    # Prevent clickjacking
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    
-    # Prevent MIME sniffing
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    
-    # XSS Protection (legacy browsers)
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    
-    # Content Security Policy
-    response.headers['Content-Security-Policy'] = (
-        "default-src 'self'; "
-        "img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "script-src 'self' https://cdn.jsdelivr.net; "
-        "frame-ancestors 'self'"
-    )
-    
-    # HSTS (only in production with HTTPS)
-    if not app.debug and request.is_secure:
-        response.headers['Strict-Transport-Security'] = (
-            'max-age=31536000; includeSubDomains; preload'
-        )
-    
-    # Referrer policy
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    
-    # Permissions policy
-    response.headers['Permissions-Policy'] = (
-        'geolocation=(), microphone=(), camera=()'
-    )
-    
-    return response
-
-
-if __name__ == '__main__':
-    # Ensure configs directory exists
-    configs_path = get_configs_path()
-    configs_path.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Starting EDRefCard v{__version__}")
-    print(f"WWW directory: {WWW_DIR}")
-    print(f"Configs directory: {configs_path}")
-    
-    app.run(debug=True, host='0.0.0.0', port=8080)
-
-# Register CLI commands
-from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command, import_defaults_command
-app.cli.add_command(clean_cache_command)
-app.cli.add_command(find_unsupported_command)
-app.cli.add_command(migrate_legacy_command)
-app.cli.add_command(import_defaults_command)
-
-
-from flask_limiter.errors import RateLimitExceeded
-
-@app.errorhandler(RateLimitExceeded)
-def handle_ratelimit_error(e):
-    """Handle rate limit exceeded."""
-    return render_template('error.html', 
-                           error_message=f'<h1>Rate Limit Exceeded</h1><p>{e.description}</p>'), 429
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    """Handle uncaught exceptions and log them."""
-    import traceback
-    tb = traceback.format_exc()
-    
-    # Log to our memory buffer
-    try:
-        from scripts import logError
-        logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
-    except:
-        print(f"Failed to log to memory buffer: {e}")
-        
-    # Re-raise key system exceptions
-    if isinstance(e,  (KeyboardInterrupt, SystemExit)):
-        raise e
-        
-    # Prepare error message for user
-    return render_template('error.html', 
-                           error_message=f'<h1>Internal Server Error</h1><p>An unexpected error occurred.</p><!-- {str(e)} -->'), 500
-
-
-def get_configs_path():
-    """Get the path to the configs directory."""
-    return app.config['CONFIGS_FOLDER']
-
-
-@app.before_request
-def set_working_directory():
-    """Set working directory for image generation paths."""
-    os.chdir(app.config['WWW_DIR'] / 'scripts')
-
-
-@app.context_processor
-def inject_version():
-    """Inject version into all templates."""
-    return {'version': __version__}
-
-
-@app.after_request
-def add_security_headers(response):
-    """Add security headers to all responses."""
-    # Prevent clickjacking
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    
-    # Prevent MIME sniffing
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    
-    # XSS Protection (legacy browsers)
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    
-    # Content Security Policy
-    response.headers['Content-Security-Policy'] = (
-        "default-src 'self'; "
-        "img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "script-src 'self'; "
-        "frame-ancestors 'self'"
-    )
-    
-    # HSTS (only in production with HTTPS)
-    if not app.debug and request.is_secure:
-        response.headers['Strict-Transport-Security'] = (
-            'max-age=31536000; includeSubDomains; preload'
-        )
-    
-    # Referrer policy
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    
-    # Permissions policy
-    response.headers['Permissions-Policy'] = (
-        'geolocation=(), microphone=(), camera=()'
-    )
-    
-    return response
-
-
-
-@app.route('/')
+@web_bp.route('/')
 def index():
     """Render the home page."""
     return render_template('index.html')
 
-
-@app.route('/generate', methods=['POST'])
-@limiter.limit("10 per hour")  # Max 10 uploads per hour per IP
+@web_bp.route('/generate', methods=['POST'])
+@limiter.limit("10 per hour")
 def generate():
     """Process uploaded bindings file and generate reference cards."""
     errors = Errors()
@@ -345,24 +51,17 @@ def generate():
                                error_message='<h1>No bindings file supplied; please go back and select your binds file as per the instructions.</h1>')
     
     # Enhanced file validation
-    # Validate file extension
     if not file.filename.endswith('.binds'):
         return render_template('error.html',
                                error_message='<h1>Only .binds files are allowed</h1>')
     
-    # Read file with size limit
     try:
         xml_bytes = file.read()
-        
-        # Check file size (500KB max for a bindings file)
         if len(xml_bytes) > 512000:
             return render_template('error.html',
                                    error_message='<h1>File too large. Maximum size is 500KB</h1>')
         
-        # Decode with strict validation
         xml = xml_bytes.decode('utf-8')
-        
-        # Basic XML bomb detection (excessive repetition)
         if xml.count('<!ENTITY') > 10:
             return render_template('error.html',
                                    error_message='<h1>Invalid XML structure detected</h1>')
@@ -385,7 +84,6 @@ def generate():
     elif request.form.get('styling') == 'modifier':
         styling = 'Modifier'
     
-    # Create new config
     config = Config.newRandom()
     config.makeDir()
     run_id = config.name
@@ -394,14 +92,11 @@ def generate():
     with open(str(binds_path), 'w', encoding='utf-8') as f:
         f.write(xml)
     
-    # Always publish configurations, but use auto-generated description if none provided
     if not description or len(description.strip()) == 0:
-        # Generate automatic description based on detected devices
         description = f"Configuration {run_id[:6]}"
     
-    public = True  # Always public now
+    public = True 
     
-    # Parse bindings and generate images
     try:
         (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
         
@@ -458,7 +153,6 @@ def generate():
         traceback.print_exc()
         errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
-    # Check for unsupported devices
     for device_key, device in devices.items():
         ignored_devices = ['Mouse::0', 'ArduinoLeonardo::0', 'vJoy::0', 'vJoy::1', '16D00AEA::0']
         if device is None and device_key not in ignored_devices:
@@ -471,10 +165,8 @@ def generate():
     if len(created_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
         errors.errors = '<h1>The file supplied does not have any bindings for a supported controller or keyboard.</h1>'
     
-    # Always save replay info and database entry (now that public is always True)
     saveReplayInfo(config, description, styling, display_groups, devices, errors)
     
-    # Also save to SQLite database
     try:
         database.create_configuration(
             config_id=run_id,
@@ -489,9 +181,8 @@ def generate():
     except Exception as e:
         logError(f"Database insertion error for {run_id}: {e}")
     
-    # Use url_for for reliable external links
-    refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)
-    binds_url_dynamic = url_for('serve_config', path=f"{run_id}.binds", _external=True)
+    refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
+    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id}.binds", _external=True)
 
     return render_template('refcard.html',
                            run_id=run_id,
@@ -508,8 +199,7 @@ def generate():
                            binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)
 
-
-@app.route('/stats')
+@web_bp.route('/stats')
 def stats():
     """Show global statistics."""
     from scripts.database import get_configuration_stats
@@ -518,16 +208,14 @@ def stats():
     try:
         stats_data = get_configuration_stats()
         
-        # Prepare data for charts
         daily_labels = [row['date'] for row in stats_data['daily_stats']]
         daily_values = [row['count'] for row in stats_data['daily_stats']]
-        daily_labels.reverse() # Oldest first for chart
+        daily_labels.reverse()
         daily_values.reverse()
         
         device_labels = [row['device_display_name'] for row in stats_data['popular_devices']]
         device_values = [row['count'] for row in stats_data['popular_devices']]
         
-        # Pass JSON data for JS
         chart_data = {
             'daily': {'labels': daily_labels, 'values': daily_values},
             'devices': {'labels': device_labels, 'values': device_values}
@@ -540,8 +228,7 @@ def stats():
 
     return render_template('stats.html', stats=stats_data, chart_data=chart_data)
 
-
-@app.route('/list')
+@web_bp.route('/list')
 def list_configs():
     """List all public configurations."""
     device_filters = request.args.getlist('deviceFilter')
@@ -561,7 +248,6 @@ def list_configs():
             
             controllers = controllerNames(obj)
             
-            # Apply filter if provided
             if selected_controllers:
                 requested_devices = []
                 for controller in selected_controllers:
@@ -574,7 +260,7 @@ def list_configs():
                     continue
             
             items.append({
-                'url': url_for('show_binds', run_id=config.name, _external=True),
+                'url': url_for('web.show_binds', run_id=config.name, _external=True),
                 'description': name,
                 'controllers': ', '.join(sorted(controllers)),
                 'date': str(obj['timestamp'].ctime()),
@@ -591,15 +277,13 @@ def list_configs():
                            search_opts=search_opts,
                            items=items)
 
-
-@app.route('/binds/<run_id>')
+@web_bp.route('/binds/<run_id>')
 def show_binds(run_id):
     """Show a saved configuration."""
     import codecs
     import pickle
     
     errors = Errors()
-    logError(f"DEBUG: Starting show_binds for {run_id}")
     
     try:
         config = Config(run_id)
@@ -616,10 +300,8 @@ def show_binds(run_id):
         
         if not binds_path.exists():
             if not replay_path.exists():
-                # Truly not found
                 return render_template('error.html', error_message=f'<h1>Configuration "{run_id}" not found</h1>')
             
-            # Source missing but we have metadata (graceful degradation)
             source_missing = True
             xml = None
         else:
@@ -639,7 +321,6 @@ def show_binds(run_id):
         return render_template('error.html',
                                error_message=f'<h1>Configuration "{run_id}" invalid</h1>')
     
-    # Parse and generate (or recover)
     created_images = []
     
     try:
@@ -675,7 +356,6 @@ def show_binds(run_id):
                                 break
                         
                         if has_new_bindings:
-                            # REGENERATION logic
                             createHOTASImage(
                                 physical_keys, modifiers,
                                 supported_device['Template'],
@@ -691,53 +371,29 @@ def show_binds(run_id):
                 appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
         else:
-            # Source missing: check for existing images on disk
             logError(f"Source missing for {run_id}, checking existing images...")
             errors.errors = "<strong>Source file missing.</strong><br>The `.binds` file for this configuration is missing from the server. Showing archived images if available."
             
-            # We can rely on devices list from replay info if available, or just scan directory?
-            # Creating list based on supportedDevices checks
-            
-            # Check for images corresponding to supported devices
             for supported_device_key, supported_device in supportedDevices.items():
                 template = supported_device['Template']
-                # Check for -Template.jpg or -Template-1.jpg
-                
-                # Index 0
                 img_path_0 = config.pathWithNameAndSuffix(template, '.jpg')
                 if img_path_0.exists():
                      created_images.append(f'{supported_device_key}::0')
-                
-                # Index 1
                 img_path_1 = config.pathWithNameAndSuffix(f'{template}-1', '.jpg')
                 if img_path_1.exists():
                      created_images.append(f'{supported_device_key}::1')
-            
-            # Check for keyboard
-            kb_path = config.pathWithNameAndSuffix('m-Keyboard', '.jpg') # standard matrix
-            # Wait, appendKeyboardImage naming is complex. It's usually just runID-Keyboard.jpg check?
-            # Actually appendKeyboardImage calls save() 
-            # In appendKeyboardImage (not visible here but assuming standard naming):
-            # It usually appends to the image list.
-            
-            # Let's check for "Keyboard" specifically?
-            # The template for Keyboard is special.
-            # Assume if we find ANY keyboard image? 
-            # It's usually handled inside the loop for other apps but here it is separate.
-            pass # created_images is good enough for now.
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
         errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
     except Exception as e:
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
-        import traceback
-        traceback.print_exc()
+        # import traceback
+        # traceback.print_exc()
         errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
-    # Use url_for for reliable external links
-    refcard_url_dynamic = url_for('show_binds', run_id=run_id, _external=True)
-    binds_url_dynamic = url_for('serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
+    refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
+    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id}.binds", _external=True) # Modified path because serve_config expects relative to config root
 
     return render_template('refcard.html',
                            run_id=run_id,
@@ -754,12 +410,10 @@ def show_binds(run_id):
                            binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)
 
-
-@app.route('/devices')
+@web_bp.route('/devices')
 def list_devices():
     """List all supported devices."""
     from scripts.database import get_device_counts
-    
     try:
         counts = get_device_counts()
     except:
@@ -767,13 +421,7 @@ def list_devices():
 
     devices = []
     for name in sorted(supportedDevices.keys()):
-        # Map device key to template name which is often used as display name in DB
-        # Note: DB 'device_display_name' is usually the Template name (e.g., 'x52pro') 
-        # OR the device key? Let's check create_configuration in database.py
-        # It uses: device_info.get('Template', device_key)
-        
         template = supportedDevices[name].get('Template', name)
-        # Try to find count by template, or fall back to name
         count = counts.get(template, counts.get(name, 0))
         
         devices.append({
@@ -784,8 +432,7 @@ def list_devices():
     
     return render_template('devices.html', devices=devices)
 
-
-@app.route('/device/<device_name>')
+@web_bp.route('/device/<device_name>')
 def show_device(device_name):
     """Show a device's button layout."""
     try:
@@ -793,8 +440,6 @@ def show_device(device_name):
     except KeyError:
         return render_template('error.html',
                                error_message=f'<h1>{device_name} is not a supported controller.</h1>')
-    
-    template_name = supportedDevices[device_name]['Template']
     
     return render_template('refcard.html',
                            run_id='',
@@ -805,45 +450,21 @@ def show_device(device_name):
                            binds_url='',
                            supported_devices=supportedDevices)
 
-
+# PDF Generation Helper
 def generate_pdf(run_id, page_format='A4'):
-    """Generate a PDF for the given run_id's images."""
     from fpdf import FPDF
     from scripts.models import Config
-    import os
+    from PIL import Image
     
     config = Config(run_id)
     pdf_filename = f"{run_id}-{page_format}.pdf"
     pdf_path = config.path().parent / pdf_filename
     
-    # Return existing if cached (optional, can force regen for debugging)
-    # in dev/hotfix we might want to force regen, but for prod use cache
     if pdf_path.exists():
          return str(pdf_path)
 
-    # Collect images in specific order:
-    # 1. Device 0
-    # 2. Device 1 (if exists)
-    # 3. Keyboard
-    
     images_to_process = []
-    
-    # We don't have the parsed 'devices' list easily available here without re-parsing.
-    # However, we can scan the directory for files matching the run_id.
-    # But we want a specific order.
-    # Pattern: {run_id}-{template}.jpg OR {run_id}-{template}-{index}.jpg
-    # Keyboard: {run_id}-keyboard.jpg
-    
-    # Get all jpgs for this run
     all_files = list(config.path().parent.glob(f"{run_id}-*.jpg"))
-    
-    # Sort them to ensure determinism
-    # Typically: runID-template.jpg (main device)
-    # runID-template-1.jpg (secondary device)
-    # runID-keyboard.jpg (keyboard)
-    
-    # Naive sort might put keyboard in middle.
-    # Let's separate them.
     
     keyboard_img = None
     device_images = []
@@ -854,7 +475,6 @@ def generate_pdf(run_id, page_format='A4'):
         else:
             device_images.append(p)
             
-    # Sort device images by name (should usually put -1 after base)
     device_images.sort()
     
     ordered_images = device_images
@@ -864,23 +484,14 @@ def generate_pdf(run_id, page_format='A4'):
     if not ordered_images:
         return None
         
-    # Create PDF
     pdf = FPDF(orientation='P', unit='mm', format=page_format)
     pdf.set_auto_page_break(False)
     
-    import tempfile
-    
     for img_path in ordered_images:
         try:
-            # Open with PIL to check dimensions and sanitize
-            from PIL import Image
-            
             with Image.open(str(img_path)) as im:
-                # Convert to RGB to ensure compatibility (remove Alpha, handle CMYK)
                 if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
-                    # Create a white background
                     bg = Image.new('RGB', im.size, (255, 255, 255))
-                    # Paste image on top (using alpha channel if available)
                     if im.mode != 'RGBA':
                         im = im.convert('RGBA')
                     bg.paste(im, mask=im.split()[3])
@@ -890,49 +501,30 @@ def generate_pdf(run_id, page_format='A4'):
                 
                 width, height = im.size
                 ratio = width / height
-                
-                # Landscape if wider than tall
                 orientation = 'L' if ratio >= 1.2 else 'P'
-                
                 pdf.add_page(orientation=orientation)
                 
-                # Page dimensions in mm
                 if orientation == 'L':
-                    # A4: 297x210, Letter: 279x216
                     pw = 297 if page_format == 'A4' else 279 
                     ph = 210 if page_format == 'A4' else 216 
                 else:
                     pw = 210 if page_format == 'A4' else 216 
                     ph = 297 if page_format == 'A4' else 279
                 
-                # Calculate fit dimensions (keep aspect ratio)
-                # Available space (assuming small margin or full bleed)
-                # Let's target full bleed or slight margin
-                
-                # Setup target dimensions
                 target_w = pw
                 target_h = ph
-                
-                # Scale logic
-                # If image ratio > page ratio (Image constitutes "Wider"), fit to width
                 page_ratio = pw / ph
                 
                 if ratio > page_ratio:
-                    # Fit Width
                     w = target_w
                     h = target_w / ratio
                 else:
-                    # Fit Height
                     h = target_h
                     w = target_h * ratio
                 
-                # Center image
                 x = (pw - w) / 2
                 y = (ph - h) / 2
                 
-                # Save sanitized image to temp file for FPDF
-                # FPDF (pyfpdf) works best with files.
-                # using a temp file with .jpg extension
                 with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_img:
                     im.save(tmp_img, 'JPEG', quality=95)
                     tmp_name = tmp_img.name
@@ -940,10 +532,8 @@ def generate_pdf(run_id, page_format='A4'):
                 try:
                     pdf.image(tmp_name, x=x, y=y, w=w, h=h)
                 finally:
-                    # Cleanup temp file
                     if os.path.exists(tmp_name):
                         os.unlink(tmp_name)
-            
         except Exception as e:
             logError(f"Error adding image {img_path} to PDF: {e}")
             continue
@@ -956,7 +546,7 @@ def generate_pdf(run_id, page_format='A4'):
          
     return str(pdf_path)
 
-@app.route('/download/<run_id>/pdf')
+@web_bp.route('/download/<run_id>/pdf')
 def download_pdf(run_id):
     """Download existing or generate new PDF."""
     format_type = request.args.get('format', 'A4')
@@ -978,64 +568,39 @@ def download_pdf(run_id):
         logError(f"PDF Gen Error: {e}")
         return render_template('error.html', error_message=f'<h1>Error generating PDF</h1><p>{e}</p>')
 
-
-@app.route('/configs/<path:path>')
+@web_bp.route('/configs/<path:path>')
 def serve_config(path):
     """Serve generated configuration images and files."""
-    configs_folder = get_configs_path()
+    configs_folder = current_app.config['CONFIGS_FOLDER']
     return send_from_directory(configs_folder, path)
 
-@app.route('/scripts/<path:filename>')
+@web_bp.route('/scripts/<path:filename>')
 def serve_scripts(filename):
     """Serve script files."""
+    scripts_path = current_app.config['WWW_DIR'] / 'scripts'
     return send_from_directory(scripts_path, filename)
 
-@app.route('/static/<path:filename>')
+@web_bp.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files."""
-    # print(f"DEBUG: serve_static called with filename={filename}")
-    try:
-        return send_from_directory(WWW_DIR, filename)
-    except Exception as e:
-        # print(f"DEBUG: serve_static error for {filename}: {e}")
-        raise e
+    return send_from_directory(current_app.config['WWW_DIR'], filename)
 
-
-# Serve CSS file
-@app.route('/ed.css')
+@web_bp.route('/ed.css')
 def serve_css():
     """Serve the main CSS file."""
-    return send_from_directory(WWW_DIR, 'ed.css')
+    return send_from_directory(current_app.config['WWW_DIR'], 'ed.css')
 
-
-# Serve favicon
-@app.route('/favicon.ico')
+@web_bp.route('/favicon.ico')
 def serve_favicon():
     """Serve the favicon."""
-    return send_from_directory(WWW_DIR, 'favicon.ico')
+    return send_from_directory(current_app.config['WWW_DIR'], 'favicon.ico')
 
-
-# Serve fonts
-@app.route('/fonts/<path:filename>')
+@web_bp.route('/fonts/<path:filename>')
 def serve_fonts(filename):
     """Serve font files."""
-    return send_from_directory(WWW_DIR / 'fonts', filename)
+    return send_from_directory(current_app.config['WWW_DIR'] / 'fonts', filename)
 
-
-# Serve res (resources like images)
-@app.route('/res/<path:filename>')
+@web_bp.route('/res/<path:filename>')
 def serve_res(filename):
     """Serve resource files."""
-    return send_from_directory(WWW_DIR / 'res', filename)
-
-
-if __name__ == '__main__':
-    # Ensure configs directory exists
-    configs_path = get_configs_path()
-    configs_path.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Starting EDRefCard v{__version__}")
-    print(f"WWW directory: {WWW_DIR}")
-    print(f"Configs directory: {configs_path}")
-    
-    app.run(debug=True, host='0.0.0.0', port=8080)
+    return send_from_directory(current_app.config['WWW_DIR'] / 'res', filename)

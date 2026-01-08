@@ -6,7 +6,7 @@
 <div id="container">
     <div id="banner">
         <h1>EDRefCard</h1>
-        <a href="{{ url_for('index') }}" class="banner-home-link" title="Return to homepage">✕</a>
+        <a href="{{ url_for('web.index') }}" class="banner-home-link" title="Return to homepage">✕</a>
     </div>
 
     <div id="content">
@@ -47,25 +47,25 @@
 
         {% if device_index == 0 %}
         <img class="refcard-image lightbox-trigger"
-            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '.jpg') }}"
+            src="{{ url_for('web.serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '.jpg') }}"
             alt="{{ device }} Reference Card" />
         {% else %}
         <img class="refcard-image lightbox-trigger"
-            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '-' + device_index|string + '.jpg') }}"
+            src="{{ url_for('web.serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '-' + device_index|string + '.jpg') }}"
             alt="{{ device }} Reference Card ({{ device_index }})" />
         {% endif %}
         {% endfor %}
 
         {% if device_for_block_image %}
         <img class="refcard-image lightbox-trigger"
-            src="{{ url_for('serve_config', path=supported_devices[device_for_block_image]['Template'][:2] + '/' + supported_devices[device_for_block_image]['Template'] + '.jpg') }}"
+            src="{{ url_for('web.serve_config', path=supported_devices[device_for_block_image]['Template'][:2] + '/' + supported_devices[device_for_block_image]['Template'] + '.jpg') }}"
             alt="{{ device_for_block_image }} Block Diagram" />
         {% endif %}
 
         {% if not device_for_block_image and public and run_id %}
         <div class="form-section share-section" style="margin-top: 2rem;">
             <h3>🔗 Share Your Reference Card</h3>
-            
+
             <div class="share-grid">
                 <!-- Direct Link -->
                 <div class="share-item">
@@ -86,43 +86,45 @@
                     <div class="dropdown">
                         <button class="btn-secondary">📄 Download PDF ▼</button>
                         <div class="dropdown-content">
-                            <a href="{{ url_for('download_pdf', run_id=run_id, format='A4') }}">A4 Format</a>
-                            <a href="{{ url_for('download_pdf', run_id=run_id, format='Letter') }}">Letter Format</a>
+                            <a href="{{ url_for('web.download_pdf', run_id=run_id, format='A4') }}">A4 Format</a>
+                            <a href="{{ url_for('web.download_pdf', run_id=run_id, format='Letter') }}">Letter
+                                Format</a>
                         </div>
                     </div>
                 </div>
 
                 <!-- Social Share -->
                 <div class="social-share">
-                    <a href="https://www.reddit.com/submit?url={{ refcard_url }}&title=My Elite Dangerous Bindings (EDRefCard)" 
-                       target="_blank" rel="noopener noreferrer" class="btn-social reddit">
-                       Run on Reddit
+                    <a href="https://www.reddit.com/submit?url={{ refcard_url }}&title=My Elite Dangerous Bindings (EDRefCard)"
+                        target="_blank" rel="noopener noreferrer" class="btn-social reddit">
+                        Run on Reddit
                     </a>
-                    <a href="https://twitter.com/intent/tweet?text=Check out my Elite Dangerous bindings!&url={{ refcard_url }}" 
-                       target="_blank" rel="noopener noreferrer" class="btn-social twitter">
-                       Share on X
+                    <a href="https://twitter.com/intent/tweet?text=Check out my Elite Dangerous bindings!&url={{ refcard_url }}"
+                        target="_blank" rel="noopener noreferrer" class="btn-social twitter">
+                        Share on X
                     </a>
                 </div>
             </div>
 
             <p class="text-muted mt-2">
-                <small>You can replace your existing custom binds file with the downloaded .binds file to use these controls.</small>
+                <small>You can replace your existing custom binds file with the downloaded .binds file to use these
+                    controls.</small>
             </p>
         </div>
 
         <script>
-        function copyToClipboard(elementId) {
-            var copyText = document.getElementById(elementId);
-            copyText.select();
-            copyText.setSelectionRange(0, 99999); /* For mobile devices */
-            navigator.clipboard.writeText(copyText.value).then(() => {
-                // Visual feedback could be added here
-                const btn = copyText.nextElementSibling;
-                const original = btn.innerHTML;
-                btn.innerHTML = '✅';
-                setTimeout(() => btn.innerHTML = original, 2000);
-            });
-        }
+            function copyToClipboard(elementId) {
+                var copyText = document.getElementById(elementId);
+                copyText.select();
+                copyText.setSelectionRange(0, 99999); /* For mobile devices */
+                navigator.clipboard.writeText(copyText.value).then(() => {
+                    // Visual feedback could be added here
+                    const btn = copyText.nextElementSibling;
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '✅';
+                    setTimeout(() => btn.innerHTML = original, 2000);
+                });
+            }
         </script>
         {% endif %}
         {% endif %}
@@ -138,5 +140,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('serve_scripts', filename='lightbox.js') }}"></script>
+<script src="{{ url_for('web.serve_scripts', filename='lightbox.js') }}"></script>
 {% endblock %}

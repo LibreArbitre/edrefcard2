@@ -93,17 +93,32 @@
                     </div>
                 </div>
 
-                <!-- Social Share -->
                 <div class="social-share">
                     <a href="https://www.reddit.com/submit?url={{ refcard_url }}&title=My Elite Dangerous Bindings (EDRefCard)"
-                        target="_blank" rel="noopener noreferrer" class="btn-social reddit">
-                        Run on Reddit
+                        target="_blank" rel="noopener noreferrer" class="btn-social reddit" title="Share on Reddit">
+                        <span style="font-size: 1.2em;">🔴</span> Reddit
                     </a>
                     <a href="https://twitter.com/intent/tweet?text=Check out my Elite Dangerous bindings!&url={{ refcard_url }}"
-                        target="_blank" rel="noopener noreferrer" class="btn-social twitter">
-                        Share on X
+                        target="_blank" rel="noopener noreferrer" class="btn-social twitter" title="Share on X">
+                        <span style="font-size: 1.2em;">✖️</span> X
                     </a>
+                    <button onclick="copyToClipboard('refcardUrl')" class="btn-social discord"
+                        style="background-color: #5865F2; color: white; border: none; cursor: pointer;"
+                        title="Copy Link for Discord">
+                        <span style="font-size: 1.2em;">💬</span> Discord
+                    </button>
+                    <button onclick="toggleQRCode()" class="btn-social qrcode"
+                        style="background-color: #fff; color: #333; border: 1px solid #ccc; cursor: pointer;"
+                        title="Show QR Code">
+                        <span style="font-size: 1.2em;">📱</span> QR Code
+                    </button>
                 </div>
+            </div>
+
+            <!-- QR Code Container (Hidden by default) -->
+            <div id="qrcode-container" style="display: none; margin-top: 1rem; text-align: center;">
+                <div id="qrcode" style="display: inline-block; padding: 10px; background: white;"></div>
+                <p><small>Scan to open on mobile</small></p>
             </div>
 
             <p class="text-muted mt-2">
@@ -112,18 +127,39 @@
             </p>
         </div>
 
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <script>
             function copyToClipboard(elementId) {
                 var copyText = document.getElementById(elementId);
                 copyText.select();
                 copyText.setSelectionRange(0, 99999); /* For mobile devices */
                 navigator.clipboard.writeText(copyText.value).then(() => {
-                    // Visual feedback could be added here
-                    const btn = copyText.nextElementSibling;
-                    const original = btn.innerHTML;
-                    btn.innerHTML = '✅';
-                    setTimeout(() => btn.innerHTML = original, 2000);
+                    // Find the button that was clicked
+                    const activeElement = document.activeElement;
+                    if (activeElement && activeElement.tagName === 'BUTTON') {
+                        const original = activeElement.innerHTML;
+                        activeElement.innerHTML = '✅ Copied!';
+                        setTimeout(() => activeElement.innerHTML = original, 2000);
+                    }
                 });
+            }
+
+            var qrCodeGenerated = false;
+            function toggleQRCode() {
+                var container = document.getElementById('qrcode-container');
+                if (container.style.display === 'none') {
+                    container.style.display = 'block';
+                    if (!qrCodeGenerated) {
+                        new QRCode(document.getElementById("qrcode"), {
+                            text: "{{ refcard_url }}",
+                            width: 128,
+                            height: 128
+                        });
+                        qrCodeGenerated = true;
+                    }
+                } else {
+                    container.style.display = 'none';
+                }
             }
         </script>
         {% endif %}

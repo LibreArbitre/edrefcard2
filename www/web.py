@@ -564,7 +564,8 @@ def download_pdf(run_id):
                 download_name=f"EDRefCard-{run_id}-{format_type}.pdf"
             )
         else:
-             return render_template('error.html', error_message='<h1>No images found to generate PDF</h1>')
+             search_path = config.path().parent
+             return render_template('error.html', error_message=f'<h1>No images found to generate PDF</h1><p>Debug: Searched in {search_path} for pattern {run_id}-*.jpg</p>')
     except Exception as e:
         logError(f"PDF Gen Error: {e}")
         return render_template('error.html', error_message=f'<h1>Error generating PDF</h1><p>{e}</p>')

@@ -63,27 +63,67 @@
         {% endif %}
 
         {% if not device_for_block_image and public and run_id %}
-        <div class="form-section" style="margin-top: 2rem;">
+        <div class="form-section share-section" style="margin-top: 2rem;">
             <h3>🔗 Share Your Reference Card</h3>
-            <p>
-                <strong>Direct link:</strong><br>
-                <a href="{{ refcard_url }}">{{ refcard_url }}</a>
-            </p>
-            <p>
-                <strong>Download binds file:</strong><br>
-                <a href="{{ binds_url }}">{{ binds_url }}</a>
-            </p>
-            <p>
-                <strong>Download PDF (Archived):</strong><br>
-                <a href="{{ url_for('download_pdf', run_id=run_id, format='A4') }}"
-                    class="btn btn-sm btn-outline-secondary">📄 A4 Format</a>
-                <a href="{{ url_for('download_pdf', run_id=run_id, format='Letter') }}"
-                    class="btn btn-sm btn-outline-secondary" style="margin-left: 10px;">📄 Letter Format</a>
-            </p>
-            <p class="text-muted">
-                You can replace your existing custom binds file with this file to use these controls.
+            
+            <div class="share-grid">
+                <!-- Direct Link -->
+                <div class="share-item">
+                    <label>Direct Link</label>
+                    <div class="input-group">
+                        <input type="text" value="{{ refcard_url }}" readonly id="refcardUrl">
+                        <button onclick="copyToClipboard('refcardUrl')" class="btn-icon" title="Copy to Clipboard">
+                            📋
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Download Buttons -->
+                <div class="share-actions">
+                    <a href="{{ binds_url }}" class="btn-secondary" download>
+                        💾 Download .binds
+                    </a>
+                    <div class="dropdown">
+                        <button class="btn-secondary">📄 Download PDF ▼</button>
+                        <div class="dropdown-content">
+                            <a href="{{ url_for('download_pdf', run_id=run_id, format='A4') }}">A4 Format</a>
+                            <a href="{{ url_for('download_pdf', run_id=run_id, format='Letter') }}">Letter Format</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Social Share -->
+                <div class="social-share">
+                    <a href="https://www.reddit.com/submit?url={{ refcard_url }}&title=My Elite Dangerous Bindings (EDRefCard)" 
+                       target="_blank" rel="noopener noreferrer" class="btn-social reddit">
+                       Run on Reddit
+                    </a>
+                    <a href="https://twitter.com/intent/tweet?text=Check out my Elite Dangerous bindings!&url={{ refcard_url }}" 
+                       target="_blank" rel="noopener noreferrer" class="btn-social twitter">
+                       Share on X
+                    </a>
+                </div>
+            </div>
+
+            <p class="text-muted mt-2">
+                <small>You can replace your existing custom binds file with the downloaded .binds file to use these controls.</small>
             </p>
         </div>
+
+        <script>
+        function copyToClipboard(elementId) {
+            var copyText = document.getElementById(elementId);
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); /* For mobile devices */
+            navigator.clipboard.writeText(copyText.value).then(() => {
+                // Visual feedback could be added here
+                const btn = copyText.nextElementSibling;
+                const original = btn.innerHTML;
+                btn.innerHTML = '✅';
+                setTimeout(() => btn.innerHTML = original, 2000);
+            });
+        }
+        </script>
         {% endif %}
         {% endif %}
     </div>

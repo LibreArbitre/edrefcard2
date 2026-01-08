@@ -455,18 +455,30 @@ def show_device(device_name):
 # PDF Generation Helper
 def generate_pdf(run_id, page_format='A4'):
     from fpdf import FPDF
-    from scripts.models import Config
     from PIL import Image
+    from pathlib import Path
     
-    config = Config(run_id)
+    # Use Flask's CONFIGS_FOLDER directly for consistency with serve_config
+    configs_folder = Path(current_app.config['CONFIGS_FOLDER'])
+    config_dir = configs_folder / run_id[:2]
+    
     pdf_filename = f"{run_id}-{page_format}.pdf"
-    pdf_path = config.path().parent / pdf_filename
+    pdf_path = config_dir / pdf_filename
     
     if pdf_path.exists():
          return str(pdf_path)
 
-    images_to_process = []
-    all_files = list(config.path().parent.glob(f"{run_id}-*.jpg"))
+    # Search for images
+    search_pattern = f"{run_id}-*.jpg"
+    all_files = list(config_dir.glob(search_pattern))
+    
+    # Debug: log what we're searching for
+    logError(f"PDF Gen Debug: Looking in {config_dir} for {search_pattern}")
+    logError(f"PDF Gen Debug: config_dir.exists()={config_dir.exists()}")
+    if config_dir.exists():
+        dir_contents = list(config_dir.iterdir())[:20]  # List first 20 files
+        logError(f"PDF Gen Debug: Directory contains {len(list(config_dir.iterdir()))} items, first 20: {[f.name for f in dir_contents]}")
+    logError(f"PDF Gen Debug: Found {len(all_files)} matching files: {[f.name for f in all_files]}")
     
     keyboard_img = None
     device_images = []
@@ -484,7 +496,7 @@ def generate_pdf(run_id, page_format='A4'):
         ordered_images.append(keyboard_img)
     
     if not ordered_images:
-        logError(f"PDF Gen: No images found for {run_id} in {config.path().parent}. Search pattern: {run_id}-*.jpg")
+        logError(f"PDF Gen: No images found for {run_id} in {config_dir}. Search pattern: {search_pattern}")
         return None
         
     pdf = FPDF(orientation='P', unit='mm', format=page_format)

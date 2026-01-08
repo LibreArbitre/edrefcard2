@@ -182,7 +182,7 @@ def generate():
         logError(f"Database insertion error for {run_id}: {e}")
     
     refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
-    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id}.binds", _external=True)
+    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
 
     return render_template('refcard.html',
                            run_id=run_id,
@@ -393,7 +393,7 @@ def show_binds(run_id):
         errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
     refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
-    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id}.binds", _external=True) # Modified path because serve_config expects relative to config root
+    binds_url_dynamic = url_for('web.serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
 
     return render_template('refcard.html',
                            run_id=run_id,
@@ -482,6 +482,7 @@ def generate_pdf(run_id, page_format='A4'):
         ordered_images.append(keyboard_img)
     
     if not ordered_images:
+        logError(f"PDF Gen: No images found for {run_id} in {config.path().parent}. Search pattern: {run_id}-*.jpg")
         return None
         
     pdf = FPDF(orientation='P', unit='mm', format=page_format)

@@ -62,7 +62,11 @@
             alt="{{ device_for_block_image }} Block Diagram" />
         {% endif %}
 
-        {% if not device_for_block_image %}
+        {% endif %}
+        {# End of created_images/device_for_block_image section #}
+
+        {# Share section - shown for all configs with a run_id, regardless of images #}
+        {% if run_id and not device_for_block_image %}
         <div class="form-section share-section" style="margin-top: 2rem;">
             <h3>🔗 Share Your Reference Card</h3>
 
@@ -162,7 +166,6 @@
                 }
             }
         </script>
-        {% endif %}
         {% endif %}
     </div>
 

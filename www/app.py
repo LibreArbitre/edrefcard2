@@ -189,7 +189,7 @@ def add_security_headers(response):
         "img-src 'self' data:; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "script-src 'self' https://cdn.jsdelivr.net; "
+        "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "frame-ancestors 'self'"
     )
     

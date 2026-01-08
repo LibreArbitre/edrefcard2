@@ -739,13 +739,13 @@ main {
   color: #fff;
 }
 
-.social-share {
+.export-links {
   display: flex;
   gap: var(--spacing-md);
   margin-top: var(--spacing-sm);
 }
 
-.btn-social {
+.btn-export {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   color: white;
@@ -755,17 +755,17 @@ main {
   transition: opacity var(--transition-fast);
 }
 
-.btn-social:hover {
+.btn-export:hover {
   opacity: 1;
   text-decoration: none;
   color: white;
 }
 
-.reddit {
+.btn-red {
   background-color: #ff4500;
 }
 
-.twitter {
+.btn-dark {
   background-color: #1da1f2;
 }
 

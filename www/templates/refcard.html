@@ -67,12 +67,12 @@
 
         {# Share section - shown for all configs with a run_id, regardless of images #}
         {% if run_id and not device_for_block_image %}
-        <div class="form-section share-section" style="margin-top: 2rem;">
-            <h3>🔗 Share Your Reference Card</h3>
+        <div class="form-section tools-section" style="margin-top: 2rem;">
+            <h3>🔗 Export & Tools</h3>
 
-            <div class="share-grid">
+            <div class="tools-grid">
                 <!-- Direct Link -->
-                <div class="share-item">
+                <div class="tools-item">
                     <label>Direct Link</label>
                     <div class="input-group">
                         <input type="text" value="{{ refcard_url }}" readonly id="refcardUrl">
@@ -83,7 +83,7 @@
                 </div>
 
                 <!-- Download Buttons -->
-                <div class="share-actions">
+                <div class="tools-actions">
                     <a href="{{ binds_url }}" class="btn-secondary" download>
                         💾 Download .binds
                     </a>
@@ -99,16 +99,16 @@
 
                 <div class="export-links">
                     <a href="https://www.reddit.com/submit?url={{ refcard_url }}&title=My Elite Dangerous Bindings (EDRefCard)"
-                        target="_blank" rel="noopener noreferrer" class="btn-export btn-red" title="Share on Reddit">
+                        target="_blank" rel="noopener noreferrer" class="btn-export btn-red" title="Post to Forum">
                         <span style="font-size: 1.2em;">🔴</span> Reddit
                     </a>
                     <a href="https://twitter.com/intent/tweet?text=Check out my Elite Dangerous bindings!&url={{ refcard_url }}"
-                        target="_blank" rel="noopener noreferrer" class="btn-export btn-dark" title="Share on X">
+                        target="_blank" rel="noopener noreferrer" class="btn-export btn-dark" title="Post">
                         <span style="font-size: 1.2em;">✖️</span> X
                     </a>
                     <button onclick="copyToClipboard('refcardUrl')" class="btn-export btn-blue"
                         style="background-color: #5865F2; color: white; border: none; cursor: pointer;"
-                        title="Copy Link for Discord">
+                        title="Copy Link">
                         <span style="font-size: 1.2em;">💬</span> Discord
                     </button>
                     <button onclick="toggleQRCode()" class="btn-export btn-light"

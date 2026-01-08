@@ -685,8 +685,8 @@ main {
   }
 }
 
-/* ===== Sharing Section ===== */
-.share-grid {
+/* ===== Tools Section ===== */
+.tools-grid {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -712,7 +712,7 @@ main {
   border-color: var(--ed-orange);
 }
 
-.share-actions {
+.tools-actions {
   display: flex;
   gap: var(--spacing-md);
   flex-wrap: wrap;

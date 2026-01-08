@@ -325,6 +325,8 @@ def show_binds(run_id):
     
     try:
         if not source_missing:
+            # Ensure directory exists for image regeneration
+            config.makeDir()
             (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
             
             already_handled_devices = []

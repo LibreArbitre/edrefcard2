@@ -77,3 +77,43 @@ Use this hidden route to investigate the production environment without shell ac
 If the SQLite DB is corrupted or lost:
 1.  Ensure `www/configs` still contains the `.replay` files.
 2.  Go to `https://your-url/admin/migrate` and run the migration.
+
+---
+
+## 🌍 Language Policy
+
+**ALL code, comments, documentation, and commit messages MUST be in English.**
+
+### Why English-only?
+- ✅ Collaboration with upstream (international project)
+- ✅ Better tooling support (linters, IDEs, AI assistants)
+- ✅ Consistency across the codebase
+- ✅ Easier for future contributors
+
+### What must be in English?
+- Code files (`.py`, `.js`, `.html`, etc.)
+- Comments in code
+- Commit messages
+- Documentation files (`.md`, docstrings)
+- Configuration files (`docker-compose.yml`, etc.)
+- Variable names and function names
+
+### Exceptions
+- User-facing strings that need translation (use i18n)
+- Personal local files in `.gitignore` (e.g., `WORKFLOW.md` for personal use)
+
+### Examples
+
+#### ❌ Bad (French)
+```python
+# Génère une carte de référence
+def generer_carte(config):
+    # Code...
+```
+
+#### ✅ Good (English)
+```python
+# Generates a reference card
+def generate_card(config):
+    # Code...
+```

@@ -13,6 +13,9 @@ services:
       - APP_URL
       - EDREFCARD_CONFIGS_DIR=/app/www/configs
     restart: unless-stopped
+    # PAS DE PORTS - Dokploy/Traefik gère le routing automatiquement
+    # Le conteneur écoute sur le port 8000 en interne (défini dans Dockerfile)
+    # Traefik route le trafic depuis les domaines configurés
 
 volumes:
   edrefcard_data:

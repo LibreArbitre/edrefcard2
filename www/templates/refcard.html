@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}EDRefCard - Reference Card{% endblock %}
+
+{% block content %}
+<div id="container">
+    <div id="banner">
+        <h1>EDRefCard</h1>
+        <a href="{{ url_for('index') }}" class="banner-home-link" title="Return to homepage">✕</a>
+    </div>
+
+    <div id="content">
+        {% if errors.unhandled_devices_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.unhandled_devices_warnings|safe }}
+        </div>
+        {% endif %}
+
+        {% if errors.misconfiguration_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.misconfiguration_warnings|safe }}
+        </div>
+        {% endif %}
+
+        {% if errors.device_warnings %}
+        <div class="alert alert-warning">
+            {{ errors.device_warnings|safe }}
+        </div>
+        {% endif %}
+
+        {% if errors.errors %}
+        <div class="alert alert-danger">
+            {{ errors.errors|safe }}
+        </div>
+        {% endif %}
+
+        {% if created_images or device_for_block_image %}
+        {% for image in created_images %}
+        {% if '::' in image %}
+        {% set parts = image.split('::') %}
+        {% set device = parts[0] %}
+        {% set device_index = parts[1]|int %}
+        {% else %}
+        {% set device = image %}
+        {% set device_index = 0 %}
+        {% endif %}
+
+        {% if device_index == 0 %}
+        <img class="refcard-image lightbox-trigger"
+            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '.jpg') }}"
+            alt="{{ device }} Reference Card" />
+        {% else %}
+        <img class="refcard-image lightbox-trigger"
+            src="{{ url_for('serve_config', path=run_id[:2] + '/' + run_id + '-' + supported_devices[device]['Template'] + '-' + device_index|string + '.jpg') }}"
+            alt="{{ device }} Reference Card ({{ device_index }})" />
+        {% endif %}
+        {% endfor %}
+
+        {% if device_for_block_image %}
+        <img class="refcard-image lightbox-trigger"
+            src="{{ url_for('serve_config', path=supported_devices[device_for_block_image]['Template'][:2] + '/' + supported_devices[device_for_block_image]['Template'] + '.jpg') }}"
+            alt="{{ device_for_block_image }} Block Diagram" />
+        {% endif %}
+
+        {% if not device_for_block_image and public and run_id %}
+        <div class="form-section" style="margin-top: 2rem;">
+            <h3>🔗 Share Your Reference Card</h3>
+            <p>
+                <strong>Direct link:</strong><br>
+                <a href="{{ refcard_url }}">{{ refcard_url }}</a>
+            </p>
+            <p>
+                <strong>Download binds file:</strong><br>
+                <a href="{{ binds_url }}">{{ binds_url }}</a>
+            </p>
+            <p>
+                <strong>Download PDF (Archived):</strong><br>
+                <a href="{{ url_for('download_pdf', run_id=run_id, format='A4') }}"
+                    class="btn btn-sm btn-outline-secondary">📄 A4 Format</a>
+                <a href="{{ url_for('download_pdf', run_id=run_id, format='Letter') }}"
+                    class="btn btn-sm btn-outline-secondary" style="margin-left: 10px;">📄 Letter Format</a>
+            </p>
+            <p class="text-muted">
+                You can replace your existing custom binds file with this file to use these controls.
+            </p>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- Lightbox -->
+    <div id="lightbox" class="hidden">
+        <span class="lightbox-close">&times;</span>
+        <img class="lightbox-content" id="lightbox-img">
+        <div id="lightbox-caption"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('serve_scripts', filename='lightbox.js') }}"></script>
+{% endblock %}

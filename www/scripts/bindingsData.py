@@ -73,6 +73,29 @@ supportedDevices = OrderedDict([
     ('Winwing-Orion-Throttle-2-F18-Handle', {'Template': 'winwing-orion-throttle2-f18-handle', 'HandledDevices': ['4098BE62']}),
     ('Winwing-Ursa-Minor-Fighter-Right', {'Template': 'winwing-ursa-minor-fighter-right', 'HandledDevices': ['4098BC2A']}),
     ('Winwing-Ursa-Minor-Fighter-Left', {'Template': 'winwing-ursa-minor-fighter-left', 'HandledDevices': ['4098BC29']}),
+    # ==== COMMUNITY-DISCOVERED CONTROLLERS (Placeholders) ====
+    # Found via analysis of 100 random configurations from edrefcard.info (2794 total)
+    # These prevent "Unknown controller detected" warnings but have no visual layouts yet
+    ('VKB-STECS-VC', {'Template': 'vkb-stecs', 'HandledDevices': ['231D012C']}),
+    ('VKB-Device-13A', {'Template': 'vkb-13a', 'HandledDevices': ['231D013A']}),
+    ('VKB-Device-137', {'Template': 'vkb-137', 'HandledDevices': ['231D0137']}),
+    ('VKB-Device-11F', {'Template': 'vkb-11f', 'HandledDevices': ['231D011F']}),
+    ('VPC-Device-812F', {'Template': 'vpc-812f', 'HandledDevices': ['3344812F']}),
+    ('Winwing-Orion2-Extra', {'Template': 'winwing-orion2-extra', 'HandledDevices': ['4098BD64']}),
+    ('ThrustMaster-Device-B67F', {'Template': 'tm-b67f', 'HandledDevices': ['044FB67F']}),
+    ('ThrustMaster-TCA-Boeing', {'Template': 'tm-tca-boeing', 'HandledDevices': ['044F0412']}),
+    ('ThrustMaster-TWCS-Throttle', {'Template': 'twcs-throttle', 'HandledDevices': ['TWCS']}),
+    ('Logitech-Device-C262', {'Template': 'logitech-c262', 'HandledDevices': ['046DC262']}),
+    ('Logitech-Device-C2AB', {'Template': 'logitech-c2ab', 'HandledDevices': ['046DC2AB']}),
+    ('Logitech-Device-C29B', {'Template': 'logitech-c29b', 'HandledDevices': ['046DC29B']}),
+    ('XBox-Elite-Variant-B00', {'Template': 'xbox-elite-b00', 'HandledDevices': ['045E0B00']}),
+    ('XBox-Controller-B12', {'Template': 'xbox-b12', 'HandledDevices': ['045E0B12']}),
+    ('HORI-Device-18E', {'Template': 'hori-18e', 'HandledDevices': ['0F0D018E']}),
+    ('HORI-Device-18F', {'Template': 'hori-18f', 'HandledDevices': ['0F0D018F']}),
+    ('DragonRise-189C', {'Template': 'dragonrise-189c', 'HandledDevices': ['0079189C']}),
+    ('DragonRise-0006', {'Template': 'dragonrise-0006', 'HandledDevices': ['00790006']}),
+    ('Unknown-Device-5758', {'Template': 'unknown-5758', 'HandledDevices': ['04835758']}),
+    ('Unknown-Device-B7', {'Template': 'unknown-b7', 'HandledDevices': ['2F2400B7']}),
     ('Keyboard', {'Template': 'keyboard', 'HandledDevices': ['Keyboard']})
 ])
 

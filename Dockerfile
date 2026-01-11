@@ -1,30 +1,50 @@
-FROM python:3
+FROM python:3.13-slim
 
+# Install ImageMagick for wand library
 RUN apt-get update -y \
-    && apt-get install -y apache2 \
+    && apt-get install -y libmagickwand-dev \
     && apt-get clean -y \
     && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/*    
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install lxml wand legacy-cgi
+# Set work directory
+# Set work directory for build
+WORKDIR /app
 
-# Copy over the apache configuration file and enable the site
-RUN a2enmod headers rewrite cgi
+# Copy requirements first for better caching
+COPY requirements.txt .
 
-COPY ./conf/apache/edrefcard.conf /etc/apache2/sites-available/edrefcard.conf
-COPY ./www/ /var/www/html
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN mkdir /var/www/html/configs \
-    && chmod uga+rw /var/www/html/configs 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-RUN echo "SetEnv PYTHONIOENCODING utf-8" >> /etc/apache2/apache2.conf
+# Copy application code
+COPY ./www/ /app/www/
+COPY ./bindings/ /app/bindings/
 
-RUN a2dissite 000-default.conf
-RUN a2ensite edrefcard.conf
+# Set work directory to where app.py is
+WORKDIR /app/www
 
-EXPOSE 80
+# Create configs and data directories
+RUN mkdir -p /app/www/configs /app/www/data \
+    && chown -R appuser:appuser /app/www/configs /app/www/data \
+    && chmod 755 /app/www/configs /app/www/data
 
-WORKDIR /var/www/html
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
+# Admin credentials (override these in docker-compose or docker run)
+ENV EDREFCARD_ADMIN_USER=admin
+ENV EDREFCARD_ADMIN_PASS=changeme
+ENV FLASK_SECRET_KEY=change-this-in-production
 
-CMD  /usr/sbin/apache2ctl -D FOREGROUND
+# Switch to non-root user
+USER appuser
 
+# Expose port
+EXPOSE 8000
+
+# Run with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "app:app"]

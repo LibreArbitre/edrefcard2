@@ -445,6 +445,12 @@ def show_device(device_name):
     
     return render_template('refcard.html',
                            run_id='',
+                           errors={
+                               'unhandled_devices_warnings': '',
+                               'misconfiguration_warnings': '',
+                               'device_warnings': '',
+                               'errors': '',
+                           },
                            created_images=[],
                            device_for_block_image=device_name,
                            public=False,

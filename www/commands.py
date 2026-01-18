@@ -1,10 +1,7 @@
 import click
-import shutil
 import time
 import re
-from pathlib import Path
 from flask.cli import with_appcontext
-from scripts.utils import logError
 
 @click.command('clean-cache')
 @click.option('--days', default=1, help='Delete files older than X days')
@@ -54,7 +51,7 @@ def find_unsupported_command(logfile):
     unsupported = set()
     
     try:
-        with open(logfile, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(logfile, encoding='utf-8', errors='ignore') as f:
             for line in f:
                 match = pattern.search(line)
                 if match:
@@ -70,22 +67,6 @@ def find_unsupported_command(logfile):
     except Exception as e:
         click.echo(f"Error reading log file: {e}")
 
-
-@click.command('migrate-legacy')
-@with_appcontext
-def migrate_legacy_command():
-    """Migrate legacy pickle configurations to SQLite."""
-    from scripts import database
-    from scripts.models import Config
-    
-    configs_path = Config.configsPath()
-    if not configs_path.exists():
-        click.echo(f"Configs directory not found: {configs_path}")
-        return
-        
-    click.echo(f"Migrating from {configs_path}...")
-    migrated, errors = database.migrate_from_pickle(configs_path)
-    click.echo(f"Migration complete: {migrated} migrated, {errors} errors.")
 
 
 @click.command('import-defaults')
@@ -145,19 +126,9 @@ def import_defaults_command(limit):
             # Create description from filename
             description = f"Default: {bind_file.stem}"
             
-            # Save .replay file (crucial for rendering)
-            parser.saveReplayInfo(
-                config=config,
-                description=description,
-                styling='None',
-                displayGroups=display_groups,
-                devices=devices,
-                errors=parse_errors
-            )
-            
-            # Save to database
-            # Extract warnings for DB
+            # Save to database (no longer using .replay pickle files)
             database.create_configuration(
+
                 config_id=config.name,
                 description=description,
                 styling='None',

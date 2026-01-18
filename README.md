@@ -2,7 +2,7 @@
 
 Elite: Dangerous has a great many command bindings to learn. To help with that, EDRefCard generates a printable reference card from your Elite: Dangerous bindings file.
 
-Currently hosted at [https://edrefcard.dp.l0l.fr/](https://edrefcard.dp.l0l.fr/).
+Currently hosted at [https://edrefcard2.l0l.fr/](https://edrefcard2.l0l.fr/).
 
 ## Dependencies
 
@@ -108,10 +108,35 @@ Comprehensive admin panel for configuration management:
 - View usage statistics and popular devices
 - Search and filter configurations
 - Toggle public/private visibility
-- Bulk operations and data migration tools
+- Batch import .binds files
 
-### Auto-Migration
-Legacy pickle-based configurations are automatically migrated to SQLite on first startup.
+
+### Friendly URLs
+Configurations now use the bindings filename as their unique ID in the URL (e.g., `/binds/my-setup`).
+If a name is already taken, a random suffix is added to ensure uniqueness.
+
+
+### 📊 Global Analytics
+New in v2.1: A public dashboard (`/stats`) showing:
+- Daily upload activity charts.
+- Most popular controller types rankings.
+
+### 🔌 Public API
+New in v2.1: A JSON API is available for third-party integrations.
+- `POST /api/v1/generate`: Programmatic upload of bindings.
+- `GET /api/v1/binds/<id>`: Retrieve configuration metadata.
+
+## Changelog
+
+### v2.1 (2025-01-08)
+*   **Frontend**:
+    *   Added **Drag & Drop** support with immediate file validation and preview.
+    *   Added **Sharing Tools**: Copy link button, social sharing (Reddit/X), and visual feedback.
+    *   Added **Global Analytics Dashboard** (`/stats`) with Chart.js visualization.
+*   **Backend**:
+    *   Implemented **Public JSON API** (`/api/v1/generate`).
+    *   Refactored `app.py` into modular **Blueprints** (`web`, `api`, `admin`) for better maintainability.
+    *   Standardized route namespaces in templates.
 
 ## Configuration
 
@@ -123,14 +148,16 @@ The application can be configured via environment variables or by modifying the 
 
 ## Supported Controllers
 
-EDRefCard supports 68+ controllers including:
+EDRefCard supports 88+ controllers including:
 - Thrustmaster (T16000M, HOTAS Warthog, T-Flight, etc.)
 - Logitech (Extreme 3D Pro, X52, X56, etc.)
-- VKB (Gladiator, Kosmosima, etc.)
+- VKB (Gladiator, Kosmosima, STECS, etc.)
 - Virpil (WarBRD, Alpha, MongoosT, etc.)
+- Winwing (Orion, Ursa Minor)
 - CH Products (Fighterstick, Pro Throttle, etc.)
-- Xbox 360 / PlayStation controllers
+- Xbox 360 / PlayStation / Gamepads
 - Standard keyboard
+
 
 See the full list at `/devices` on the running application.
 
@@ -155,15 +182,16 @@ Set the following environment variables to configure admin access:
 - **Dashboard**: View statistics on configuration usage and popular devices
 - **Configurations**: List, search, delete, and toggle visibility of user configurations
 - **Devices**: View list of supported devices and their template mappings
-- **Data Migration**: Tool to import legacy pickle files into the SQLite database
 
 ## Data Storage
 
-EDRefCard v2.0 uses a hybrid storage approach:
+EDRefCard v2.2 uses a hybrid storage approach:
 - **SQLite Database (`edrefcard.db`)**: Stores configuration metadata (id, description, status, devices used).
 - **Filesystem**: Stores generated images (`.jpg`) and original bindings files (`.binds`) in the `configs/` directory.
 
-When upgrading from v1.0, use the `/admin/migrate` tool to import existing pickle files into the database.
+> [!NOTE]
+> All legacy `.replay` and pickle-based metadata systems have been fully replaced by the SQLite database.
+
 
 ## Maintenance
 
@@ -175,9 +203,6 @@ flask --app www/app.py clean-cache --days 1
 
 # Find unsupported controls in a log file
 flask --app www/app.py find-unsupported error.log
-
-# Import legacy configurations (pickle) to SQLite
-flask --app www/app.py migrate-legacy
 ```
 
 ## Development

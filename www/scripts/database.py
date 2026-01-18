@@ -309,18 +309,26 @@ def get_configuration_stats():
             'popular_devices': [dict(d) for d in popular_devices]
         }
 
-def get_device_counts():
+def get_device_counts(public_only=False):
     """Get count of configurations for each device type.
     
+    Args:
+        public_only: If True, only count public configurations with descriptions.
+        
     Returns:
         Dictionary mapping device_display_name to count
     """
+    where_clause = ""
+    if public_only:
+        where_clause = "WHERE c.is_public = 1 AND c.description != ''"
+        
     with get_db() as conn:
-        rows = conn.execute("""
-            SELECT device_display_name, COUNT(*) as count
-            FROM config_devices
-            WHERE device_display_name IS NOT NULL
-            GROUP BY device_display_name
+        rows = conn.execute(f"""
+            SELECT cd.device_display_name, COUNT(*) as count
+            FROM config_devices cd
+            JOIN configurations c ON cd.config_id = c.id
+            {where_clause}
+            GROUP BY cd.device_display_name
         """).fetchall()
         return {r['device_display_name']: r['count'] for r in rows}
 

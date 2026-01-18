@@ -470,7 +470,7 @@ def list_devices():
     """List all supported devices."""
     from scripts.database import get_device_counts
     try:
-        counts = get_device_counts()
+        counts = get_device_counts(public_only=True)
     except Exception:
         counts = {}
 

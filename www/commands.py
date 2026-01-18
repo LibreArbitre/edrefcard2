@@ -145,19 +145,9 @@ def import_defaults_command(limit):
             # Create description from filename
             description = f"Default: {bind_file.stem}"
             
-            # Save .replay file (crucial for rendering)
-            parser.saveReplayInfo(
-                config=config,
-                description=description,
-                styling='None',
-                displayGroups=display_groups,
-                devices=devices,
-                errors=parse_errors
-            )
-            
-            # Save to database
-            # Extract warnings for DB
+            # Save to database (no longer using .replay pickle files)
             database.create_configuration(
+
                 config_id=config.name,
                 description=description,
                 styling='None',

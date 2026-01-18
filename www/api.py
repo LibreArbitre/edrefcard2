@@ -7,7 +7,6 @@ from scripts import (
     parseFormData,
     createHOTASImage,
     appendKeyboardImage,
-    saveReplayInfo,
     logError
 )
 from scripts import database
@@ -128,8 +127,7 @@ def generate_api():
         if devices.get('Keyboard::0') is not None:
             appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
-        # 4. Save Metadata
-        saveReplayInfo(config, description, styling, display_groups, devices, errors)
+        # 4. Save Metadata to SQLite database (no longer using .replay pickle files)
         
         database.create_configuration(
             config_id=run_id,

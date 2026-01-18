@@ -293,7 +293,8 @@ def batch_import():
         return render_template('admin/batch_import.html')
     
     # POST: Process uploaded files
-    from scripts import parseBindings, parseFormData, createBlockImage, saveReplayInfo
+    from scripts import parseBindings, parseFormData, createBlockImage
+
     from scripts.models import Config, Errors
     
     files = request.files.getlist('binds_files')

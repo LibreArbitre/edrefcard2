@@ -9,11 +9,11 @@ from scripts import (
     createHOTASImage,
     appendKeyboardImage,
     createBlockImage,
-    saveReplayInfo,
     controllerNames,
     logError,
     __version__
 )
+
 from scripts import database
 import os
 import tempfile
@@ -165,9 +165,9 @@ def generate():
     if len(created_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
         errors.errors = '<h1>The file supplied does not have any bindings for a supported controller or keyboard.</h1>'
     
-    saveReplayInfo(config, description, styling, display_groups, devices, errors)
-    
+    # Store configuration in SQLite database (no longer using .replay pickle files)
     try:
+
         database.create_configuration(
             config_id=run_id,
             description=description,
@@ -281,25 +281,18 @@ def list_configs():
 def show_binds(run_id):
     """Show a saved configuration."""
     import codecs
-    import pickle
     
     errors = Errors()
     
     try:
         config = Config(run_id)
         binds_path = config.pathWithSuffix('.binds')
-        replay_path = config.pathWithSuffix('.replay')
         
-        replay_info = {}
-        if replay_path.exists():
-            try:
-                with replay_path.open('rb') as pickle_file:
-                    replay_info = pickle.load(pickle_file)
-            except Exception as e:
-                logError(f"Error loading replay for {run_id}: {e}")
+        # Get configuration from SQLite database (instead of .replay pickle files)
+        db_config = database.get_configuration(run_id)
         
         if not binds_path.exists():
-            if not replay_path.exists():
+            if db_config is None:
                 return render_template('error.html', error_message=f'<h1>Configuration "{run_id}" not found</h1>')
             
             source_missing = True
@@ -309,13 +302,20 @@ def show_binds(run_id):
             with codecs.open(str(binds_path), 'r', 'utf-8') as f:
                 xml = f.read()
         
-        display_groups = replay_info.get('displayGroups', ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI'])
-        styling = replay_info.get('styling', 'None')
-        description = replay_info.get('description', '')
-        
-        if not source_missing:
-            errors.misconfigurationWarnings = replay_info.get('misconfigurationWarnings', replay_info.get('warnings', ''))
-            errors.deviceWarnings = replay_info.get('deviceWarnings', '')
+        # Get display options from database, with sensible defaults for legacy configs
+        if db_config:
+            display_groups = db_config.get('display_groups', ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI'])
+            styling = db_config.get('styling', 'None')
+            description = db_config.get('description', '')
+            if not source_missing:
+                errors.misconfigurationWarnings = db_config.get('misc_warnings', '')
+                errors.deviceWarnings = db_config.get('device_warnings', '')
+        else:
+            # Fallback defaults for configs not in database (very old legacy)
+            display_groups = ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI']
+            styling = 'None'
+            description = ''
+
 
     except (ValueError):
         return render_template('error.html',

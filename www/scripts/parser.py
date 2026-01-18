@@ -453,7 +453,7 @@ def controllerNames(configObj):
     def displayName(controller):
         try:
             return hotasDetails[controller]['displayName']
-        except:
+        except Exception:
             return controller
     
     controllers = {

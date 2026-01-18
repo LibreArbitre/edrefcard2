@@ -73,7 +73,21 @@ Use this hidden route to investigate the production environment without shell ac
 3.  Restart app (or reload if in dev mode).
 
 ### Restoring Database
-If the SQLite DB is corrupted or lost, data can only be recovered if backups exist. Legacy pickle migration is no longer supported as of v2.2.
+If the SQLite DB is corrupted or lost, data can only be recovered if backups exist. The legacy pickle migration system has been removed in v2.2 to simplify the codebase.
+
+## 🛠️ Quality Assurance & CI/CD
+
+### Strict Code Quality (Ruff)
+To ensure a reliable production deployment and avoid breaking CI/CD pipelines, **you MUST run and fix all Ruff linting errors before any commit, push, or merge**.
+
+1.  **Check**: `ruff check .`
+2.  **Fix**: `ruff check . --fix` (only for safe autofixes)
+3.  **Manual Fixes**: Address any remaining errors manually until the report is 100% clean.
+
+> [!IMPORTANT]
+> A clean Ruff report is mandatory for merging into `main`. Never push code with linting errors, as it may block automated production deployments.
+
+
 
 
 ---

@@ -19,12 +19,17 @@ WWW_DIR = Path(__file__).parent.resolve()
 scripts_path = WWW_DIR / 'scripts'
 sys.path.insert(0, str(scripts_path))
 
-# Import from the modular package
-from scripts import (
+from scripts import (  # noqa: E402
     __version__,
     Config,
 )
-from scripts import database
+from scripts import database  # noqa: E402
+
+from web import web_bp  # noqa: E402
+from extensions import limiter  # noqa: E402
+from commands import clean_cache_command, find_unsupported_command, import_defaults_command  # noqa: E402
+from flask_limiter.errors import RateLimitExceeded  # noqa: E402
+
 
 app = Flask(__name__, 
             static_folder=str(WWW_DIR), 
@@ -70,30 +75,33 @@ with app.app_context():
 
 
 # Register admin blueprint
-from admin import admin_bp
+from admin import admin_bp  # noqa: E402
 app.register_blueprint(admin_bp)
 
+
 # Register API blueprint
-from api import api_bp
+from api import api_bp  # noqa: E402
 app.register_blueprint(api_bp)
 
+
 # Register Web blueprint
-from web import web_bp
 app.register_blueprint(web_bp)
+
 
 # Initialize Limiter
 # (Limiter is defined in extensions.py which web.py uses)
-from extensions import limiter
 limiter.init_app(app)
 
+
 # Register CLI commands
-from commands import clean_cache_command, find_unsupported_command, import_defaults_command
 app.cli.add_command(clean_cache_command)
 app.cli.add_command(find_unsupported_command)
 app.cli.add_command(import_defaults_command)
 
 
-from flask_limiter.errors import RateLimitExceeded
+
+
+
 
 @app.errorhandler(RateLimitExceeded)
 def handle_ratelimit_error(e):
@@ -111,7 +119,7 @@ def handle_exception(e):
     try:
         from scripts import logError
         logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
-    except:
+    except Exception as e:
         print(f"Failed to log to memory buffer: {e}")
         
     # Re-raise key system exceptions

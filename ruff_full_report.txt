@@ -1,0 +1,122 @@
+www\app.py:23:1: E402 Module level import not at top of file
+   |
+22 |   # Import from the modular package
+23 | / from scripts import (
+24 | |     __version__,
+25 | |     Config,
+26 | | )
+   | |_^ E402
+27 |   from scripts import database
+   |
+
+www\app.py:27:1: E402 Module level import not at top of file
+   |
+25 |     Config,
+26 | )
+27 | from scripts import database
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E402
+28 |
+29 | app = Flask(__name__, 
+   |
+
+www\app.py:73:1: E402 Module level import not at top of file
+   |
+72 | # Register admin blueprint
+73 | from admin import admin_bp
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^ E402
+74 | app.register_blueprint(admin_bp)
+   |
+
+www\app.py:77:1: E402 Module level import not at top of file
+   |
+76 | # Register API blueprint
+77 | from api import api_bp
+   | ^^^^^^^^^^^^^^^^^^^^^^ E402
+78 | app.register_blueprint(api_bp)
+   |
+
+www\app.py:81:1: E402 Module level import not at top of file
+   |
+80 | # Register Web blueprint
+81 | from web import web_bp
+   | ^^^^^^^^^^^^^^^^^^^^^^ E402
+82 | app.register_blueprint(web_bp)
+   |
+
+www\app.py:86:1: E402 Module level import not at top of file
+   |
+84 | # Initialize Limiter
+85 | # (Limiter is defined in extensions.py which web.py uses)
+86 | from extensions import limiter
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E402
+87 | limiter.init_app(app)
+   |
+
+www\app.py:90:1: E402 Module level import not at top of file
+   |
+89 | # Register CLI commands
+90 | from commands import clean_cache_command, find_unsupported_command, import_defaults_command
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E402
+91 | app.cli.add_command(clean_cache_command)
+92 | app.cli.add_command(find_unsupported_command)
+   |
+
+www\app.py:96:1: E402 Module level import not at top of file
+   |
+96 | from flask_limiter.errors import RateLimitExceeded
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E402
+97 |
+98 | @app.errorhandler(RateLimitExceeded)
+   |
+
+www\app.py:114:5: E722 Do not use bare `except`
+    |
+112 |         from scripts import logError
+113 |         logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
+114 |     except:
+    |     ^^^^^^ E722
+115 |         print(f"Failed to log to memory buffer: {e}")
+    |
+
+www\scripts\controlsData.py:173:5: F601 Dictionary key literal `'YawAxisRaw'` repeated
+    |
+171 |     'VerticalThrustAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 48, 'Name': 'Vertical Thrust (Alt)', 'Type': 'AnaÔÇª
+172 |     'LateralThrustAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 49, 'Name': 'Lateral Thrust (Alt)', 'Type': 'AnaloÔÇª
+173 |     'YawAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 50, 'Name': 'Yaw', 'Type': 'Analogue', 'HideIfSameAs': []},
+    |     ^^^^^^^^^^^^ F601
+174 |     'RollAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order':51, 'Name': 'Roll', 'Type': 'Analogue', 'HideIfSameAs': []},
+175 |     'PitchAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 52, 'Name': 'Pitch', 'Type': 'Analogue', 'HideIfSameAs': []},
+    |
+    = help: Remove repeated key literal `'YawAxisRaw'`
+
+www\scripts\controlsData.py:174:5: F601 Dictionary key literal `'RollAxisRaw'` repeated
+    |
+172 |     'LateralThrustAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 49, 'Name': 'Lateral Thrust (Alt)', 'Type': 'AnaloÔÇª
+173 |     'YawAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 50, 'Name': 'Yaw', 'Type': 'Analogue', 'HideIfSameAs': []},
+174 |     'RollAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order':51, 'Name': 'Roll', 'Type': 'Analogue', 'HideIfSameAs': []},
+    |     ^^^^^^^^^^^^^ F601
+175 |     'PitchAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 52, 'Name': 'Pitch', 'Type': 'Analogue', 'HideIfSameAs': []},
+    |
+    = help: Remove repeated key literal `'RollAxisRaw'`
+
+www\scripts\controlsData.py:175:5: F601 Dictionary key literal `'PitchAxisRaw'` repeated
+    |
+173 |     'YawAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 50, 'Name': 'Yaw', 'Type': 'Analogue', 'HideIfSameAs': []},
+174 |     'RollAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order':51, 'Name': 'Roll', 'Type': 'Analogue', 'HideIfSameAs': []},
+175 |     'PitchAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 52, 'Name': 'Pitch', 'Type': 'Analogue', 'HideIfSameAs': []},
+    |     ^^^^^^^^^^^^^^ F601
+176 |
+177 |     # Selecting a target and firing
+    |
+    = help: Remove repeated key literal `'PitchAxisRaw'`
+
+www\scripts\parser.py:456:9: E722 Do not use bare `except`
+    |
+454 |         try:
+455 |             return hotasDetails[controller]['displayName']
+456 |         except:
+    |         ^^^^^^ E722
+457 |             return controller
+    |
+
+Found 13 errors.

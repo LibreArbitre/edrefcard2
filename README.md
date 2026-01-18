@@ -108,7 +108,8 @@ Comprehensive admin panel for configuration management:
 - View usage statistics and popular devices
 - Search and filter configurations
 - Toggle public/private visibility
-- Bulk operations and data migration tools
+- Batch import .binds files
+
 
 ### Friendly URLs
 Configurations now use the bindings filename as their unique ID in the URL (e.g., `/binds/my-setup`).
@@ -188,7 +189,9 @@ EDRefCard v2.2 uses a hybrid storage approach:
 - **SQLite Database (`edrefcard.db`)**: Stores configuration metadata (id, description, status, devices used).
 - **Filesystem**: Stores generated images (`.jpg`) and original bindings files (`.binds`) in the `configs/` directory.
 
-When upgrading from v1.0, use the `/admin/migrate` tool to import existing pickle files into the database.
+> [!NOTE]
+> All legacy `.replay` and pickle-based metadata systems have been fully replaced by the SQLite database.
+
 
 ## Maintenance
 

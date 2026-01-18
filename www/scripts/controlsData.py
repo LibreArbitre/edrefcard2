@@ -170,9 +170,7 @@ controls = {
     'YawAxisAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 47, 'Name': 'Yaw (Alt)', 'Type': 'Analogue', 'HideIfSameAs': ['YawAxisRaw']},
     'VerticalThrustAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 48, 'Name': 'Vertical Thrust (Alt)', 'Type': 'Analogue', 'HideIfSameAs': ['VerticalThrustRaw']},
     'LateralThrustAlternate': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 49, 'Name': 'Lateral Thrust (Alt)', 'Type': 'Analogue', 'HideIfSameAs': ['LateralThrustRaw']},
-    'YawAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 50, 'Name': 'Yaw', 'Type': 'Analogue', 'HideIfSameAs': []},
-    'RollAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order':51, 'Name': 'Roll', 'Type': 'Analogue', 'HideIfSameAs': []},
-    'PitchAxisRaw': {'Group': 'Ship', 'Category': 'Navigation', 'Order': 52, 'Name': 'Pitch', 'Type': 'Analogue', 'HideIfSameAs': []},
+
 
     # Selecting a target and firing
     'SelectTarget': {'Group': 'Ship', 'Category': 'Combat', 'Order': 101, 'Name': 'Target Ahead', 'Type': 'Digital', 'HasAnalogue': False, 'HideIfSameAs': []},

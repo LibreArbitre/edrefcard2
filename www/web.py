@@ -265,12 +265,13 @@ def list_configs():
                 if not any(rd in controllers_list for rd in requested_devices_set):
                     continue
             
-            # Format timestamp
+            # Format timestamp (US date format, no time)
             created_at = db_config.get('created_at', '')
             if hasattr(created_at, 'strftime'):
-                date_str = created_at.strftime('%c')
+                date_str = created_at.strftime('%Y-%m-%d')
             else:
-                date_str = str(created_at)
+                date_str = str(created_at)[:10] if created_at else ''
+
             
             items.append({
                 'url': url_for('web.show_binds', run_id=db_config['id'], _external=True),

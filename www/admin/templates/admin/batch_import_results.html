@@ -26,7 +26,7 @@
                         <td>{{ filename }}</td>
                         <td><code>{{ config_id }}</code></td>
                         <td>
-                            <a href="{{ url_for('bindings', config_id=config_id) }}" class="btn btn-sm btn-primary"
+                            <a href="{{ url_for('web.show_binds', run_id=config_id) }}" class="btn btn-sm btn-primary"
                                 target="_blank">
                                 View
                             </a>

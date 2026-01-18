@@ -236,18 +236,25 @@ def list_configs():
     
     search_opts = {'controllers': selected_controllers} if selected_controllers else {}
     
-    objs = Config.allConfigs(sortKey=lambda obj: str(obj['description']).casefold())
+    # Use SQLite database instead of pickle files
+    db_configs, total = database.list_configurations(
+        page=1, 
+        per_page=1000,  # Get all for client-side filtering
+        public_only=True
+    )
     
     items = []
-    for obj in objs:
+    for db_config in db_configs:
         try:
-            config = Config(obj['runID'])
-            name = str(obj['description'])
+            name = str(db_config.get('description', ''))
             if name == '':
                 continue
             
-            controllers = controllerNames(obj)
+            # Get devices from database format
+            device_names = db_config.get('device_names', '') or ''
+            controllers_list = [d.strip() for d in device_names.split(',') if d.strip()]
             
+            # Filter by selected controllers if any
             if selected_controllers:
                 requested_devices = []
                 for controller in selected_controllers:
@@ -255,18 +262,24 @@ def list_configs():
                     requested_devices.extend(device_info.get('HandledDevices', []))
                 requested_devices_set = set(requested_devices)
                 
-                devices = [full_key.split('::')[0] for full_key in obj['devices'].keys()]
-                if not any(rd in devices for rd in requested_devices_set):
+                if not any(rd in controllers_list for rd in requested_devices_set):
                     continue
             
+            # Format timestamp
+            created_at = db_config.get('created_at', '')
+            if hasattr(created_at, 'strftime'):
+                date_str = created_at.strftime('%c')
+            else:
+                date_str = str(created_at)
+            
             items.append({
-                'url': url_for('web.show_binds', run_id=config.name, _external=True),
+                'url': url_for('web.show_binds', run_id=db_config['id'], _external=True),
                 'description': name,
-                'controllers': ', '.join(sorted(controllers)),
-                'date': str(obj['timestamp'].ctime()),
+                'controllers': ', '.join(sorted(controllers_list)) if controllers_list else 'Unknown',
+                'date': date_str,
             })
         except Exception as e:
-            logError(f'Error processing item {obj.get("runID", "unknown")}: {e}\n')
+            logError(f'Error processing item {db_config.get("id", "unknown")}: {e}\n')
             continue
     
     controllers = sorted(supportedDevices.keys())
@@ -276,6 +289,7 @@ def list_configs():
                            selected_controllers=selected_controllers,
                            search_opts=search_opts,
                            items=items)
+
 
 @web_bp.route('/binds/<run_id>')
 def show_binds(run_id):

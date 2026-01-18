@@ -324,22 +324,27 @@ def batch_import():
             config.makeDir()
             errors = Errors()
             
-            # Parse bindings (from app.py logic)
-            (physicalKeys, modifiers, devices) = parseBindings(config.name, xml, [], errors)
+            # Default display groups for batch import (all groups)
+            display_groups = ['Ship', 'SRV', 'OnFoot', 'UI', 'Galaxy map', 'Head look', 
+                              'Scanners', 'Fighter', 'Multicrew', 'Camera', 'Holo-Me', 'Misc']
+            
+            # Parse bindings
+            (physicalKeys, modifiers, devices) = parseBindings(config.name, xml, display_groups, errors)
             
             # Save if parsing successful (physicalKeys is None if parsing failed)
             if physicalKeys is not None:
-                # Save replay info to database
+                # Save to database
                 from scripts.database import create_configuration
                 create_configuration(
                     config_id=config.name,
                     description=f"Batch import: {file.filename}",
-                    display_groups=[],
+                    display_groups=display_groups,
                     devices=devices,
                     unhandled_warnings=errors.unhandledDevicesWarnings,
                     device_warnings=errors.deviceWarnings,
                     misc_warnings=errors.misconfigurationWarnings
                 )
+
                 
                 # Save binds file
                 binds_path = config.pathWithSuffix('.binds')

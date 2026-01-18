@@ -335,8 +335,9 @@ def show_binds(run_id):
             styling = db_config.get('styling', 'None')
             description = db_config.get('description', '')
             if not source_missing:
-                errors.misconfigurationWarnings = db_config.get('misc_warnings', '')
+                errors.misconfigurationWarnings = db_config.get('misconfiguration_warnings', '')
                 errors.deviceWarnings = db_config.get('device_warnings', '')
+
         else:
             # Fallback defaults for configs not in database (very old legacy)
             display_groups = ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI']

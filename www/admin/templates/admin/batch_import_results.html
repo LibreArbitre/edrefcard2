@@ -63,7 +63,41 @@
             </table>
         </div>
     </div>
+    {% if results.skipped %}
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">ℹ Already Exist ({{ results.skipped|length }})</h5>
+        </div>
+        <div class="card-body">
+            <p class="small text-muted mb-2">The following files were skipped because a configuration with the same name
+                already exists.</p>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Existing ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for filename, config_id in results.skipped %}
+                    <tr>
+                        <td>{{ filename }}</td>
+                        <td><code>{{ config_id }}</code></td>
+                        <td>
+                            <a href="{{ url_for('web.show_binds', run_id=config_id) }}"
+                                class="btn btn-sm btn-outline-primary" target="_blank">
+                                View Existing
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
     {% endif %}
+
 
     <div class="mt-4">
         <a href="{{ url_for('admin.batch_import') }}" class="btn btn-primary">Import More Files</a>

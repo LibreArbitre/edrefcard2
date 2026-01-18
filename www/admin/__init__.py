@@ -267,8 +267,10 @@ def batch_import():
     
     results = {
         'success': [],
-        'failed': []
+        'failed': [],
+        'skipped': []
     }
+
     
     for file in files:
         if not file or not file.filename:
@@ -291,11 +293,10 @@ def batch_import():
             run_id = base_id
             config = Config(run_id)
             
-            # If ID already exists, append a short random suffix
+            # If ID already exists, skip it (as requested for batch import)
             if config.exists():
-                suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
-                run_id = f"{base_id}-{suffix}"
-                config = Config(run_id)
+                results['skipped'].append((file.filename, run_id))
+                continue
             
             config.makeDir()
 

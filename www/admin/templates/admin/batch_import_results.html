@@ -63,7 +63,10 @@
             </table>
         </div>
     </div>
+    {% endif %}
+
     {% if results.skipped %}
+
     <div class="card mb-4">
         <div class="card-header bg-info text-white">
             <h5 class="mb-0">ℹ Already Exist ({{ results.skipped|length }})</h5>

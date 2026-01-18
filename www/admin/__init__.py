@@ -324,10 +324,10 @@ def batch_import():
             errors = Errors()
             
             # Parse bindings (from app.py logic)
-            devices, bindings = parseBindings(config.name, xml, [], errors)
+            (physicalKeys, modifiers, devices) = parseBindings(config.name, xml, [], errors)
             
-            # Save if parsing successful
-            if devices is not None:
+            # Save if parsing successful (physicalKeys is None if parsing failed)
+            if physicalKeys is not None:
                 # Save replay info to database
                 from scripts.database import create_configuration
                 create_configuration(
@@ -348,6 +348,7 @@ def batch_import():
                 results['success'].append((file.filename, config.name))
             else:
                 results['failed'].append((file.filename, 'Parsing failed'))
+
                 
         except Exception as e:
             results['failed'].append((file.filename, str(e)))

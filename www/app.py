@@ -77,27 +77,12 @@ else:
 print(f"Application configured with Web Root: {web_root}")
 
 # Initialize SQLite database
-# Initialize SQLite database
-from scripts.database import init_db, get_configuration_stats, migrate_from_pickle
+from scripts.database import init_db, get_configuration_stats
 # Store DB# Initialize database
 with app.app_context():
     db_path = app.config['CONFIGS_FOLDER'] / 'edrefcard.db'
     database.init_db(str(db_path))
 
-# Auto-migrate legacy data if database is empty
-try:
-    stats = get_configuration_stats()
-    if stats['total_configurations'] == 0:
-        print("Database empty. Checking for legacy configurations to migrate...")
-        configs_dir = WWW_DIR / 'configs'
-        if configs_dir.exists():
-            migrated, errors = migrate_from_pickle(configs_dir)
-            if migrated > 0:
-                print(f"Auto-migrated {migrated} legacy configurations ({errors} errors).")
-            else:
-                print("No legacy configurations found.")
-except Exception as e:
-    print(f"Warning: Auto-migration check failed: {e}")
 
 # Register admin blueprint
 from admin import admin_bp
@@ -117,10 +102,9 @@ from extensions import limiter
 limiter.init_app(app)
 
 # Register CLI commands
-from commands import clean_cache_command, find_unsupported_command, migrate_legacy_command, import_defaults_command
+from commands import clean_cache_command, find_unsupported_command, import_defaults_command
 app.cli.add_command(clean_cache_command)
 app.cli.add_command(find_unsupported_command)
-app.cli.add_command(migrate_legacy_command)
 app.cli.add_command(import_defaults_command)
 
 

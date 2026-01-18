@@ -7,7 +7,6 @@ SQLite database for storing configurations and device information.
 
 import sqlite3
 import datetime
-import pickle
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -324,48 +323,6 @@ def get_device_counts():
             GROUP BY device_display_name
         """).fetchall()
         return {r['device_display_name']: r['count'] for r in rows}
-
-
-# ============== Migration from Pickle ==============
-
-def migrate_from_pickle(configs_path):
-    """Migrate existing pickle files to SQLite.
-    
-    Args:
-        configs_path: Path to the configs directory
-        
-    Returns:
-        Tuple of (migrated_count, error_count)
-    """
-    configs_path = Path(configs_path)
-    migrated = 0
-    errors = 0
-    
-    for replay_path in configs_path.glob('**/*.replay'):
-        try:
-            with replay_path.open('rb') as f:
-                data = pickle.load(f)
-            
-            config_id = replay_path.stem
-            
-            create_configuration(
-                config_id=config_id,
-                description=data.get('description', ''),
-                styling=data.get('styling', 'None'),
-                display_groups=data.get('displayGroups', []),
-                devices=data.get('devices', {}),
-                unhandled_warnings=data.get('unhandledDevicesWarnings', ''),
-                device_warnings=data.get('deviceWarnings', ''),
-                misc_warnings=data.get('misconfigurationWarnings', ''),
-                created_at=data.get('timestamp')
-            )
-            migrated += 1
-            
-        except Exception as e:
-            print(f"Error migrating {replay_path}: {e}")
-            errors += 1
-    
-    return migrated, errors
 
 
 def get_all_device_names():

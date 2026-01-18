@@ -183,7 +183,7 @@ def get_configuration(config_id):
         return config
 
 
-def list_configurations(page=1, per_page=50, public_only=True, search=None, device_filter=None):
+def list_configurations(page=1, per_page=50, public_only=True, search=None, device_filter=None, **kwargs):
     """List configurations with pagination.
     
     Args:
@@ -191,7 +191,8 @@ def list_configurations(page=1, per_page=50, public_only=True, search=None, devi
         per_page: Items per page
         public_only: Only show public configurations
         search: Search term for description
-        device_filter: Filter by device name
+        device_filter: Filter by device name (LIKE)
+        **kwargs: Additional filters like device_filters (list of names for IN)
     
     Returns:
         Tuple of (list of configs, total count)
@@ -212,6 +213,12 @@ def list_configurations(page=1, per_page=50, public_only=True, search=None, devi
             c.id IN (SELECT config_id FROM config_devices WHERE device_display_name LIKE ?)
         """)
         params.append(f"%{device_filter}%")
+
+    if kwargs.get('device_filters'):
+        device_filters = kwargs.get('device_filters')
+        placeholders = ', '.join(['?'] * len(device_filters))
+        where_clauses.append(f"c.id IN (SELECT config_id FROM config_devices WHERE device_display_name IN ({placeholders}))")
+        params.extend(device_filters)
     
     where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
     
@@ -324,7 +331,7 @@ def get_device_counts(public_only=False):
         
     with get_db() as conn:
         rows = conn.execute(f"""
-            SELECT cd.device_display_name, COUNT(*) as count
+            SELECT cd.device_display_name, COUNT(DISTINCT cd.config_id) as count
             FROM config_devices cd
             JOIN configurations c ON cd.config_id = c.id
             {where_clause}

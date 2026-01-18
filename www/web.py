@@ -259,65 +259,62 @@ def stats():
 @web_bp.route('/list')
 def list_configs():
     """List all public configurations."""
+    # Get device filters from query params
     device_filters = request.args.getlist('deviceFilter')
-    selected_controllers = set(device_filters) if device_filters else set()
-    
-    search_opts = {'controllers': selected_controllers} if selected_controllers else {}
-    
-    # Use SQLite database instead of pickle files
-    db_configs, total = database.list_configurations(
-        page=1, 
-        per_page=1000,  # Get all for client-side filtering
-        public_only=True
+    search_query = request.args.get('search')
+    page = int(request.args.get('page', 1))
+    per_page = 20 # Number of items per page
+
+    # Resolve names to templates for database filtering
+    selected_templates = []
+    if device_filters:
+        for controller in device_filters:
+            device_info = supportedDevices.get(controller, {})
+            selected_templates.append(device_info.get('Template', controller))
+
+    # Retrieve configurations from database
+    db_configs, total_configs = database.list_configurations(
+        page=page, 
+        per_page=per_page, 
+        public_only=True,
+        search=search_query if search_query else None,
+        device_filters=selected_templates if selected_templates else None
     )
     
-    items = []
+    configs = []
     for db_config in db_configs:
-        try:
-            name = str(db_config.get('description', ''))
-            if name == '':
-                continue
-            
-            # Get devices from database format
-            device_names = db_config.get('device_names', '') or ''
-            controllers_list = [d.strip() for d in device_names.split(',') if d.strip()]
-            
-            # Filter by selected controllers if any
-            if selected_controllers:
-                requested_templates = set()
-                for controller in selected_controllers:
-                    device_info = supportedDevices.get(controller, {})
-                    template = device_info.get('Template', controller)
-                    requested_templates.add(template)
-                
-                if not any(t in controllers_list for t in requested_templates):
-                    continue
-            
-            # Format timestamp (US date format, no time)
-            created_at = db_config.get('created_at', '')
-            if hasattr(created_at, 'strftime'):
-                date_str = created_at.strftime('%Y-%m-%d')
-            else:
-                date_str = str(created_at)[:10] if created_at else ''
+        config = dict(db_config)
+        
+        # Parse device names for display
+        device_names = config.get('device_names', '') or ''
+        controllers_list = [d.strip() for d in device_names.split(',') if d.strip()]
+        
+        # Format timestamp (US date format, no time)
+        created_at = config.get('created_at', '')
+        if hasattr(created_at, 'strftime'):
+            date_str = created_at.strftime('%Y-%m-%d')
+        elif isinstance(created_at, str):
+            date_str = created_at[:10]
+        else:
+            date_str = ''
 
-            
-            items.append({
-                'url': url_for('web.show_binds', run_id=db_config['id'], _external=True),
-                'description': name,
-                'controllers': ', '.join(sorted(controllers_list)) if controllers_list else 'Unknown',
-                'date': date_str,
-            })
-        except Exception as e:
-            logError(f'Error processing item {db_config.get("id", "unknown")}: {e}\n')
-            continue
+        configs.append({
+            'url': url_for('web.show_binds', run_id=config['id'], _external=True),
+            'description': config.get('description', 'Untitled'),
+            'controllers': ', '.join(sorted(controllers_list)) if controllers_list else 'Unknown',
+            'date': date_str,
+        })
     
     controllers = sorted(supportedDevices.keys())
+    selected_controllers = set(device_filters)
     
     return render_template('list.html',
                            controllers=controllers,
                            selected_controllers=selected_controllers,
-                           search_opts=search_opts,
-                           items=items)
+                           items=configs,
+                           total=total_configs,
+                           page=page,
+                           per_page=per_page)
 
 
 @web_bp.route('/binds/<run_id>')

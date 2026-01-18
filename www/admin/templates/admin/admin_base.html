@@ -402,10 +402,6 @@
                 class="nav-item {% if request.endpoint == 'admin.list_devices' %}active{% endif %}">
                 <span>🎮</span> Devices
             </a>
-            <a href="{{ url_for('admin.migrate_data') }}"
-                class="nav-item {% if request.endpoint == 'admin.migrate_data' %}active{% endif %}">
-                <span>🔄</span> Migration
-            </a>
             <a href="{{ url_for('admin.batch_import') }}"
                 class="nav-item {% if request.endpoint == 'admin.batch_import' %}active{% endif %}">
                 <span>📤</span> Batch Import

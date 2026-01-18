@@ -342,9 +342,11 @@ def batch_import():
                     if preset_name and preset_name not in ('Custom', 'Empty', ''):
                         description = preset_name
                     else:
-                        description = f"Batch import: {file.filename}"
+                        # Use filename without extension as fallback
+                        description = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
                 else:
-                    description = f"Batch import: {file.filename}"
+                    description = file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename
+
                 
                 # Save to database
                 from scripts.database import create_configuration

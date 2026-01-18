@@ -92,8 +92,20 @@ def generate():
     with open(str(binds_path), 'w', encoding='utf-8') as f:
         f.write(xml)
     
+    # If no description provided, try to extract PresetName from XML
     if not description or len(description.strip()) == 0:
-        description = f"Configuration {run_id[:6]}"
+        import re
+        preset_match = re.search(r'PresetName="([^"]+)"', xml)
+        if preset_match:
+            preset_name = preset_match.group(1)
+            # Use preset name if meaningful (not generic like 'Custom' or 'Empty')
+            if preset_name and preset_name not in ('Custom', 'Empty', ''):
+                description = preset_name
+            else:
+                description = f"Configuration {run_id[:6]}"
+        else:
+            description = f"Configuration {run_id[:6]}"
+
     
     public = True 
     

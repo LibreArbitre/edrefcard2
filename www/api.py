@@ -67,9 +67,23 @@ def generate_api():
         binds_path = config.pathWithSuffix('.binds')
         with open(str(binds_path), 'w', encoding='utf-8') as f:
             f.write(xml)
-            
-        description = request.form.get('description', f"API Config {run_id[:6]}")
+        
+        # Get description from request, or extract PresetName from XML
+        description = request.form.get('description', '').strip()
+        if not description:
+            import re
+            preset_match = re.search(r'PresetName="([^"]+)"', xml)
+            if preset_match:
+                preset_name = preset_match.group(1)
+                if preset_name and preset_name not in ('Custom', 'Empty', ''):
+                    description = preset_name
+                else:
+                    description = f"API Config {run_id[:6]}"
+            else:
+                description = f"API Config {run_id[:6]}"
+        
         styling_mode = request.form.get('styling', 'modifier').lower()
+
         
         styling_map = {
             'modifier': 'Modifier',

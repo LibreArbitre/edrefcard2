@@ -333,17 +333,31 @@ def batch_import():
             
             # Save if parsing successful (physicalKeys is None if parsing failed)
             if physicalKeys is not None:
+                # Extract PresetName from XML for description
+                import re
+                preset_match = re.search(r'PresetName="([^"]+)"', xml)
+                if preset_match:
+                    preset_name = preset_match.group(1)
+                    # Skip generic preset names, use them only if meaningful
+                    if preset_name and preset_name not in ('Custom', 'Empty', ''):
+                        description = preset_name
+                    else:
+                        description = f"Batch import: {file.filename}"
+                else:
+                    description = f"Batch import: {file.filename}"
+                
                 # Save to database
                 from scripts.database import create_configuration
                 create_configuration(
                     config_id=config.name,
-                    description=f"Batch import: {file.filename}",
+                    description=description,
                     display_groups=display_groups,
                     devices=devices,
                     unhandled_warnings=errors.unhandledDevicesWarnings,
                     device_warnings=errors.deviceWarnings,
                     misc_warnings=errors.misconfigurationWarnings
                 )
+
 
                 
                 # Save binds file

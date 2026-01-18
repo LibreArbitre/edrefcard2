@@ -14,7 +14,6 @@ try:
     from wand.image import Image
     from wand.font import Font
     from wand.color import Color
-    from wand.color import Color
 except ImportError as e:
     # Log the error but don't fail immediately to allow app to start
     print(f"Warning: Failed to import wand (ImageMagick): {e}")
@@ -114,7 +113,7 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
             outputs = {group: {} for group in displayGroups}
 
             # Find bindings and order them
-            for physicalKeySpec, physicalKey in physicalKeys.items():
+            for _physicalKeySpec, physicalKey in physicalKeys.items():
                 itemDevice = physicalKey.get('Device')
                 itemKey = physicalKey.get('Key')
 
@@ -122,7 +121,7 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
                     continue
 
                 for modifier, bind in physicalKey.get('Binds').items():
-                    for controlKey, control in bind.get('Controls').items():
+                    for _controlKey, control in bind.get('Controls').items():
                         bindInfo = {
                             'Control': control,
                             'Key': itemKey,
@@ -130,7 +129,7 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
                         }
 
                         if modifier != 'Unmodified':
-                            for modifierKey, modifierControls in modifiers.items():
+                            for _modifierKey, modifierControls in modifiers.items():
                                 for modifierControl in modifierControls:
                                     if (modifierControl.get('ModifierKey') == modifier 
                                             and modifierControl.get('Key') is not None):
@@ -165,7 +164,7 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
                     sorted(outputs[displayGroup].items(), 
                            key=lambda x: x[1].get('Control').get('Order'))
                 )
-                for bindKey, bind in orderedOutputs.items():
+                for _bindKey, bind in orderedOutputs.items():
                     for modifier in bind.get('Modifiers', []):
                         writeText(context, sourceImg, transKey(modifier), screenState, font, True, False)
                     writeText(context, sourceImg, transKey(bind.get('Key')), screenState, font, True, False)
@@ -400,7 +399,14 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
     if filePath.exists():
         return True
     
-    with Image(filename='../res/' + source + '.jpg') as sourceImg:
+    # Ensure template exists
+    from pathlib import Path
+    template_path = Path('../res') / (source + '.jpg')
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template image '../res/{source}.jpg' not found")
+
+    with Image(filename=str(template_path)) as sourceImg:
+
         with Drawing() as context:
             # Font defaults
             context.font = getFontPath('Regular', 'Normal')
@@ -471,7 +477,7 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
                 # Get unmodified bindings
                 for modifier, bind in physicalKey.get('Binds').items():
                     if modifier == 'Unmodified':
-                        for controlKey, control in bind.get('Controls').items():
+                        for _controlKey, control in bind.get('Controls').items():
                             if isRedundantSpecialisation(control, bind):
                                 continue
                             
@@ -520,7 +526,7 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
                             if modifierNum != curModifierNum:
                                 continue
                             
-                            for controlKey, control in bind.get('Controls').items():
+                            for _controlKey, control in bind.get('Controls').items():
                                 if isRedundantSpecialisation(control, bind):
                                     continue
                                 

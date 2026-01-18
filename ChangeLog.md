@@ -1,6 +1,18 @@
 # Change Log
 
-## 2.0.1 (2025-12-31)
+## 2.2.0 (2026-01-18)
+### Features
+* **Friendly URLs**: Configurations now use the upload filename as ID (slugified) instead of random strings.
+* **Graceful Device Support**: 
+  - Missing image templates no longer crash the rendering engine.
+  - Page renders supported devices and shows a warning for unsupported ones with an official forum link.
+* **Batch Import Improvements**: Added filename-based ID generation and automatic skipping of existing configurations.
+* **API Update**: JSON API now supports friendly URLs consistent with the web interface.
+
+### Improvements & Cleanup
+* **Legacy Code Removal**: Completely removed obsolete pickle migration logic (auto-migration, CLI commands, and admin buttons).
+* **Code Quality**: Unified ID generation logic and improved error handling in the renderer.
+
 ### Bug Fixes
 * **Template Error**: Fixed Jinja2 TemplateSyntaxError in `refcard.html` that caused 500 errors on configuration pages
 * **Data Migration**: Fixed auto-migration to handle partial database states (88 configs successfully restored)

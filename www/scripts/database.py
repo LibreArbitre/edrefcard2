@@ -7,7 +7,6 @@ SQLite database for storing configurations and device information.
 
 import sqlite3
 import datetime
-import pickle
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -120,7 +119,7 @@ def create_configuration(config_id, description='', styling='None', display_grou
         created_at: Timestamp (defaults to now)
     """
     if created_at is None:
-        created_at = datetime.datetime.now(datetime.timezone.utc)
+        created_at = datetime.datetime.now(datetime.UTC)
     
     with get_db() as conn:
         conn.execute("""
@@ -326,48 +325,6 @@ def get_device_counts():
         return {r['device_display_name']: r['count'] for r in rows}
 
 
-# ============== Migration from Pickle ==============
-
-def migrate_from_pickle(configs_path):
-    """Migrate existing pickle files to SQLite.
-    
-    Args:
-        configs_path: Path to the configs directory
-        
-    Returns:
-        Tuple of (migrated_count, error_count)
-    """
-    configs_path = Path(configs_path)
-    migrated = 0
-    errors = 0
-    
-    for replay_path in configs_path.glob('**/*.replay'):
-        try:
-            with replay_path.open('rb') as f:
-                data = pickle.load(f)
-            
-            config_id = replay_path.stem
-            
-            create_configuration(
-                config_id=config_id,
-                description=data.get('description', ''),
-                styling=data.get('styling', 'None'),
-                display_groups=data.get('displayGroups', []),
-                devices=data.get('devices', {}),
-                unhandled_warnings=data.get('unhandledDevicesWarnings', ''),
-                device_warnings=data.get('deviceWarnings', ''),
-                misc_warnings=data.get('misconfigurationWarnings', ''),
-                created_at=data.get('timestamp')
-            )
-            migrated += 1
-            
-        except Exception as e:
-            print(f"Error migrating {replay_path}: {e}")
-            errors += 1
-    
-    return migrated, errors
-
-
 def get_all_device_names():
     """Get all unique device names from configurations.
     
@@ -419,7 +376,7 @@ def create_controller_mapping(device_id, device_name, template_name, image_filen
         ID of created mapping
     """
     import datetime
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     
     with get_db() as conn:
         cursor = conn.execute("""
@@ -499,7 +456,7 @@ def update_controller_mapping(mapping_id, **kwargs):
     if not updates:
         return
     
-    updates['updated_at'] = datetime.datetime.now(datetime.timezone.utc)
+    updates['updated_at'] = datetime.datetime.now(datetime.UTC)
     
     set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
     values = list(updates.values()) + [mapping_id]

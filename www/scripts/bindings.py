@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 
 from lxml import etree
 
@@ -32,12 +32,12 @@ from urllib.parse import urljoin
 
 try:
     from .bindingsData import *
-except: # pragma: no cover
+except Exception: # pragma: no cover
     from bindingsData import *
 
 try:
     from .controlsData import *
-except: # pragma: no cover
+except Exception: # pragma: no cover
     from controlsData import *
 
 class Config:
@@ -746,7 +746,7 @@ def controllerNames(configObj):
     def displayName(controller):
         try:
             return hotasDetails[controller]['displayName']
-        except:
+        except Exception:
             return controller
     controllers = {displayName(controller) for controller in controllers if not controller in silencedControllers}
     return controllers

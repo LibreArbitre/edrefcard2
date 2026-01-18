@@ -1,10 +1,7 @@
 import click
-import shutil
 import time
 import re
-from pathlib import Path
 from flask.cli import with_appcontext
-from scripts.utils import logError
 
 @click.command('clean-cache')
 @click.option('--days', default=1, help='Delete files older than X days')
@@ -54,7 +51,7 @@ def find_unsupported_command(logfile):
     unsupported = set()
     
     try:
-        with open(logfile, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(logfile, encoding='utf-8', errors='ignore') as f:
             for line in f:
                 match = pattern.search(line)
                 if match:

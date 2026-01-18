@@ -6,8 +6,9 @@ Flask Blueprint for administration functionality.
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-import os
-import shutil
+
+
+
 from pathlib import Path
 
 from .auth import require_admin
@@ -184,7 +185,7 @@ def stats():
 def debug_info():
     """Debug information about the environment."""
     import sys
-    import shutil
+
     from scripts.models import Config
     from scripts.utils import RECENT_ERRORS
     
@@ -228,7 +229,7 @@ def debug_info():
     try:
         log_path = Config.configsPath() / 'error.log'
         if log_path.exists():
-            with open(log_path, 'r', encoding='utf-8') as f:
+            with open(log_path, encoding='utf-8') as f:
                 # Read last 50 lines
                 lines = f.readlines()
                 persistent_logs = lines[-50:]
@@ -258,7 +259,8 @@ def batch_import():
     # POST: Process uploaded files
     from scripts import parseBindings, parseFormData, createBlockImage
 
-    from scripts.models import Config, Errors
+    from scripts.models import Config
+
     
     files = request.files.getlist('binds_files')
     if not files:

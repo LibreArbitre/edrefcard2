@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, send_from_directory, current_app
+from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app
 from extensions import limiter
 from scripts import (
     Config,
@@ -9,9 +9,7 @@ from scripts import (
     createHOTASImage,
     appendKeyboardImage,
     createBlockImage,
-    controllerNames,
-    logError,
-    __version__
+    logError
 )
 
 from scripts import database
@@ -95,7 +93,8 @@ def generate():
     
     # If ID already exists, append a short random suffix
     if config.exists():
-        import random, string
+        import random
+        import string
         suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
         run_id = f"{base_id}-{suffix}"
         config = Config(run_id)
@@ -178,7 +177,7 @@ def generate():
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         import traceback
         traceback.print_exc()
-        errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
+        errors.errors = '<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
     for device_key, device in devices.items():
         ignored_devices = ['Mouse::0', 'ArduinoLeonardo::0', 'vJoy::0', 'vJoy::1', '16D00AEA::0']
@@ -230,7 +229,6 @@ def generate():
 def stats():
     """Show global statistics."""
     from scripts.database import get_configuration_stats
-    import json
     
     try:
         stats_data = get_configuration_stats()
@@ -350,7 +348,7 @@ def show_binds(run_id):
         if db_config:
             display_groups = db_config.get('display_groups', ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI'])
             styling = db_config.get('styling', 'None')
-            description = db_config.get('description', '')
+            db_config.get('description', '')
             if not source_missing:
                 errors.misconfigurationWarnings = db_config.get('misconfiguration_warnings', '')
                 errors.deviceWarnings = db_config.get('device_warnings', '')
@@ -359,7 +357,6 @@ def show_binds(run_id):
             # Fallback defaults for configs not in database (very old legacy)
             display_groups = ['Galaxy map', 'General', 'Head look', 'SRV', 'Ship', 'UI']
             styling = 'None'
-            description = ''
 
 
     except (ValueError):
@@ -397,7 +394,7 @@ def show_binds(run_id):
                     
                     if handled:
                         has_new_bindings = False
-                        for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                        for _device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
                             if device_key not in already_handled_devices:
                                 has_new_bindings = True
                                 break
@@ -443,7 +440,7 @@ def show_binds(run_id):
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         # import traceback
         # traceback.print_exc()
-        errors.errors = f'<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
+        errors.errors = '<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
     
     refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
     binds_url_dynamic = url_for('web.serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
@@ -471,8 +468,9 @@ def list_devices():
     from scripts.database import get_device_counts
     try:
         counts = get_device_counts()
-    except:
+    except Exception:
         counts = {}
+
 
     devices = []
     for name in sorted(supportedDevices.keys()):
@@ -515,7 +513,6 @@ def show_device(device_name):
 def generate_pdf(run_id, page_format='A4'):
     from fpdf import FPDF
     from PIL import Image
-    from pathlib import Path
     
     # Use Flask's CONFIGS_FOLDER directly for consistency with serve_config
     configs_folder = Path(current_app.config['CONFIGS_FOLDER'])

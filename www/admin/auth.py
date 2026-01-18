@@ -8,8 +8,6 @@ Credentials are read from environment variables.
 
 import os
 import logging
-from datetime import datetime
-from pathlib import Path
 from functools import wraps
 from flask import request, Response
 from scripts.models import Config

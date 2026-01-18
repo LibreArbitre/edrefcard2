@@ -1,16 +1,14 @@
-from flask import Blueprint, request, jsonify, url_for, current_app
+from flask import Blueprint, request, jsonify, url_for
 from scripts import (
     Config, 
     Errors, 
     supportedDevices, 
     parseBindings, 
-    parseFormData,
     createHOTASImage,
     appendKeyboardImage,
     logError
 )
 from scripts import database
-import os
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -64,7 +62,8 @@ def generate_api():
         from scripts import slugify
         base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
         if not base_id:
-            import string, random
+            import string
+            import random
             base_id = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
         
         run_id = base_id
@@ -72,7 +71,8 @@ def generate_api():
         
         # If ID already exists, append a short random suffix
         if config.exists():
-            import random, string
+            import random
+            import string
             suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
             run_id = f"{base_id}-{suffix}"
             config = Config(run_id)
@@ -138,7 +138,7 @@ def generate_api():
                 
                 if handled:
                     has_new_bindings = False
-                    for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                    for _device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
                         if device_key not in already_handled_devices:
                             has_new_bindings = True; break
                             

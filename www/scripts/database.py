@@ -119,7 +119,7 @@ def create_configuration(config_id, description='', styling='None', display_grou
         created_at: Timestamp (defaults to now)
     """
     if created_at is None:
-        created_at = datetime.datetime.now(datetime.timezone.utc)
+        created_at = datetime.datetime.now(datetime.UTC)
     
     with get_db() as conn:
         conn.execute("""
@@ -376,7 +376,7 @@ def create_controller_mapping(device_id, device_name, template_name, image_filen
         ID of created mapping
     """
     import datetime
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     
     with get_db() as conn:
         cursor = conn.execute("""
@@ -456,7 +456,7 @@ def update_controller_mapping(mapping_id, **kwargs):
     if not updates:
         return
     
-    updates['updated_at'] = datetime.datetime.now(datetime.timezone.utc)
+    updates['updated_at'] = datetime.datetime.now(datetime.UTC)
     
     set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
     values = list(updates.values()) + [mapping_id]

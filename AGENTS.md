@@ -13,17 +13,16 @@ The project uses two separate compose files:
 
 ### File Storage Structure
 Configuration files are stored in `www/configs/` using a **hashed directory structure** to avoid filesystem limits:
-*   Path format: `www/configs/{xx}/{xxxxxx}.{ext}` (where `xx` are the first 2 chars of the run ID).
+*   Path format: `www/configs/{xx}/{run_id}.{ext}` (where `xx` are the first 2 chars of the run ID).
+*   **Run ID**: Now primarily derived from the slugified filename (e.g., `my-setup`) with a random suffix for collisions.
 *   **Example**: ID `unkbsa` is stored in `www/configs/un/unkbsa.binds`.
+
 
 ### 🗄️ Database & Persistence
 *   **Engine**: SQLite.
 *   **Location**: `www/configs/edrefcard.db`.
     *   *Critical*: The DB is located in `configs/` (mounted volume) and NOT `data/` or root. If moved to a non-mounted path, all data/stats will reset on container rebuild.
-*   **Migration**: 
-    *   Legacy data consists of `.replay` (Pickle) files.
-    *   The `/admin/migrate` endpoint scans `www/configs` for all `.replay` files and populates the SQLite DB.
-    *   This is an idempotent operation (safe to run multiple times).
+
 
 ### 🧩 Application Structure (Refactoring v2.1)
 *   **Blueprints**: The application has been refactored to use Flask Blueprints:
@@ -35,11 +34,11 @@ Configuration files are stored in `www/configs/` using a **hashed directory stru
 
 ## ⚠️ Known Quirks & Issues
 
-### 1. "Configuration not found" vs "Source missing"
-*   **Scenario**: A user accesses a configuration URL (`/binds/ckjcrn`).
-*   **Cause**:
-    *   If **.binds** file is missing but **.replay** exists: App enters **Archived Mode**. It displays cached images if found, or a "Source missing" warning. Regeneration is disabled. (Logic in `app.py:show_binds`).
-    *   If **both** are missing: Returns 404.
+### 1. Missing Templates & Unsupported Devices
+*   **Scenario**: A configuration contains a controller for which no image template exists in `www/res/`.
+*   **Behavior**: The system catches the `FileNotFoundError`, logs it, and continues rendering other devices. A warning is displayed to the user on the reference card page.
+*   **Source missing**: If the `.binds` file is deleted from the server, the card cannot be regenerated.
+
 
 ### 2. Permissions on Volumes
 *   Docker volumes on Linux/Prod often entail permission issues when writing generated images or logs.
@@ -74,9 +73,8 @@ Use this hidden route to investigate the production environment without shell ac
 3.  Restart app (or reload if in dev mode).
 
 ### Restoring Database
-If the SQLite DB is corrupted or lost:
-1.  Ensure `www/configs` still contains the `.replay` files.
-2.  Go to `https://your-url/admin/migrate` and run the migration.
+If the SQLite DB is corrupted or lost, data can only be recovered if backups exist. Legacy pickle migration is no longer supported as of v2.2.
+
 
 ---
 

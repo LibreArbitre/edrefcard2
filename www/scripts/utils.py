@@ -126,7 +126,6 @@ def logError(message):
     # Keep last 20 errors in memory
     global RECENT_ERRORS
     import datetime
-    from pathlib import Path
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     formatted_msg = f"[{timestamp}] {message}\n"

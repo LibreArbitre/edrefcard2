@@ -144,7 +144,7 @@ def saveReplayInfo(config, description, styling, displayGroups, devices, errors)
         'deviceWarnings': errors.deviceWarnings,
         'styling': styling,
         'description': description,
-        'timestamp': datetime.datetime.now(datetime.timezone.utc),
+        'timestamp': datetime.datetime.now(datetime.UTC),
         'devices': devices,
     }
     replayPath = config.pathWithSuffix('.replay')

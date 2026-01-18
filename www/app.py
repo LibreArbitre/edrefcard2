@@ -10,9 +10,7 @@ import os
 import sys
 from pathlib import Path
 
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+from flask import Flask, render_template, request
 
 # Get the www directory path
 WWW_DIR = Path(__file__).parent.resolve()
@@ -25,18 +23,6 @@ sys.path.insert(0, str(scripts_path))
 from scripts import (
     __version__,
     Config,
-    Mode,
-    Errors,
-    supportedDevices,
-    groupStyles,
-    parseBindings,
-    parseFormData,
-    createHOTASImage,
-    appendKeyboardImage,
-    createBlockImage,
-    saveReplayInfo,
-    controllerNames,
-    logError,
 )
 from scripts import database
 
@@ -77,7 +63,6 @@ else:
 print(f"Application configured with Web Root: {web_root}")
 
 # Initialize SQLite database
-from scripts.database import init_db, get_configuration_stats
 # Store DB# Initialize database
 with app.app_context():
     db_path = app.config['CONFIGS_FOLDER'] / 'edrefcard.db'
@@ -130,7 +115,7 @@ def handle_exception(e):
         print(f"Failed to log to memory buffer: {e}")
         
     # Re-raise key system exceptions
-    if isinstance(e,  (KeyboardInterrupt, SystemExit)):
+    if isinstance(e,  KeyboardInterrupt | SystemExit):
         raise e
         
     # Prepare error message for user

@@ -60,9 +60,24 @@ def generate_api():
 
     # 2. Setup Config
     try:
-        config = Config.newRandom()
+        # Generate config ID from filename
+        from scripts import slugify
+        base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
+        if not base_id:
+            import string, random
+            base_id = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
+        
+        run_id = base_id
+        config = Config(run_id)
+        
+        # If ID already exists, append a short random suffix
+        if config.exists():
+            import random, string
+            suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
+            run_id = f"{base_id}-{suffix}"
+            config = Config(run_id)
+        
         config.makeDir()
-        run_id = config.name
         
         binds_path = config.pathWithSuffix('.binds')
         with open(str(binds_path), 'w', encoding='utf-8') as f:
@@ -78,9 +93,10 @@ def generate_api():
                 if preset_name and preset_name not in ('Custom', 'Empty', ''):
                     description = preset_name
                 else:
-                    description = f"API Config {run_id[:6]}"
+                    description = f"API Config {run_id}"
             else:
-                description = f"API Config {run_id[:6]}"
+                description = f"API Config {run_id}"
+
         
         styling_mode = request.form.get('styling', 'modifier').lower()
 

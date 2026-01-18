@@ -282,9 +282,23 @@ def batch_import():
             # Read file
             xml = file.read().decode('utf-8')
             
-            # Generate config
-            config = Config.newRandom()
+            # Generate config ID from filename
+            from scripts import slugify
+            base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
+            if not base_id:
+                base_id = Config.randomName()
+            
+            run_id = base_id
+            config = Config(run_id)
+            
+            # If ID already exists, append a short random suffix
+            if config.exists():
+                suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
+                run_id = f"{base_id}-{suffix}"
+                config = Config(run_id)
+            
             config.makeDir()
+
             errors = Errors()
             
             # Default display groups for batch import (all groups)

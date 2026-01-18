@@ -6,6 +6,20 @@ This module contains utility functions used across the application.
 """
 
 import sys
+import re
+
+def slugify(text):
+    """Convert text to a URL-friendly slug.
+    
+    Args:
+        text: Input string
+        
+    Returns:
+        Slugified string (lowercase, alphanumeric and hyphens only)
+    """
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    return text.strip('-')
 
 # Key translation map for displaying keyboard keys
 keymap = {

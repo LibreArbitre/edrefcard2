@@ -36,6 +36,21 @@
         </div>
         {% endif %}
 
+        {% if unsupported_devices %}
+        <div class="alert alert-warning">
+            <p><strong>Unsupported Controller(s) Detected:</strong></p>
+            <ul>
+                {% for device in unsupported_devices %}
+                <li>{{ device }}</li>
+                {% endfor %}
+            </ul>
+            <p>These controllers do not have a visual layout yet. Please report them in the <a
+                    href="https://forums.frontier.co.uk/threads/627609/" target="_blank" rel="noopener">official forum
+                    thread</a> so we can add support for them.</p>
+        </div>
+        {% endif %}
+
+
         {% if created_images or device_for_block_image %}
         {% for image in created_images %}
         {% if '::' in image %}

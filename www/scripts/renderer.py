@@ -400,7 +400,14 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
     if filePath.exists():
         return True
     
-    with Image(filename='../res/' + source + '.jpg') as sourceImg:
+    # Ensure template exists
+    from pathlib import Path
+    template_path = Path('../res') / (source + '.jpg')
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template image '../res/{source}.jpg' not found")
+
+    with Image(filename=str(template_path)) as sourceImg:
+
         with Drawing() as context:
             # Font defaults
             context.font = getFontPath('Regular', 'Normal')

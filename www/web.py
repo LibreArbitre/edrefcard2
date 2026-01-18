@@ -84,9 +84,23 @@ def generate():
     elif request.form.get('styling') == 'modifier':
         styling = 'Modifier'
     
-    config = Config.newRandom()
+    # Generate config ID from filename
+    from scripts import slugify
+    base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
+    if not base_id:
+        base_id = Config.randomName()
+    
+    run_id = base_id
+    config = Config(run_id)
+    
+    # If ID already exists, append a short random suffix
+    if config.exists():
+        import random, string
+        suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
+        run_id = f"{base_id}-{suffix}"
+        config = Config(run_id)
+    
     config.makeDir()
-    run_id = config.name
     
     binds_path = config.pathWithSuffix('.binds')
     with open(str(binds_path), 'w', encoding='utf-8') as f:
@@ -102,9 +116,10 @@ def generate():
             if preset_name and preset_name not in ('Custom', 'Empty', ''):
                 description = preset_name
             else:
-                description = f"Configuration {run_id[:6]}"
+                description = f"Configuration {run_id}"
         else:
-            description = f"Configuration {run_id[:6]}"
+            description = f"Configuration {run_id}"
+
 
     
     public = True 
@@ -310,8 +325,10 @@ def show_binds(run_id):
     import codecs
     
     errors = Errors()
+    unsupported_devices = []
     
     try:
+
         config = Config(run_id)
         binds_path = config.pathWithSuffix('.binds')
         
@@ -386,16 +403,22 @@ def show_binds(run_id):
                                 break
                         
                         if has_new_bindings:
-                            createHOTASImage(
-                                physical_keys, modifiers,
-                                supported_device['Template'],
-                                supported_device['HandledDevices'],
-                                40, config, True, styling, device_index,
-                                errors.misconfigurationWarnings
-                            )
-                            created_images.append(f'{supported_device_key}::{device_index}')
-                            for handled_device in supported_device['HandledDevices']:
-                                already_handled_devices.append(f'{handled_device}::{device_index}')
+                            try:
+                                createHOTASImage(
+                                    physical_keys, modifiers,
+                                    supported_device['Template'],
+                                    supported_device['HandledDevices'],
+                                    40, config, True, styling, device_index,
+                                    errors.misconfigurationWarnings
+                                )
+                                created_images.append(f'{supported_device_key}::{device_index}')
+                                for handled_device in supported_device['HandledDevices']:
+                                    already_handled_devices.append(f'{handled_device}::{device_index}')
+                            except FileNotFoundError as e:
+                                logError(f"Template missing: {e}\n")
+                                unsupported_devices.append(supported_device_key)
+
+
             
             if devices.get('Keyboard::0') is not None:
                 appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
@@ -438,7 +461,9 @@ def show_binds(run_id):
                            public=True,
                            refcard_url=refcard_url_dynamic,
                            binds_url=binds_url_dynamic,
+                           unsupported_devices=unsupported_devices,
                            supported_devices=supportedDevices)
+
 
 @web_bp.route('/devices')
 def list_devices():

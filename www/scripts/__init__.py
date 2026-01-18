@@ -20,7 +20,7 @@ __version__ = '2.1.0'
 
 # Re-export from submodules for backwards compatibility
 from .models import Config, Mode, Errors
-from .utils import getFontPath, transKey, logError
+from .utils import getFontPath, transKey, logError, slugify
 from .parser import (
     parseBindings, 
     parseForm, 
@@ -82,6 +82,7 @@ __all__ = [
     'getFontPath',
     'transKey',
     'logError',
+    'slugify',
     # Data
     'supportedDevices',
     'hotasDetails',

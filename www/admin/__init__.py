@@ -5,15 +5,6 @@ EDRefCard Admin Blueprint
 Flask Blueprint for administration functionality.
 """
 
-<<<<<<< HEAD
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-import os
-import shutil
-from pathlib import Path
-
-from .auth import require_admin
-
-=======
 import sys
 import re
 import shutil
@@ -27,67 +18,40 @@ from .auth import require_admin
 
 
 
->>>>>>> dev
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, 
                      url_prefix='/admin',
                      template_folder='templates')
 
 
-<<<<<<< HEAD
-# Import database
-# We expect 'scripts' to be in the python path (set up by app.py)
-from scripts import database
-=======
->>>>>>> dev
 
 
 @admin_bp.route('/')
 @require_admin
 def dashboard():
     """Admin dashboard with statistics."""
-<<<<<<< HEAD
-    db = database
-    stats = db.get_configuration_stats()
-    return render_template('admin/dashboard.html', stats=stats)
-
-
-=======
     stats = database.get_configuration_stats()
     return render_template('admin/dashboard.html', stats=stats)
 
 
 
->>>>>>> dev
 @admin_bp.route('/configs')
 @require_admin
 def list_configs():
     """List all configurations with pagination."""
-<<<<<<< HEAD
-    db = database
-    
-=======
->>>>>>> dev
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
     device = request.args.get('device', '')
     public_only = request.args.get('public_only', '0') == '1'
     
-<<<<<<< HEAD
-    configs, total = db.list_configurations(
-=======
     configs, total = database.list_configurations(
->>>>>>> dev
         page=page,
         per_page=50,
         public_only=public_only,
         search=search if search else None,
         device_filter=device if device else None
     )
-<<<<<<< HEAD
-=======
 
->>>>>>> dev
     
     total_pages = (total + 49) // 50
     
@@ -108,19 +72,12 @@ def delete_config(config_id):
     db = database
     
     # Get config path to delete files
-<<<<<<< HEAD
-    from scripts.models import Config
-=======
->>>>>>> dev
     config = Config(config_id)
     config_path = config.path().parent
     
     # Delete from database
     db.delete_configuration(config_id)
-<<<<<<< HEAD
-=======
 
->>>>>>> dev
     
     # Delete files on disk
     if config_path.exists():
@@ -137,15 +94,9 @@ def delete_config(config_id):
 @require_admin
 def purge_pdf(config_id):
     """Purge generated PDF files for a configuration."""
-<<<<<<< HEAD
-    from scripts.models import Config
-    config = Config(config_id)
-    config_path = config.path().parent
-=======
     config = Config(config_id)
     config_path = config.path().parent
 
->>>>>>> dev
     
     purged_count = 0
     errors = []
@@ -218,46 +169,6 @@ def list_devices():
     return render_template('admin/devices.html', devices=devices)
 
 
-<<<<<<< HEAD
-@admin_bp.route('/migrate', methods=['GET', 'POST'])
-@require_admin
-def migrate_data():
-    """Migrate pickle files to SQLite."""
-    db = database
-    
-    if request.method == 'POST':
-        from scripts.models import Config
-        configs_path = Config.configsPath()
-        
-        migrated, errors = db.migrate_from_pickle(configs_path)
-        
-        flash(f'Migration complete: {migrated} migrated, {errors} errors.', 
-              'success' if errors == 0 else 'warning')
-        return redirect(url_for('admin.dashboard'))
-    
-    # GET: show migration form
-    from scripts.models import Config
-    configs_path = Config.configsPath()
-    
-    # Get all replay files
-    replay_files = list(configs_path.glob('**/*.replay')) if configs_path.exists() else []
-    total_pickles = len(replay_files)
-    
-    # Get all DB IDs
-    db_ids = db.get_all_config_ids()
-    
-    # Calculate missing
-    missing_count = 0
-    for p in replay_files:
-        if p.stem not in db_ids:
-            missing_count += 1
-            
-    return render_template('admin/migrate.html', 
-                           pickle_count=missing_count,
-                           total_pickles=total_pickles)
-
-=======
->>>>>>> dev
 
 @admin_bp.route('/stats')
 @require_admin
@@ -274,15 +185,8 @@ def stats():
 @require_admin
 def debug_info():
     """Debug information about the environment."""
-<<<<<<< HEAD
-    import sys
-    import shutil
-    from scripts.models import Config
-    from scripts.utils import RECENT_ERRORS
-=======
     from scripts.utils import RECENT_ERRORS
 
->>>>>>> dev
     
     # Check Wand status
     wand_status = "Not Installed"
@@ -324,11 +228,7 @@ def debug_info():
     try:
         log_path = Config.configsPath() / 'error.log'
         if log_path.exists():
-<<<<<<< HEAD
-            with open(log_path, 'r', encoding='utf-8') as f:
-=======
             with open(log_path, encoding='utf-8') as f:
->>>>>>> dev
                 # Read last 50 lines
                 lines = f.readlines()
                 persistent_logs = lines[-50:]
@@ -356,13 +256,8 @@ def batch_import():
         return render_template('admin/batch_import.html')
     
     # POST: Process uploaded files
-<<<<<<< HEAD
-    from scripts import parseBindings, parseFormData, createBlockImage, saveReplayInfo
-    from scripts.models import Config, Errors
-=======
 
 
->>>>>>> dev
     
     files = request.files.getlist('binds_files')
     if not files:
@@ -371,15 +266,10 @@ def batch_import():
     
     results = {
         'success': [],
-<<<<<<< HEAD
-        'failed': []
-    }
-=======
         'failed': [],
         'skipped': []
     }
 
->>>>>>> dev
     
     for file in files:
         if not file or not file.filename:
@@ -393,24 +283,6 @@ def batch_import():
             # Read file
             xml = file.read().decode('utf-8')
             
-<<<<<<< HEAD
-            # Generate config
-            config = Config.newRandom()
-            config.makeDir()
-            errors = Errors()
-            
-            # Parse bindings (from app.py logic)
-            devices, bindings = parseBindings(config.name, xml, [], errors)
-            
-            # Save if parsing successful
-            if devices is not None:
-                # Save replay info to database
-                from scripts.database import create_configuration
-                create_configuration(
-                    config_id=config.name,
-                    description=f"Batch import: {file.filename}",
-                    display_groups=[],
-=======
             # Generate config ID from filename
             base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
 
@@ -459,17 +331,13 @@ def batch_import():
                     config_id=config.name,
                     description=description,
                     display_groups=display_groups,
->>>>>>> dev
                     devices=devices,
                     unhandled_warnings=errors.unhandledDevicesWarnings,
                     device_warnings=errors.deviceWarnings,
                     misc_warnings=errors.misconfigurationWarnings
                 )
-<<<<<<< HEAD
-=======
 
 
->>>>>>> dev
                 
                 # Save binds file
                 binds_path = config.pathWithSuffix('.binds')
@@ -479,10 +347,7 @@ def batch_import():
                 results['success'].append((file.filename, config.name))
             else:
                 results['failed'].append((file.filename, 'Parsing failed'))
-<<<<<<< HEAD
-=======
 
->>>>>>> dev
                 
         except Exception as e:
             results['failed'].append((file.filename, str(e)))

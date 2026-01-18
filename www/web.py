@@ -1,3 +1,8 @@
+import os
+import random
+import string
+import tempfile
+from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app
 from extensions import limiter
 from scripts import (
@@ -9,13 +14,12 @@ from scripts import (
     createHOTASImage,
     appendKeyboardImage,
     createBlockImage,
-    logError
+    logError,
+    slugify
 )
-
 from scripts import database
-import os
-import tempfile
-from pathlib import Path
+
+
 
 web_bp = Blueprint('web', __name__)
 
@@ -83,21 +87,20 @@ def generate():
         styling = 'Modifier'
     
     # Generate config ID from filename
-    from scripts import slugify
     base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
     if not base_id:
         base_id = Config.randomName()
+
     
     run_id = base_id
     config = Config(run_id)
     
     # If ID already exists, append a short random suffix
     if config.exists():
-        import random
-        import string
         suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
         run_id = f"{base_id}-{suffix}"
         config = Config(run_id)
+
     
     config.makeDir()
     
@@ -150,7 +153,7 @@ def generate():
                 
                 if handled:
                     has_new_bindings = False
-                    for device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                    for _ in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
                         if device_key not in already_handled_devices:
                             has_new_bindings = True
                             break
@@ -376,8 +379,8 @@ def show_binds(run_id):
             for supported_device_key, supported_device in supportedDevices.items():
                 if supported_device_key == 'Keyboard':
                     continue
-                
-                for device_index in [0, 1]:
+                for device_index in range(4):
+
                     handled = False
                     device_key = None
                     for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):

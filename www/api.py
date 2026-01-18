@@ -1,3 +1,6 @@
+import re
+import random
+import string
 from flask import Blueprint, request, jsonify, url_for
 from scripts import (
     Config, 
@@ -6,9 +9,11 @@ from scripts import (
     parseBindings, 
     createHOTASImage,
     appendKeyboardImage,
-    logError
+    logError,
+    slugify
 )
 from scripts import database
+
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -59,23 +64,21 @@ def generate_api():
     # 2. Setup Config
     try:
         # Generate config ID from filename
-        from scripts import slugify
+
         base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
         if not base_id:
-            import string
-            import random
             base_id = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
+
         
         run_id = base_id
         config = Config(run_id)
         
         # If ID already exists, append a short random suffix
         if config.exists():
-            import random
-            import string
             suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
             run_id = f"{base_id}-{suffix}"
             config = Config(run_id)
+
         
         config.makeDir()
         
@@ -86,8 +89,8 @@ def generate_api():
         # Get description from request, or extract PresetName from XML
         description = request.form.get('description', '').strip()
         if not description:
-            import re
             preset_match = re.search(r'PresetName="([^"]+)"', xml)
+
             if preset_match:
                 preset_name = preset_match.group(1)
                 if preset_name and preset_name not in ('Custom', 'Empty', ''):
@@ -123,7 +126,9 @@ def generate_api():
         # For now, replicating the core loop for the API to avoid major refactor risk in this step
         
         for supported_device_key, supported_device in supportedDevices.items():
-            if supported_device_key == 'Keyboard': continue
+            if supported_device_key == 'Keyboard':
+                continue
+
             
             for device_index in [0, 1]:
                 handled = False
@@ -131,16 +136,24 @@ def generate_api():
                 for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
                     if handled_device.find('::') > -1:
                         if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                            handled = True; device_key = handled_device; break
+                            handled = True
+                            device_key = handled_device
+                            break
+
                     else:
                         if devices.get(f'{handled_device}::{device_index}') is not None:
-                            handled = True; device_key = f'{handled_device}::{device_index}'; break
+                            handled = True
+                            device_key = f'{handled_device}::{device_index}'
+                            break
+
                 
                 if handled:
                     has_new_bindings = False
-                    for _device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                    for _ in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
                         if device_key not in already_handled_devices:
-                            has_new_bindings = True; break
+                            has_new_bindings = True
+                            break
+
                             
                     if has_new_bindings:
                         createHOTASImage(

@@ -5,13 +5,18 @@ EDRefCard Admin Blueprint
 Flask Blueprint for administration functionality.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-
-
-
+import sys
+import re
+import shutil
 from pathlib import Path
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from scripts import database, parseBindings, slugify
 
+from scripts.models import Config, Errors
 from .auth import require_admin
+
+
+
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, 
@@ -19,38 +24,34 @@ admin_bp = Blueprint('admin', __name__,
                      template_folder='templates')
 
 
-# Import database
-# We expect 'scripts' to be in the python path (set up by app.py)
-from scripts import database
 
 
 @admin_bp.route('/')
 @require_admin
 def dashboard():
     """Admin dashboard with statistics."""
-    db = database
-    stats = db.get_configuration_stats()
+    stats = database.get_configuration_stats()
     return render_template('admin/dashboard.html', stats=stats)
+
 
 
 @admin_bp.route('/configs')
 @require_admin
 def list_configs():
     """List all configurations with pagination."""
-    db = database
-    
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
     device = request.args.get('device', '')
     public_only = request.args.get('public_only', '0') == '1'
     
-    configs, total = db.list_configurations(
+    configs, total = database.list_configurations(
         page=page,
         per_page=50,
         public_only=public_only,
         search=search if search else None,
         device_filter=device if device else None
     )
+
     
     total_pages = (total + 49) // 50
     
@@ -71,12 +72,12 @@ def delete_config(config_id):
     db = database
     
     # Get config path to delete files
-    from scripts.models import Config
     config = Config(config_id)
     config_path = config.path().parent
     
     # Delete from database
     db.delete_configuration(config_id)
+
     
     # Delete files on disk
     if config_path.exists():
@@ -93,9 +94,9 @@ def delete_config(config_id):
 @require_admin
 def purge_pdf(config_id):
     """Purge generated PDF files for a configuration."""
-    from scripts.models import Config
     config = Config(config_id)
     config_path = config.path().parent
+
     
     purged_count = 0
     errors = []
@@ -184,10 +185,8 @@ def stats():
 @require_admin
 def debug_info():
     """Debug information about the environment."""
-    import sys
-
-    from scripts.models import Config
     from scripts.utils import RECENT_ERRORS
+
     
     # Check Wand status
     wand_status = "Not Installed"
@@ -257,9 +256,7 @@ def batch_import():
         return render_template('admin/batch_import.html')
     
     # POST: Process uploaded files
-    from scripts import parseBindings, parseFormData, createBlockImage
 
-    from scripts.models import Config
 
     
     files = request.files.getlist('binds_files')
@@ -287,8 +284,8 @@ def batch_import():
             xml = file.read().decode('utf-8')
             
             # Generate config ID from filename
-            from scripts import slugify
             base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
+
             if not base_id:
                 base_id = Config.randomName()
             
@@ -314,8 +311,8 @@ def batch_import():
             # Save if parsing successful (physicalKeys is None if parsing failed)
             if physicalKeys is not None:
                 # Extract PresetName from XML for description
-                import re
                 preset_match = re.search(r'PresetName="([^"]+)"', xml)
+
                 if preset_match:
                     preset_name = preset_match.group(1)
                     # Skip generic preset names, use them only if meaningful
@@ -329,8 +326,8 @@ def batch_import():
 
                 
                 # Save to database
-                from scripts.database import create_configuration
-                create_configuration(
+                database.create_configuration(
+
                     config_id=config.name,
                     description=description,
                     display_groups=display_groups,

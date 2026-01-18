@@ -27,3 +27,6 @@ www/data/admin_access.log
 ADDING_NEW_CONTROLLER.md
 
 WORKFLOW.md
+
+scrape_binds.py
+downloaded_binds/

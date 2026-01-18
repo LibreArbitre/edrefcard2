@@ -284,13 +284,13 @@ def list_configs():
             
             # Filter by selected controllers if any
             if selected_controllers:
-                requested_devices = []
+                requested_templates = set()
                 for controller in selected_controllers:
                     device_info = supportedDevices.get(controller, {})
-                    requested_devices.extend(device_info.get('HandledDevices', []))
-                requested_devices_set = set(requested_devices)
+                    template = device_info.get('Template', controller)
+                    requested_templates.add(template)
                 
-                if not any(rd in controllers_list for rd in requested_devices_set):
+                if not any(t in controllers_list for t in requested_templates):
                     continue
             
             # Format timestamp (US date format, no time)

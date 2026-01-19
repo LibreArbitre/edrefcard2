@@ -259,11 +259,29 @@ def stats():
 @web_bp.route('/list')
 def list_configs():
     """List all public configurations."""
+    import re
+    
     # Get device filters from query params
     device_filters = request.args.getlist('deviceFilter')
-    search_query = request.args.get('search')
-    page = int(request.args.get('page', 1))
-    per_page = 20 # Number of items per page
+    search_query = request.args.get('search', '').strip()
+    
+    # Sanitize search query: limit length and remove potentially dangerous characters
+    if search_query:
+        search_query = search_query[:100]  # Max 100 characters
+        # Allow only alphanumeric, spaces, hyphens, underscores, and common punctuation
+        search_query = re.sub(r'[^\w\s\-_.\'"]', '', search_query)
+        if not search_query:  # If nothing left after sanitization
+            search_query = None
+    else:
+        search_query = None
+    
+    # Sanitize page number
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (ValueError, TypeError):
+        page = 1
+    
+    per_page = 20  # Number of items per page
 
     # Resolve names to templates for database filtering
     selected_templates = []

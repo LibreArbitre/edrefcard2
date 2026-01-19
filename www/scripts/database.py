@@ -205,8 +205,17 @@ def list_configurations(page=1, per_page=50, public_only=True, search=None, devi
         where_clauses.append("c.is_public = 1")
     
     if search:
-        where_clauses.append("c.description LIKE ?")
-        params.append(f"%{search}%")
+        # Search in description OR in device names (both display_name and device_key)
+        # Using parameterized queries to prevent SQL injection
+        where_clauses.append("""(
+            c.description LIKE ? 
+            OR c.id IN (
+                SELECT config_id FROM config_devices 
+                WHERE device_display_name LIKE ? OR device_key LIKE ?
+            )
+        )""")
+        search_pattern = f"%{search}%"
+        params.extend([search_pattern, search_pattern, search_pattern])
     
     if device_filter:
         where_clauses.append("""

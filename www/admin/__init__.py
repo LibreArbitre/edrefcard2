@@ -358,3 +358,458 @@ def batch_import():
         flash(f"Failed to import {len(results['failed'])} files.", 'warning')
     
     return render_template('admin/batch_import_results.html', results=results)
+
+
+# ============== Backup & Restore Routes ==============
+
+@admin_bp.route('/backup')
+@require_admin
+def backup_dashboard():
+    """Backup dashboard showing status and options."""
+    from .backup import (
+        BackupManager, get_backup_settings, get_backup_history,
+        is_maintenance_mode
+    )
+    
+    backup_manager = BackupManager()
+    local_backups = backup_manager.list_local_backups()
+    settings = get_backup_settings()
+    history = get_backup_history(limit=10)
+    
+    return render_template('admin/backup.html',
+                           local_backups=local_backups,
+                           settings=settings,
+                           history=history,
+                           maintenance_mode=is_maintenance_mode())
+
+
+@admin_bp.route('/backup/create', methods=['POST'])
+@require_admin
+def backup_create():
+    """Create a manual backup (local or download)."""
+    from flask import send_file
+    from .backup import BackupManager, DiscordNotifier
+    
+    include_db = request.form.get('include_db', '1') == '1'
+    include_binds = request.form.get('include_binds', '1') == '1'
+    action = request.form.get('action', 'download')
+    
+    try:
+        backup_manager = BackupManager()
+        backup_path = backup_manager.create_backup(
+            include_db=include_db,
+            include_binds=include_binds,
+            backup_type='manual'
+        )
+        
+        # Send notification
+        notifier = DiscordNotifier.from_settings()
+        if notifier.webhook_url:
+            size_mb = backup_path.stat().st_size / (1024 * 1024)
+            notifier.send_notification(
+                title="📦 Manual Backup Created",
+                message=f"A manual backup was created ({action}).",
+                success=True,
+                fields=[
+                    {'name': 'Size', 'value': f"{size_mb:.2f} MB", 'inline': True},
+                    {'name': 'Type', 'value': action.capitalize(), 'inline': True},
+                ]
+            )
+        
+        if action == 'download':
+            return send_file(
+                backup_path,
+                as_attachment=True,
+                download_name=backup_path.name
+            )
+        else:
+            flash(f'Backup created successfully: {backup_path.name}', 'success')
+            return redirect(url_for('admin.backup_dashboard'))
+        
+    except Exception as e:
+        flash(f'Backup failed: {e}', 'danger')
+        return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/upload-sftp', methods=['POST'])
+@require_admin
+def backup_upload_sftp():
+    """Upload a backup to SFTP (latest or specific)."""
+    from .backup import BackupManager, SFTPManager, get_backup_settings
+    
+    settings = get_backup_settings()
+    if not settings.get('sftp_enabled') or not settings.get('sftp_host'):
+        flash('SFTP is not configured.', 'warning')
+        return redirect(url_for('admin.backup_dashboard'))
+    
+    filename = request.form.get('filename')
+    
+    try:
+        backup_manager = BackupManager()
+        
+        target_path = None
+        if filename:
+            # Upload specific file
+            target_path = backup_manager.get_backup_path(filename)
+            if not target_path:
+                flash(f'Backup file not found: {filename}', 'danger')
+                return redirect(url_for('admin.backup_dashboard'))
+        else:
+            # Upload latest
+            local_backups = backup_manager.list_local_backups()
+            if not local_backups:
+                flash('No local backups to upload.', 'warning')
+                return redirect(url_for('admin.backup_dashboard'))
+            target_path = Path(local_backups[0]['path'])
+        
+        sftp_manager = SFTPManager.from_settings()
+        sftp_manager.upload_backup(target_path)
+        
+        # Cleanup old remote backups if needed (only on auto/sync all)
+        # sftp_manager.cleanup_remote(retention_days=7) 
+        
+        flash(f'Backup {target_path.name} uploaded to SFTP.', 'success')
+        
+    except Exception as e:
+        flash(f'SFTP upload failed: {e}', 'danger')
+    
+    return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/delete/<filename>', methods=['POST'])
+@require_admin
+def backup_delete(filename):
+    """Delete a local backup file."""
+    from .backup import BackupManager
+    
+    try:
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if backup_path and backup_path.exists():
+            backup_path.unlink()
+            flash(f'Backup {filename} deleted.', 'success')
+        else:
+            flash(f'Backup {filename} not found.', 'warning')
+            
+    except Exception as e:
+        flash(f'Failed to delete backup: {e}', 'danger')
+        
+    return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/download/<filename>')
+@require_admin
+def backup_download(filename):
+    """Download a specific local backup file."""
+    from flask import send_file
+    from .backup import BackupManager
+    
+    try:
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if backup_path and backup_path.exists():
+            return send_file(
+                backup_path,
+                as_attachment=True,
+                download_name=filename
+            )
+        else:
+            flash(f'Backup {filename} not found.', 'danger')
+            return redirect(url_for('admin.backup_dashboard'))
+            
+    except Exception as e:
+        flash(f'Download failed: {e}', 'danger')
+        return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/settings', methods=['GET', 'POST'])
+@require_admin
+def backup_settings():
+    """Backup settings page."""
+    from .backup import get_backup_settings, save_backup_settings
+    
+    if request.method == 'POST':
+        settings = {
+            'sftp_enabled': request.form.get('sftp_enabled') == 'on',
+            'sftp_host': request.form.get('sftp_host', ''),
+            'sftp_port': int(request.form.get('sftp_port', 22)),
+            'sftp_user': request.form.get('sftp_user', ''),
+            'sftp_password': request.form.get('sftp_password', ''),
+            'sftp_remote_dir': request.form.get('sftp_remote_dir', '/backups/edrefcard'),
+            'auto_backup_enabled': request.form.get('auto_backup_enabled') == 'on',
+            'backup_schedule_hour': int(request.form.get('backup_schedule_hour', 4)),
+            'discord_webhook_url': request.form.get('discord_webhook_url', ''),
+        }
+        
+        # Don't overwrite password if not provided (keep existing)
+        if not settings['sftp_password']:
+            existing = get_backup_settings()
+            settings['sftp_password'] = existing.get('sftp_password', '')
+        
+        save_backup_settings(settings)
+        flash('Backup settings saved.', 'success')
+        return redirect(url_for('admin.backup_settings'))
+    
+    settings = get_backup_settings()
+    return render_template('admin/backup_settings.html', settings=settings)
+
+
+@admin_bp.route('/backup/sftp-test', methods=['POST'])
+@require_admin
+def backup_sftp_test():
+    """Test SFTP connection."""
+    from flask import jsonify
+    from .backup import SFTPManager
+    
+    sftp_manager = SFTPManager(
+        host=request.form.get('sftp_host', ''),
+        port=int(request.form.get('sftp_port', 22)),
+        user=request.form.get('sftp_user', ''),
+        password=request.form.get('sftp_password', ''),
+        remote_dir=request.form.get('sftp_remote_dir', '/backups/edrefcard')
+    )
+    
+    success, message = sftp_manager.test_connection()
+    return jsonify({'success': success, 'message': message})
+
+
+@admin_bp.route('/backup/discord-test', methods=['POST'])
+@require_admin
+def backup_discord_test():
+    """Test Discord webhook."""
+    from flask import jsonify
+    from .backup import DiscordNotifier
+    
+    webhook_url = request.form.get('discord_webhook_url', '')
+    notifier = DiscordNotifier(webhook_url=webhook_url)
+    
+    success, message = notifier.test_webhook()
+    return jsonify({'success': success, 'message': message})
+
+
+@admin_bp.route('/restore')
+@require_admin
+def restore_dashboard():
+    """Restore dashboard."""
+    from .backup import get_backup_settings, SFTPManager, BackupManager, is_maintenance_mode
+    
+    settings = get_backup_settings()
+    remote_backups = []
+    sftp_error = None
+    
+    # Get local backups
+    backup_manager = BackupManager()
+    local_backups = backup_manager.list_local_backups()
+    
+    if settings.get('sftp_enabled') and settings.get('sftp_host'):
+        try:
+            sftp_manager = SFTPManager.from_settings()
+            remote_backups = sftp_manager.list_remote_backups()
+        except Exception as e:
+            sftp_error = str(e)
+    
+    return render_template('admin/restore.html',
+                           settings=settings,
+                           local_backups=local_backups,
+                           remote_backups=remote_backups,
+                           sftp_error=sftp_error,
+                           maintenance_mode=is_maintenance_mode())
+
+
+@admin_bp.route('/restore/from-upload', methods=['POST'])
+@require_admin
+def restore_from_upload():
+    """Restore from an uploaded backup file."""
+    from .backup import RestoreManager, DiscordNotifier
+    import tempfile
+    
+    if 'backup_file' not in request.files:
+        flash('No backup file uploaded.', 'danger')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    file = request.files['backup_file']
+    if not file.filename or not file.filename.endswith('.tar.gz'):
+        flash('Invalid backup file. Must be a .tar.gz file.', 'danger')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    restore_db = request.form.get('restore_db') == 'on'
+    restore_binds = request.form.get('restore_binds') == 'on'
+    
+    if not restore_db and not restore_binds:
+        flash('Please select at least one component to restore.', 'warning')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    try:
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp:
+            file.save(tmp.name)
+            tmp_path = Path(tmp.name)
+        
+        # Perform restore
+        restore_manager = RestoreManager()
+        results = restore_manager.restore_from_archive(
+            tmp_path,
+            restore_db=restore_db,
+            restore_binds=restore_binds
+        )
+        
+        # Cleanup temp file
+        tmp_path.unlink(missing_ok=True)
+        
+        if results['success']:
+            flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
+            
+            # Send notification
+            notifier = DiscordNotifier.from_settings()
+            if notifier.webhook_url:
+                notifier.send_notification(
+                    title="🔄 Restore Completed",
+                    message="A restore operation completed successfully.",
+                    success=True,
+                    fields=[
+                        {'name': 'Database', 'value': 'Yes' if results['db_restored'] else 'No', 'inline': True},
+                        {'name': 'Binds Files', 'value': str(results['binds_restored']), 'inline': True},
+                    ]
+                )
+        else:
+            flash(f'Restore completed with errors: {", ".join(results["errors"])}', 'warning')
+            
+    except Exception as e:
+        flash(f'Restore failed: {e}', 'danger')
+    
+    return redirect(url_for('admin.restore_dashboard'))
+
+
+@admin_bp.route('/restore/from-local', methods=['POST'])
+@require_admin
+def restore_from_local():
+    """Restore from a local backup file."""
+    from .backup import RestoreManager, BackupManager, DiscordNotifier
+    
+    filename = request.form.get('filename')
+    if not filename:
+        flash('No backup file selected.', 'danger')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    restore_db = request.form.get('restore_db') == 'on'
+    restore_binds = request.form.get('restore_binds') == 'on'
+    
+    if not restore_db and not restore_binds:
+        flash('Please select at least one component to restore.', 'warning')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    try:
+        # Get local backup path
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if not backup_path:
+            flash(f'Backup file not found: {filename}', 'danger')
+            return redirect(url_for('admin.restore_dashboard'))
+        
+        # Perform restore
+        restore_manager = RestoreManager()
+        results = restore_manager.restore_from_archive(
+            backup_path,
+            restore_db=restore_db,
+            restore_binds=restore_binds
+        )
+        
+        if results['success']:
+            flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
+            
+            # Send notification
+            notifier = DiscordNotifier.from_settings()
+            if notifier.webhook_url:
+                notifier.send_notification(
+                    title="🔄 Restore Completed",
+                    message=f"Restored from local backup: {filename}",
+                    success=True
+                )
+        else:
+            flash(f'Restore completed with errors: {", ".join(results["errors"])}', 'warning')
+            
+    except Exception as e:
+        flash(f'Restore failed: {e}', 'danger')
+    
+    return redirect(url_for('admin.restore_dashboard'))
+
+
+@admin_bp.route('/restore/from-sftp', methods=['POST'])
+@require_admin
+def restore_from_sftp():
+    """Restore from a backup on SFTP server."""
+    print("[ROUTE] restore_from_sftp called")
+    from .backup import RestoreManager, SFTPManager, DiscordNotifier
+    
+    filename = request.form.get('filename')
+    print(f"[ROUTE] filename={filename}")
+    
+    if not filename:
+        flash('No backup file selected.', 'danger')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    restore_db = request.form.get('restore_db') == 'on'
+    restore_binds = request.form.get('restore_binds') == 'on'
+    print(f"[ROUTE] restore_db={restore_db}, restore_binds={restore_binds}")
+    
+    if not restore_db and not restore_binds:
+        flash('Please select at least one component to restore.', 'warning')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    try:
+        print("[ROUTE] Connecting to SFTP...")
+        # Download from SFTP
+        sftp_manager = SFTPManager.from_settings()
+        print(f"[ROUTE] SFTP host: {sftp_manager.host}")
+        local_path = sftp_manager.download_backup(filename)
+        print(f"[ROUTE] Downloaded to: {local_path}")
+        
+        # Perform restore
+        restore_manager = RestoreManager()
+        results = restore_manager.restore_from_archive(
+            local_path,
+            restore_db=restore_db,
+            restore_binds=restore_binds
+        )
+        
+        # Cleanup downloaded file
+        local_path.unlink(missing_ok=True)
+        
+        if results['success']:
+            flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
+            
+            # Send notification
+            notifier = DiscordNotifier.from_settings()
+            if notifier.webhook_url:
+                notifier.send_notification(
+                    title="🔄 Restore Completed",
+                    message=f"Restored from SFTP backup: {filename}",
+                    success=True
+                )
+        else:
+            flash(f'Restore completed with errors: {", ".join(results["errors"])}', 'warning')
+            
+    except Exception as e:
+        flash(f'Restore failed: {e}', 'danger')
+    
+    return redirect(url_for('admin.restore_dashboard'))
+
+
+@admin_bp.route('/maintenance/toggle', methods=['POST'])
+@require_admin
+def maintenance_toggle():
+    """Toggle maintenance mode."""
+    from .backup import is_maintenance_mode, set_maintenance_mode
+    
+    current = is_maintenance_mode()
+    message = request.form.get('message', 'System is under maintenance.')
+    
+    set_maintenance_mode(not current, message)
+    
+    status = 'enabled' if not current else 'disabled'
+    flash(f'Maintenance mode {status}.', 'success')
+    
+    return redirect(request.referrer or url_for('admin.dashboard'))

@@ -82,6 +82,10 @@ def init_db(db_path):
             CREATE INDEX IF NOT EXISTS idx_config_devices_config ON config_devices(config_id);
             CREATE INDEX IF NOT EXISTS idx_controller_mappings_device ON controller_mappings(device_id);
         """)
+        
+        # Initialize backup-related tables
+        from admin.backup import init_backup_tables
+        init_backup_tables(conn)
 
 
 @contextmanager

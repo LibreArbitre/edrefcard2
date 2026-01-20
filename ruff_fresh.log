@@ -1,8 +1,0 @@
-www\app.py:78:1: E402 Module level import not at top of file
-www\app.py:82:1: E402 Module level import not at top of file
-www\app.py:120:5: E722 Do not use bare `except`
-www\scripts\controlsData.py:173:5: F601 Dictionary key literal `'YawAxisRaw'` repeated
-www\scripts\controlsData.py:174:5: F601 Dictionary key literal `'RollAxisRaw'` repeated
-www\scripts\controlsData.py:175:5: F601 Dictionary key literal `'PitchAxisRaw'` repeated
-www\scripts\parser.py:456:9: E722 Do not use bare `except`
-Found 7 errors.

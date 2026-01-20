@@ -167,24 +167,19 @@ def rebuild_db_command():
     bind_files = list(configs_dir.rglob('*.binds'))
     total_files = len(bind_files)
     
-    click.echo(f"Found {total_files} .binds files. Starting rebuild...")
+    bind_files = list(configs_dir.rglob('*.binds'))
+    total_files = len(bind_files)
+    
+    click.echo(f"Found {total_files} .binds files. Starting rebuild (silencing warnings)...")
     
     count = 0
     errors_count = 0
     
-    # Get existing config IDs to skip if needed, or we can use INSERT OR REPLACE
-    # For now, we'll try to re-parse everything to ensure DB is consistent
+    # Silence logError to prevent console spam
+    original_log_error = utils.logError
+    utils.logError = lambda msg: None
     
-    # Context manager to silence logError
-    class SilenceLogs:
-        def __enter__(self):
-            self.original_log_error = utils.logError
-            utils.logError = lambda msg: None
-        
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            utils.logError = self.original_log_error
-
-    with SilenceLogs():
+    try:
         for bind_file in bind_files:
             try:
                 # Extract config_id from path
@@ -235,5 +230,9 @@ def rebuild_db_command():
             except Exception as e:
                 click.echo(f"Error processing {bind_file.name}: {e}")
                 errors_count += 1
+                
+    finally:
+        # Restore original logError
+        utils.logError = original_log_error
             
     click.echo(f"Rebuild complete: {count} recovered, {errors_count} errors.")

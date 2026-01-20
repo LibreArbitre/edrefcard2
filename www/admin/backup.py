@@ -651,24 +651,41 @@ class RestoreManager:
                 if restore_db:
                     try:
                         db_member = tar.getmember('database/edrefcard.db')
+                        print(f"[RESTORE] Found database in backup: {db_member.name}")
+                        
                         with tempfile.TemporaryDirectory() as tmpdir:
                             tar.extract(db_member, path=tmpdir)
                             extracted_db = Path(tmpdir) / 'database' / 'edrefcard.db'
                             
-                            # Determine correct target path - check configs_path first
+                            # ALWAYS restore to configs_path - that's where the app reads from
+                            # (as configured by EDREFCARD_CONFIGS_DIR)
                             target_db = self.configs_path / 'edrefcard.db'
-                            if not target_db.exists():
-                                # Fallback to data_path if configs doesn't have it
-                                target_db = self.data_path / 'edrefcard.db'
+                            target_db.parent.mkdir(parents=True, exist_ok=True)
                             
-                            # Backup current DB and replace
+                            print(f"[RESTORE] Extracted DB size: {extracted_db.stat().st_size} bytes")
+                            print(f"[RESTORE] Target path: {target_db}")
+                            
+                            # Check current DB state before overwrite
+                            if target_db.exists():
+                                print(f"[RESTORE] Existing DB size: {target_db.stat().st_size} bytes")
+                            else:
+                                print("[RESTORE] No existing DB at target path")
+                            
+                            # Copy the restored database
                             shutil.copy2(extracted_db, target_db)
+                            
+                            print(f"[RESTORE] After copy, DB size: {target_db.stat().st_size} bytes")
+                            
                             results['db_restored'] = True
                             results['db_path'] = str(target_db)
                             logger.info(f"Database restored to {target_db}")
+                            print(f"[RESTORE] Database restored successfully to {target_db}")
+                            
                     except KeyError:
+                        print("[RESTORE] ERROR: Database not found in backup archive")
                         results['errors'].append("Database not found in backup")
                     except Exception as e:
+                        print(f"[RESTORE] ERROR: Database restore failed: {e}")
                         results['errors'].append(f"Database restore failed: {e}")
                 
                 # Restore binds files

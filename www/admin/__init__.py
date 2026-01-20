@@ -678,24 +678,31 @@ def restore_from_local():
 @require_admin
 def restore_from_sftp():
     """Restore from a backup on SFTP server."""
+    print("[ROUTE] restore_from_sftp called")
     from .backup import RestoreManager, SFTPManager, DiscordNotifier
     
     filename = request.form.get('filename')
+    print(f"[ROUTE] filename={filename}")
+    
     if not filename:
         flash('No backup file selected.', 'danger')
         return redirect(url_for('admin.restore_dashboard'))
     
     restore_db = request.form.get('restore_db') == 'on'
     restore_binds = request.form.get('restore_binds') == 'on'
+    print(f"[ROUTE] restore_db={restore_db}, restore_binds={restore_binds}")
     
     if not restore_db and not restore_binds:
         flash('Please select at least one component to restore.', 'warning')
         return redirect(url_for('admin.restore_dashboard'))
     
     try:
+        print("[ROUTE] Connecting to SFTP...")
         # Download from SFTP
         sftp_manager = SFTPManager.from_settings()
+        print(f"[ROUTE] SFTP host: {sftp_manager.host}")
         local_path = sftp_manager.download_backup(filename)
+        print(f"[ROUTE] Downloaded to: {local_path}")
         
         # Perform restore
         restore_manager = RestoreManager()

@@ -206,7 +206,8 @@ def rebuild_db_command():
                     continue
                 
                 # Create description
-                description = "Recovered Configuration"
+                # Use filename as description to provide meaningful identity
+                description = config_id
                 
                 # Save to database
                 # Note: We can't easily restore the original creation time without modifying the DB schema

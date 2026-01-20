@@ -247,6 +247,11 @@ class BackupManager:
         self.data_path = Path(__file__).parent.parent / 'data'
         self.backup_dir = self.data_path / 'backups'
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Debug logging
+        print(f"[BackupManager] configs_path: {self.configs_path}")
+        print(f"[BackupManager] data_path: {self.data_path}")
+        print(f"[BackupManager] backup_dir: {self.backup_dir}")
     
     def create_backup(self, include_db: bool = True, include_binds: bool = True,
                       backup_type: str = 'manual') -> Path:
@@ -703,9 +708,21 @@ class RestoreManager:
                     if db_path:
                         database.init_db(db_path)
                         logger.info(f"Database reconnected: {db_path}")
+                        print(f"[RESTORE] Database reconnected: {db_path}")
                 except Exception as e:
                     results['errors'].append(f"Database reconnection failed: {e}")
                     logger.error(f"Database reconnection failed: {e}")
+            
+            # Signal Gunicorn to reload all workers (multi-worker fix)
+            if results['success'] and restore_db and results['db_restored']:
+                try:
+                    reloaded = self.reload_gunicorn()
+                    if reloaded:
+                        results['gunicorn_reloaded'] = True
+                        print("[RESTORE] Gunicorn HUP signal sent - workers will reload")
+                except Exception as e:
+                    # Don't fail the restore if reload fails
+                    print(f"[RESTORE] Warning: Gunicorn reload failed: {e}")
             
         except Exception as e:
             results['errors'].append(f"Restore failed: {e}")

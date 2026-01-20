@@ -206,8 +206,19 @@ def rebuild_db_command():
                     continue
                 
                 # Create description
-                # Use filename as description to provide meaningful identity
+                # Try to get PresetName from XML, fallback to filename
                 description = config_id
+                try:
+                    # Simple regex to avoid full XML parsing overhead just for one attribute
+                    # <Root PresetName="Keyboard" ...>
+                    import re
+                    match = re.search(r'PresetName="([^"]+)"', xml)
+                    if match:
+                        preset_name = match.group(1)
+                        if preset_name and preset_name != "Custom":
+                            description = preset_name
+                except Exception:
+                    pass  # Fallback to filename on any error
                 
                 # Save to database
                 # Note: We can't easily restore the original creation time without modifying the DB schema

@@ -27,7 +27,7 @@ from scripts import database  # noqa: E402
 
 from web import web_bp  # noqa: E402
 from extensions import limiter  # noqa: E402
-from commands import clean_cache_command, find_unsupported_command, import_defaults_command  # noqa: E402
+from commands import clean_cache_command, find_unsupported_command, import_defaults_command, rebuild_db_command  # noqa: E402
 from flask_limiter.errors import RateLimitExceeded  # noqa: E402
 
 
@@ -85,6 +85,7 @@ app.register_blueprint(api_bp)
 
 
 # Register Web blueprint
+from web import web_bp  # noqa: E402
 app.register_blueprint(web_bp)
 
 
@@ -97,6 +98,7 @@ limiter.init_app(app)
 app.cli.add_command(clean_cache_command)
 app.cli.add_command(find_unsupported_command)
 app.cli.add_command(import_defaults_command)
+app.cli.add_command(rebuild_db_command)
 
 
 # =============================================================================

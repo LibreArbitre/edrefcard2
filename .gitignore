@@ -1,4 +1,5 @@
 ignored
+AGENTS.md
 *.pyc
 www/configs
 configs/

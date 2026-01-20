@@ -129,3 +129,43 @@ def generer_carte(config):
 def generate_card(config):
     # Code...
 ```
+
+---
+
+## 🔀 Git Branching & Merge Strategy
+
+### Branching Model
+- **`main`**: Production-ready code. Deployed to production container.
+- **`dev`**: Development/staging branch. Deployed to dev container for testing.
+- **Feature branches**: Created from `dev` for specific features (optional).
+
+### Environment Detection
+Use `APP_ENV` environment variable:
+- `development` (default): Safe mode, no automatic tasks (scheduler disabled)
+- `production`: Full features enabled (automatic backups, etc.)
+
+### Merge Conventions
+
+#### For merging `dev` → `main` or creating upstream PRs:
+
+**Always use SQUASH MERGE** to create a single clean commit:
+```bash
+git checkout main
+git merge --squash dev
+git commit -m "feat: Descriptive feature name
+
+- Bullet point summary of changes
+- Another change
+- Dependencies added (if any)"
+```
+
+> [!IMPORTANT]
+> Do NOT bring intermediate troubleshooting commits into `main`. Squash all work from `dev` into a single, well-documented commit. This keeps the main branch history clean and makes PRs easier to review.
+
+### Commit Message Format
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation only
+- `refactor:` Code refactoring
+- `chore:` Maintenance tasks

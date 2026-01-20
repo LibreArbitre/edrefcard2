@@ -155,7 +155,7 @@ def import_defaults_command(limit):
 def rebuild_db_command():
     """Rebuild database from existing .binds files in configs directory."""
     from flask import current_app
-    from scripts import database, parser
+    from scripts import database, parser, utils
     from scripts.models import Errors
     
     configs_dir = current_app.config['CONFIGS_FOLDER']
@@ -175,57 +175,65 @@ def rebuild_db_command():
     # Get existing config IDs to skip if needed, or we can use INSERT OR REPLACE
     # For now, we'll try to re-parse everything to ensure DB is consistent
     
-    for bind_file in bind_files:
-        try:
-            # Extract config_id from path
-            # Structure is usually configs/xx/config_id.binds
-            config_id = bind_file.stem
-            
-            # Read file
+    # Context manager to silence logError
+    class SilenceLogs:
+        def __enter__(self):
+            self.original_log_error = utils.logError
+            utils.logError = lambda msg: None
+        
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            utils.logError = self.original_log_error
+
+    with SilenceLogs():
+        for bind_file in bind_files:
             try:
-                with bind_file.open('r', encoding='utf-8') as f:
-                    xml = f.read()
-            except Exception as e:
-                click.echo(f"Error reading {bind_file}: {e}")
-                errors_count += 1
-                continue
-            
-            # Parse bindings
-            parse_errors = Errors()
-            (physicalKeys, modifiers, devices) = parser.parseBindings(
-                config_id, xml, display_groups, parse_errors
-            )
-            
-            if parse_errors.hasErrors():
-                click.echo(f"Skipping {bind_file.name}: Parsing error")
-                errors_count += 1
-                continue
-            
-            # Create description
-            # We don't have the original description, so we'll use a generic one or try to extract from XML if possible
-            description = "Recovered Configuration"
-            
-            # Save to database
-            # Note: We can't easily restore the original creation time without modifying the DB schema
-            # or SQL directly, so new entries will have current timestamp.
-            
-            database.create_configuration(
-                config_id=config_id,
-                description=description,
-                styling='None',
-                display_groups=display_groups,
-                devices=devices,
-                unhandled_warnings=parse_errors.unhandledDevicesWarnings,
-                device_warnings=parse_errors.deviceWarnings,
-                misc_warnings=parse_errors.misconfigurationWarnings
-            )
-            
-            count += 1
-            if count % 100 == 0:
-                click.echo(f"Processed {count}/{total_files}...")
+                # Extract config_id from path
+                # Structure is usually configs/xx/config_id.binds
+                config_id = bind_file.stem
                 
-        except Exception as e:
-            click.echo(f"Error processing {bind_file.name}: {e}")
-            errors_count += 1
+                # Read file
+                try:
+                    with bind_file.open('r', encoding='utf-8') as f:
+                        xml = f.read()
+                except Exception as e:
+                    click.echo(f"Error reading {bind_file}: {e}")
+                    errors_count += 1
+                    continue
+                
+                # Parse bindings
+                parse_errors = Errors()
+                (physicalKeys, modifiers, devices) = parser.parseBindings(
+                    config_id, xml, display_groups, parse_errors
+                )
+                
+                if parse_errors.hasErrors():
+                    errors_count += 1
+                    continue
+                
+                # Create description
+                description = "Recovered Configuration"
+                
+                # Save to database
+                # Note: We can't easily restore the original creation time without modifying the DB schema
+                # or SQL directly, so new entries will have current timestamp.
+                
+                database.create_configuration(
+                    config_id=config_id,
+                    description=description,
+                    styling='None',
+                    display_groups=display_groups,
+                    devices=devices,
+                    unhandled_warnings=parse_errors.unhandledDevicesWarnings,
+                    device_warnings=parse_errors.deviceWarnings,
+                    misc_warnings=parse_errors.misconfigurationWarnings
+                )
+                
+                count += 1
+                if count % 100 == 0:
+                    click.echo(f"Processed {count}/{total_files}...")
+                    
+            except Exception as e:
+                click.echo(f"Error processing {bind_file.name}: {e}")
+                errors_count += 1
             
     click.echo(f"Rebuild complete: {count} recovered, {errors_count} errors.")

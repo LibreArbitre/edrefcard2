@@ -530,11 +530,15 @@ def backup_discord_test():
 @require_admin
 def restore_dashboard():
     """Restore dashboard."""
-    from .backup import get_backup_settings, SFTPManager, is_maintenance_mode
+    from .backup import get_backup_settings, SFTPManager, BackupManager, is_maintenance_mode
     
     settings = get_backup_settings()
     remote_backups = []
     sftp_error = None
+    
+    # Get local backups
+    backup_manager = BackupManager()
+    local_backups = backup_manager.list_local_backups()
     
     if settings.get('sftp_enabled') and settings.get('sftp_host'):
         try:
@@ -545,6 +549,7 @@ def restore_dashboard():
     
     return render_template('admin/restore.html',
                            settings=settings,
+                           local_backups=local_backups,
                            remote_backups=remote_backups,
                            sftp_error=sftp_error,
                            maintenance_mode=is_maintenance_mode())
@@ -604,6 +609,61 @@ def restore_from_upload():
                         {'name': 'Database', 'value': 'Yes' if results['db_restored'] else 'No', 'inline': True},
                         {'name': 'Binds Files', 'value': str(results['binds_restored']), 'inline': True},
                     ]
+                )
+        else:
+            flash(f'Restore completed with errors: {", ".join(results["errors"])}', 'warning')
+            
+    except Exception as e:
+        flash(f'Restore failed: {e}', 'danger')
+    
+    return redirect(url_for('admin.restore_dashboard'))
+
+
+@admin_bp.route('/restore/from-local', methods=['POST'])
+@require_admin
+def restore_from_local():
+    """Restore from a local backup file."""
+    from .backup import RestoreManager, BackupManager, DiscordNotifier
+    
+    filename = request.form.get('filename')
+    if not filename:
+        flash('No backup file selected.', 'danger')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    restore_db = request.form.get('restore_db') == 'on'
+    restore_binds = request.form.get('restore_binds') == 'on'
+    
+    if not restore_db and not restore_binds:
+        flash('Please select at least one component to restore.', 'warning')
+        return redirect(url_for('admin.restore_dashboard'))
+    
+    try:
+        # Get local backup path
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if not backup_path:
+            flash(f'Backup file not found: {filename}', 'danger')
+            return redirect(url_for('admin.restore_dashboard'))
+        
+        # Perform restore
+        restore_manager = RestoreManager()
+        results = restore_manager.restore_from_archive(
+            backup_path,
+            restore_db=restore_db,
+            restore_binds=restore_binds
+        )
+        
+        if results['success']:
+            flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
+            
+            # Send notification
+            notifier = DiscordNotifier.from_settings()
+            if notifier.webhook_url:
+                notifier.send_notification(
+                    title="🔄 Restore Completed",
+                    message=f"Restored from local backup: {filename}",
+                    success=True
                 )
         else:
             flash(f'Restore completed with errors: {", ".join(results["errors"])}', 'warning')

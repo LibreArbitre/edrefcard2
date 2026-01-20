@@ -287,11 +287,14 @@ class BackupManager:
                 tarinfo.mtime = datetime.datetime.now().timestamp()
                 tar.addfile(tarinfo, metadata_io)
                 
-                # Add database
+                # Add database - check configs_path first, then data_path
                 if include_db:
-                    db_path = self.data_path / 'edrefcard.db'
+                    db_path = self.configs_path / 'edrefcard.db'
+                    if not db_path.exists():
+                        db_path = self.data_path / 'edrefcard.db'
                     if db_path.exists():
                         tar.add(db_path, arcname='database/edrefcard.db')
+                        logger.info(f"Added database from {db_path}")
                 
                 # Add binds files only (no images/PDFs)
                 if include_binds:
@@ -553,7 +556,8 @@ class SFTPManager:
             Number of backups deleted
         """
         deleted = 0
-        cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=retention_days)
+        # Use naive datetime for comparison with SFTP timestamps (which are naive)
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=retention_days)
         
         try:
             sftp = self._connect()
@@ -645,12 +649,18 @@ class RestoreManager:
                         with tempfile.TemporaryDirectory() as tmpdir:
                             tar.extract(db_member, path=tmpdir)
                             extracted_db = Path(tmpdir) / 'database' / 'edrefcard.db'
-                            target_db = self.data_path / 'edrefcard.db'
+                            
+                            # Determine correct target path - check configs_path first
+                            target_db = self.configs_path / 'edrefcard.db'
+                            if not target_db.exists():
+                                # Fallback to data_path if configs doesn't have it
+                                target_db = self.data_path / 'edrefcard.db'
                             
                             # Backup current DB and replace
                             shutil.copy2(extracted_db, target_db)
                             results['db_restored'] = True
-                            logger.info("Database restored successfully")
+                            results['db_path'] = str(target_db)
+                            logger.info(f"Database restored to {target_db}")
                     except KeyError:
                         results['errors'].append("Database not found in backup")
                     except Exception as e:
@@ -682,6 +692,20 @@ class RestoreManager:
                     logger.info(f"Restored {binds_count} binds files")
             
             results['success'] = len(results['errors']) == 0
+            
+            # CRITICAL: Reinitialize database connection after restore
+            # SQLite keeps the old file handle, so we must reconnect
+            if restore_db and results['db_restored']:
+                try:
+                    from scripts import database
+                    # Use the path where we actually restored the DB
+                    db_path = results.get('db_path')
+                    if db_path:
+                        database.init_db(db_path)
+                        logger.info(f"Database reconnected: {db_path}")
+                except Exception as e:
+                    results['errors'].append(f"Database reconnection failed: {e}")
+                    logger.error(f"Database reconnection failed: {e}")
             
         except Exception as e:
             results['errors'].append(f"Restore failed: {e}")

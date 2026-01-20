@@ -37,7 +37,7 @@ app = Flask(__name__,
             template_folder=str(WWW_DIR / 'templates'))
 
 # Configure the application
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max upload
 app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 app.config['WWW_DIR'] = WWW_DIR
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')

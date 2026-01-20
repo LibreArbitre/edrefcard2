@@ -386,12 +386,13 @@ def backup_dashboard():
 @admin_bp.route('/backup/create', methods=['POST'])
 @require_admin
 def backup_create():
-    """Create a manual backup and download it."""
+    """Create a manual backup (local or download)."""
     from flask import send_file
     from .backup import BackupManager, DiscordNotifier
     
     include_db = request.form.get('include_db', '1') == '1'
     include_binds = request.form.get('include_binds', '1') == '1'
+    action = request.form.get('action', 'download')
     
     try:
         backup_manager = BackupManager()
@@ -407,18 +408,23 @@ def backup_create():
             size_mb = backup_path.stat().st_size / (1024 * 1024)
             notifier.send_notification(
                 title="📦 Manual Backup Created",
-                message="A manual backup was created and downloaded.",
+                message=f"A manual backup was created ({action}).",
                 success=True,
                 fields=[
                     {'name': 'Size', 'value': f"{size_mb:.2f} MB", 'inline': True},
+                    {'name': 'Type', 'value': action.capitalize(), 'inline': True},
                 ]
             )
         
-        return send_file(
-            backup_path,
-            as_attachment=True,
-            download_name=backup_path.name
-        )
+        if action == 'download':
+            return send_file(
+                backup_path,
+                as_attachment=True,
+                download_name=backup_path.name
+            )
+        else:
+            flash(f'Backup created successfully: {backup_path.name}', 'success')
+            return redirect(url_for('admin.backup_dashboard'))
         
     except Exception as e:
         flash(f'Backup failed: {e}', 'danger')
@@ -428,7 +434,7 @@ def backup_create():
 @admin_bp.route('/backup/upload-sftp', methods=['POST'])
 @require_admin
 def backup_upload_sftp():
-    """Upload the latest local backup to SFTP."""
+    """Upload a backup to SFTP (latest or specific)."""
     from .backup import BackupManager, SFTPManager, get_backup_settings
     
     settings = get_backup_settings()
@@ -436,29 +442,86 @@ def backup_upload_sftp():
         flash('SFTP is not configured.', 'warning')
         return redirect(url_for('admin.backup_dashboard'))
     
+    filename = request.form.get('filename')
+    
     try:
         backup_manager = BackupManager()
-        local_backups = backup_manager.list_local_backups()
         
-        if not local_backups:
-            flash('No local backups to upload.', 'warning')
-            return redirect(url_for('admin.backup_dashboard'))
-        
-        latest = local_backups[0]
-        backup_path = Path(latest['path'])
+        target_path = None
+        if filename:
+            # Upload specific file
+            target_path = backup_manager.get_backup_path(filename)
+            if not target_path:
+                flash(f'Backup file not found: {filename}', 'danger')
+                return redirect(url_for('admin.backup_dashboard'))
+        else:
+            # Upload latest
+            local_backups = backup_manager.list_local_backups()
+            if not local_backups:
+                flash('No local backups to upload.', 'warning')
+                return redirect(url_for('admin.backup_dashboard'))
+            target_path = Path(local_backups[0]['path'])
         
         sftp_manager = SFTPManager.from_settings()
-        sftp_manager.upload_backup(backup_path)
+        sftp_manager.upload_backup(target_path)
         
-        # Cleanup old remote backups
-        sftp_manager.cleanup_remote(retention_days=7)
+        # Cleanup old remote backups if needed (only on auto/sync all)
+        # sftp_manager.cleanup_remote(retention_days=7) 
         
-        flash(f'Backup {latest["filename"]} uploaded to SFTP.', 'success')
+        flash(f'Backup {target_path.name} uploaded to SFTP.', 'success')
         
     except Exception as e:
         flash(f'SFTP upload failed: {e}', 'danger')
     
     return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/delete/<filename>', methods=['POST'])
+@require_admin
+def backup_delete(filename):
+    """Delete a local backup file."""
+    from .backup import BackupManager
+    
+    try:
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if backup_path and backup_path.exists():
+            backup_path.unlink()
+            flash(f'Backup {filename} deleted.', 'success')
+        else:
+            flash(f'Backup {filename} not found.', 'warning')
+            
+    except Exception as e:
+        flash(f'Failed to delete backup: {e}', 'danger')
+        
+    return redirect(url_for('admin.backup_dashboard'))
+
+
+@admin_bp.route('/backup/download/<filename>')
+@require_admin
+def backup_download(filename):
+    """Download a specific local backup file."""
+    from flask import send_file
+    from .backup import BackupManager
+    
+    try:
+        backup_manager = BackupManager()
+        backup_path = backup_manager.get_backup_path(filename)
+        
+        if backup_path and backup_path.exists():
+            return send_file(
+                backup_path,
+                as_attachment=True,
+                download_name=filename
+            )
+        else:
+            flash(f'Backup {filename} not found.', 'danger')
+            return redirect(url_for('admin.backup_dashboard'))
+            
+    except Exception as e:
+        flash(f'Download failed: {e}', 'danger')
+        return redirect(url_for('admin.backup_dashboard'))
 
 
 @admin_bp.route('/backup/settings', methods=['GET', 'POST'])

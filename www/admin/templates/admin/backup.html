@@ -23,11 +23,18 @@
         <form action="{{ url_for('admin.backup_create') }}" method="post" style="text-align: center;">
             <input type="hidden" name="include_db" value="1">
             <input type="hidden" name="include_binds" value="1">
-            <button type="submit" class="btn btn-primary" style="font-size: 1rem; padding: 1rem 2rem;">
+            <!-- Default action is download -->
+            <button type="submit" name="action" value="download" class="btn btn-primary"
+                style="font-size: 1rem; padding: 1rem 2rem;">
                 📥 Download Backup
             </button>
+            <div style="margin-top: 1rem;">
+                <button type="submit" name="action" value="local" class="btn btn-outline btn-sm">
+                    💾 Create Local Backup
+                </button>
+            </div>
             <p style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.85rem;">
-                Create a full backup (DB + binds)
+                Full backup (DB + binds)
             </p>
         </form>
     </div>
@@ -39,7 +46,7 @@
                 ☁️ Sync to SFTP
             </button>
             <p style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.85rem;">
-                Upload latest backup to remote
+                Upload latest local backup to remote
             </p>
         </form>
         {% else %}
@@ -116,6 +123,7 @@
                 <th>Filename</th>
                 <th>Size</th>
                 <th>Created</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -124,6 +132,34 @@
                 <td>{{ backup.filename }}</td>
                 <td>{{ (backup.size_bytes / 1024 / 1024)|round(2) }} MB</td>
                 <td>{{ backup.created_at[:19] }}</td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <!-- Download -->
+                        <a href="{{ url_for('admin.backup_download', filename=backup.filename) }}"
+                            class="btn btn-sm btn-outline" title="Download">
+                            📥
+                        </a>
+
+                        <!-- Sync to SFTP -->
+                        {% if settings.sftp_enabled and settings.sftp_host %}
+                        <form action="{{ url_for('admin.backup_upload_sftp') }}" method="post" style="display:inline;">
+                            <input type="hidden" name="filename" value="{{ backup.filename }}">
+                            <button type="submit" class="btn btn-sm btn-outline" title="Sync to SFTP">
+                                ☁️
+                            </button>
+                        </form>
+                        {% endif %}
+
+                        <!-- Delete -->
+                        <form action="{{ url_for('admin.backup_delete', filename=backup.filename) }}" method="post"
+                            style="display:inline;"
+                            onsubmit="return confirm('Are you sure you want to delete this backup?');">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                🗑️
+                            </button>
+                        </form>
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

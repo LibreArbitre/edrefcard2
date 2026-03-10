@@ -121,25 +121,26 @@
                 </div>
             </div>
 
-            <!-- Keyboard Layout Section -->
+            <!-- Keyboard Display Section -->
             <div class="form-section">
-                <h3>⌨️ Keyboard Layout</h3>
-                <p>Select your keyboard layout (for future visualization):</p>
+                <h3>⌨️ Keyboard Display</h3>
+                <p>Choose how to display your keyboard bindings:</p>
 
                 <div class="radio-group">
                     <label class="radio-item">
-                        <input type="radio" name="keyboard_layout" value="ansi" checked>
-                        <span>ANSI 104-key</span>
+                        <input type="radio" name="keyboard_display" value="text" checked>
+                        <span>📄 Text List (Recommended for all layouts)</span>
                     </label>
                     <label class="radio-item">
-                        <input type="radio" name="keyboard_layout" value="iso">
-                        <span>ISO 105-key</span>
-                    </label>
-                    <label class="radio-item">
-                        <input type="radio" name="keyboard_layout" value="cyrillic">
-                        <span>ЙЦУКЕН Cyrillic</span>
+                        <input type="radio" name="keyboard_display" value="visual-ansi">
+                        <span>🎹 Visual ANSI 104 (QWERTY key labels)</span>
                     </label>
                 </div>
+
+                <p class="text-muted mt-1" style="font-size: 0.85rem;">
+                    💡 Visual keyboard uses QWERTY key labels.
+                    AZERTY/QWERTZ users: use Text List for clarity.
+                </p>
             </div>
 
             <!-- Publishing Section -->

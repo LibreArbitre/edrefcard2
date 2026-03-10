@@ -7,6 +7,7 @@ using the Wand/ImageMagick library.
 """
 
 import re
+from pathlib import Path
 from collections import OrderedDict
 
 try:
@@ -209,6 +210,282 @@ def appendKeyboardImage(createdImages, physicalKeys, modifiers, displayGroups, r
     createKeyboardImage(physicalKeys, modifiers, 'keyboard', ['Keyboard'], 
                         fontSize, displayGroups, runId, public)
     createdImages.append('Keyboard')
+
+
+def createKeyboardLayoutImage(physicalKeys, layout, config, styling):
+    """Create a visual keyboard layout image with bindings overlaid on keys.
+
+    Overlays key bindings onto a keyboard image (keyboard-layout.jpg).
+    Currently only ANSI 104-key is implemented; ISO/Cyrillic fall through
+    to return None (caller should fall back to text list).
+
+    Args:
+        physicalKeys: Dictionary of physical key bindings
+        layout: 'ansi', 'iso', or 'cyrillic'
+        config: Config object (for output file path)
+        styling: Styling mode ('None', 'Group', 'Category', 'Modifier')
+
+    Returns:
+        True if image was created, None if layout not supported
+    """
+    if Drawing is None:
+        raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed.")
+
+    # Only ANSI is implemented in this simplified version
+    if layout != 'ansi':
+        return None
+
+    _init_styles()
+
+    try:
+        from .keyboardLayouts import keyboardLayouts
+    except ImportError:
+        from keyboardLayouts import keyboardLayouts
+
+    layoutMapping = keyboardLayouts.get('ANSI 104', {})
+
+    filePath = config.pathWithNameAndSuffix('keyboard-layout', '.jpg')
+    if filePath.exists():
+        return True
+
+    # The keyboard-layout.jpg is in www/static/images/; renderer runs from www/
+    sourceImagePath = Path('../www/static/images/keyboard-layout.jpg')
+    if not sourceImagePath.exists():
+        # Try alternate relative paths depending on working directory
+        for candidate in [
+            Path('static/images/keyboard-layout.jpg'),
+            Path('../static/images/keyboard-layout.jpg'),
+            Path('/app/www/static/images/keyboard-layout.jpg'),
+        ]:
+            if candidate.exists():
+                sourceImagePath = candidate
+                break
+        else:
+            return None  # Image not found, skip silently
+
+    with Image(filename=str(sourceImagePath)) as sourceImg:
+        imgWidth = sourceImg.width
+        imgHeight = sourceImg.height
+
+        with Drawing() as context:
+            context.text_antialias = True
+            context.font = getFontPath('Regular', 'Normal')
+            context.font_size = 28
+            context.stroke_width = 0
+            context.fill_opacity = 1
+
+            # Add URL watermark at bottom
+            context.push()
+            context.font = getFontPath('SemiBold', 'Normal')
+            context.font_size = 36
+            context.fill_color = Color('Black')
+            context.text(x=23, y=imgHeight - 20, body=config.refcardURL())
+            context.pop()
+
+            # Collect one representative binding per key
+            keyBindings = {}  # keyName -> list of (controlName, style)
+            for _physicalKeySpec, physicalKey in physicalKeys.items():
+                if physicalKey.get('Device') != 'Keyboard':
+                    continue
+
+                keyName = physicalKey.get('Key')
+                displayLabel = layoutMapping.get(keyName)
+                if not displayLabel:
+                    continue  # Key not in ANSI mapping
+
+                if keyName not in keyBindings:
+                    keyBindings[keyName] = []
+
+                for _modifier, bind in physicalKey.get('Binds', {}).items():
+                    for _controlKey, control in bind.get('Controls', {}).items():
+                        if styling == 'Group':
+                            style = groupStyles.get(control.get('Group'), groupStyles.get('General'))
+                        elif styling == 'Category':
+                            style = categoryStyles.get(control.get('Category', 'General'), categoryStyles.get('General'))
+                        elif styling == 'Modifier':
+                            style = ModifierStyles.index(0)
+                        else:
+                            style = groupStyles.get('General')
+                        keyBindings[keyName].append({
+                            'name': control.get('Name', ''),
+                            'style': style,
+                        })
+
+            # Lay out text annotations on a grid matching the keyboard image.
+            # The keyboard-layout.jpg image has a standard ANSI layout.
+            # We use a calculated grid based on the image dimensions.
+            # Row y-positions and per-row key x-positions (as fraction of imgWidth).
+            # These approximate the standard ANSI keyboard photo layout.
+            keyPositions = _ansiKeyPositions(imgWidth, imgHeight)
+
+            for keyName, binds in keyBindings.items():
+                if not binds:
+                    continue
+                pos = keyPositions.get(keyName)
+                if not pos:
+                    continue
+
+                x, y = pos
+                # Clip to at most 2 bindings per key to avoid overlap
+                for i, bindInfo in enumerate(binds[:2]):
+                    name = bindInfo['name']
+                    style = bindInfo['style']
+                    # Shorten long names
+                    if len(name) > 12:
+                        name = name[:11] + '…'
+                    context.fill_color = style['Color']
+                    context.font = style['Font']
+                    context.font_size = 22
+                    context.text(x=x, y=y + i * 26, body=name)
+
+            context.draw(sourceImg)
+            sourceImg.save(filename=str(filePath))
+
+    return True
+
+
+def _ansiKeyPositions(imgWidth, imgHeight):
+    """Return approximate pixel positions for each ANSI key in keyboard-layout.jpg.
+
+    Coordinates are the top-left corner of the text annotation area for each key.
+    These are calculated as fractions of the image dimensions so they scale
+    with different image sizes.
+
+    Returns:
+        Dict mapping Elite Dangerous key name -> (x, y) pixel position
+    """
+    # keyboard-layout.jpg is a standard ANSI keyboard photo.
+    # Approximate row y-positions as fractions of image height:
+    w, h = imgWidth, imgHeight
+
+    # Row top y-positions (fraction of height)
+    rFn  = 0.04   # Function key row
+    rNum = 0.19   # Number row
+    rTab = 0.35   # Tab row (QWERTY)
+    rCap = 0.51   # Caps Lock row (ASDF)
+    rSft = 0.66   # Shift row (ZXCV)
+    rBot = 0.82   # Bottom row (Space etc.)
+    rNav = 0.19   # Nav cluster (same height as number row)
+    rNum2= 0.19   # Numpad top
+
+    def p(xf, yf):
+        return (int(xf * w), int(yf * h))
+
+    return {
+        # --- Function keys ---
+        'Key_Escape':      p(0.005, rFn),
+        'Key_F1':          p(0.073, rFn),
+        'Key_F2':          p(0.110, rFn),
+        'Key_F3':          p(0.147, rFn),
+        'Key_F4':          p(0.183, rFn),
+        'Key_F5':          p(0.228, rFn),
+        'Key_F6':          p(0.265, rFn),
+        'Key_F7':          p(0.302, rFn),
+        'Key_F8':          p(0.338, rFn),
+        'Key_F9':          p(0.383, rFn),
+        'Key_F10':         p(0.420, rFn),
+        'Key_F11':         p(0.457, rFn),
+        'Key_F12':         p(0.493, rFn),
+        # --- Number row ---
+        'Key_Grave':       p(0.005, rNum),
+        'Key_1':           p(0.042, rNum),
+        'Key_2':           p(0.079, rNum),
+        'Key_3':           p(0.116, rNum),
+        'Key_4':           p(0.153, rNum),
+        'Key_5':           p(0.190, rNum),
+        'Key_6':           p(0.227, rNum),
+        'Key_7':           p(0.264, rNum),
+        'Key_8':           p(0.301, rNum),
+        'Key_9':           p(0.338, rNum),
+        'Key_0':           p(0.375, rNum),
+        'Key_Minus':       p(0.412, rNum),
+        'Key_Equals':      p(0.449, rNum),
+        'Key_Backspace':   p(0.468, rNum),
+        # --- Tab row ---
+        'Key_Tab':         p(0.005, rTab),
+        'Key_Q':           p(0.057, rTab),
+        'Key_W':           p(0.094, rTab),
+        'Key_E':           p(0.131, rTab),
+        'Key_R':           p(0.168, rTab),
+        'Key_T':           p(0.205, rTab),
+        'Key_Y':           p(0.242, rTab),
+        'Key_U':           p(0.279, rTab),
+        'Key_I':           p(0.316, rTab),
+        'Key_O':           p(0.353, rTab),
+        'Key_P':           p(0.390, rTab),
+        'Key_LeftBracket': p(0.427, rTab),
+        'Key_RightBracket':p(0.464, rTab),
+        'Key_BackSlash':   p(0.486, rTab),
+        # --- Caps row ---
+        'Key_CapsLock':    p(0.005, rCap),
+        'Key_A':           p(0.064, rCap),
+        'Key_S':           p(0.101, rCap),
+        'Key_D':           p(0.138, rCap),
+        'Key_F':           p(0.175, rCap),
+        'Key_G':           p(0.212, rCap),
+        'Key_H':           p(0.249, rCap),
+        'Key_J':           p(0.286, rCap),
+        'Key_K':           p(0.323, rCap),
+        'Key_L':           p(0.360, rCap),
+        'Key_SemiColon':   p(0.397, rCap),
+        'Key_Apostrophe':  p(0.434, rCap),
+        'Key_Enter':       p(0.456, rCap),
+        # --- Shift row ---
+        'Key_LeftShift':   p(0.005, rSft),
+        'Key_Z':           p(0.079, rSft),
+        'Key_X':           p(0.116, rSft),
+        'Key_C':           p(0.153, rSft),
+        'Key_V':           p(0.190, rSft),
+        'Key_B':           p(0.227, rSft),
+        'Key_N':           p(0.264, rSft),
+        'Key_M':           p(0.301, rSft),
+        'Key_Comma':       p(0.338, rSft),
+        'Key_Period':      p(0.375, rSft),
+        'Key_Slash':       p(0.412, rSft),
+        'Key_RightShift':  p(0.438, rSft),
+        # --- Bottom row ---
+        'Key_LeftControl': p(0.005, rBot),
+        'Key_LeftWindows': p(0.057, rBot),
+        'Key_LeftAlt':     p(0.094, rBot),
+        'Key_Space':       p(0.185, rBot),
+        'Key_RightAlt':    p(0.360, rBot),
+        'Key_RightWindows':p(0.397, rBot),
+        'Key_Application': p(0.430, rBot),
+        'Key_RightControl':p(0.460, rBot),
+        # --- Navigation cluster ---
+        'Key_PrintScreen': p(0.545, rNav),
+        'Key_ScrollLock':  p(0.582, rNav),
+        'Key_Pause':       p(0.619, rNav),
+        'Key_Insert':      p(0.545, 0.35),
+        'Key_Home':        p(0.582, 0.35),
+        'Key_PageUp':      p(0.619, 0.35),
+        'Key_Delete':      p(0.545, 0.51),
+        'Key_End':         p(0.582, 0.51),
+        'Key_PageDown':    p(0.619, 0.51),
+        # --- Arrow keys ---
+        'Key_UpArrow':     p(0.582, 0.74),
+        'Key_LeftArrow':   p(0.545, 0.82),
+        'Key_DownArrow':   p(0.582, 0.82),
+        'Key_RightArrow':  p(0.619, 0.82),
+        # --- Numpad ---
+        'Key_NumLock':     p(0.660, rNum2),
+        'Key_Numpad_Divide':   p(0.697, rNum2),
+        'Key_Numpad_Multiply': p(0.734, rNum2),
+        'Key_Numpad_Subtract': p(0.771, rNum2),
+        'Key_Numpad_7':    p(0.660, 0.35),
+        'Key_Numpad_8':    p(0.697, 0.35),
+        'Key_Numpad_9':    p(0.734, 0.35),
+        'Key_Numpad_Add':  p(0.771, 0.35),
+        'Key_Numpad_4':    p(0.660, 0.51),
+        'Key_Numpad_5':    p(0.697, 0.51),
+        'Key_Numpad_6':    p(0.734, 0.51),
+        'Key_Numpad_1':    p(0.660, 0.66),
+        'Key_Numpad_2':    p(0.697, 0.66),
+        'Key_Numpad_3':    p(0.734, 0.66),
+        'Key_Numpad_Enter':p(0.771, 0.66),
+        'Key_Numpad_0':    p(0.660, 0.82),
+        'Key_Numpad_Decimal': p(0.734, 0.82),
+    }
 
 
 def writeText(context, img, text, screenState, font, surround, newLine):

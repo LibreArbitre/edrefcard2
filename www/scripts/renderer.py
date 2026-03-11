@@ -363,8 +363,8 @@ def _writeCenteredWrapableText(context, sourceImg, x, y, w, h, text):
     """Draw text centered and word-wrapped within a rectangle."""
     def _writeCentered(ctx, img, x, y, w, h, t):
         m = ctx.get_font_metrics(img, t, multiline=True)
-        x2 = int(x + (w - m.text_width) / 2)
-        y2 = int(y + (h - m.text_height) / 2 + m.ascender)
+        x2 = int(round(x + (w - m.text_width) / 2))
+        y2 = int(round(y + (h - stdH) / 2 + m.ascender))
         ctx.text(x=x2, y=y2, body=t)
 
     metrics = context.get_font_metrics(sourceImg, 'A', multiline=False)

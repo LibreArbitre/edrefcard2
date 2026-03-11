@@ -176,7 +176,7 @@ def generate():
         if devices.get('Keyboard::0') is not None:
             if keyboard_display == 'visual-ansi':
                 result = createKeyboardLayoutImage(
-                    physical_keys, 'ansi', config, styling
+                    physical_keys, modifiers, 'ANSI 104', config, styling
                 )
                 if result is True:
                     keyboard_layout_image = True
@@ -216,6 +216,7 @@ def generate():
             styling=styling,
             display_groups=display_groups,
             devices=devices,
+            keyboard_display=keyboard_display,
             unhandled_warnings=errors.unhandledDevicesWarnings,
             device_warnings=errors.deviceWarnings,
             misc_warnings=errors.misconfigurationWarnings
@@ -454,7 +455,7 @@ def show_binds(run_id):
                 keyboard_display = db_config.get('keyboard_display', 'text') if db_config else 'text'
                 if keyboard_display == 'visual-ansi':
                     result = createKeyboardLayoutImage(
-                        physical_keys, 'ansi', config, styling
+                        physical_keys, modifiers, 'ANSI 104', config, styling
                     )
                     if result is True:
                         keyboard_layout_image = True

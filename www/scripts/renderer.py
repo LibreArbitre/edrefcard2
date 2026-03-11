@@ -6,8 +6,8 @@ This module contains functions for generating reference card images
 using the Wand/ImageMagick library.
 """
 
+import math
 import re
-from pathlib import Path
 from collections import OrderedDict
 
 try:
@@ -212,280 +212,484 @@ def appendKeyboardImage(createdImages, physicalKeys, modifiers, displayGroups, r
     createdImages.append('Keyboard')
 
 
-def createKeyboardLayoutImage(physicalKeys, layout, config, styling):
-    """Create a visual keyboard layout image with bindings overlaid on keys.
+# ---------------------------------------------------------------------------
+# Keyboard layout image – ported from clockbrain/edrefcard2 PR #39
+# ---------------------------------------------------------------------------
 
-    Overlays key bindings onto a keyboard image (keyboard-layout.jpg).
-    Currently only ANSI 104-key is implemented; ISO/Cyrillic fall through
-    to return None (caller should fall back to text list).
+def _prepareCapList(physicalKeys, modifiers, styling, keyboardLayout):
+    """Build a faceBandset mapping cap labels to their binding bands."""
+    unmapped = []
+    capReverseMap = {}
+    for keyboardRow in keyboardLayout:
+        for keyboardItem in keyboardRow:
+            if isinstance(keyboardItem, dict):
+                continue
+            if isinstance(keyboardItem, list):
+                lcaseKey = keyboardItem[1].casefold()
+                capReverseMap[lcaseKey] = keyboardItem[0]
+            else:
+                lcaseKey = f'Key_{keyboardItem}'.casefold()
+                capReverseMap[lcaseKey] = keyboardItem
+
+    faceBandset = {}
+    for _physicalKeySpec, physicalKey in physicalKeys.items():
+        if physicalKey.get('Device') != 'Keyboard':
+            continue
+        itemKey = physicalKey.get('Key')
+        if itemKey is None:
+            continue
+        cap = capReverseMap.get(itemKey.casefold())
+        if cap is None and itemKey not in unmapped:
+            unmapped.append(itemKey)
+        binds = physicalKey.get('Binds', {}).items()
+        if binds:
+            faceBandset[cap] = {}
+        for bindKey, controlList in binds:
+            for controlTag, control in controlList.get('Controls', {}).items():
+                entry = None
+                if styling == 'Group':
+                    entry = control.get('Group')
+                elif styling == 'Category':
+                    entry = control.get('Category')
+                bandIndex = f'{entry}::{controlTag}::{bindKey}'
+                skip = False
+                for sameAs in control.get('HideIfSameAs', []):
+                    if f'{entry}::{sameAs}::{bindKey}' in faceBandset.get(cap, {}):
+                        skip = True
+                        break
+                if not skip and bandIndex not in faceBandset.get(cap, {}):
+                    color = 'White'
+                    if styling == 'Group':
+                        color = groupStyles.get(entry, groupStyles.get('General')).get('Color')
+                    elif styling == 'Category':
+                        color = categoryStyles.get(entry, categoryStyles.get('General')).get('Color')
+                    stripColors = []
+                    hold = False
+                    if bindKey == 'Keyboard::0::HOLD':
+                        hold = True
+                    elif bindKey != 'Unmodified':
+                        for modifier in modifiers.get(bindKey, []):
+                            modColor = ModifierStyles.index(modifier.get('Number') - 101).get('Color')
+                            stripColors.append(modColor)
+                    faceBandset[cap][bandIndex] = {
+                        'Label': control.get('Name', ''),
+                        'Color': color,
+                        'StripColors': stripColors,
+                        'Hold': hold,
+                    }
+
+    for _modifierKey, modifierControls in modifiers.items():
+        for modifier in modifierControls:
+            if modifier.get('Device') != 'Keyboard':
+                continue
+            itemKey = modifier.get('Key')
+            if itemKey is None:
+                continue
+            cap = capReverseMap.get(itemKey.casefold())
+            if cap is None and itemKey != 'HOLD' and itemKey not in unmapped:
+                unmapped.append(itemKey)
+            if faceBandset.get(cap) is None:
+                faceBandset[cap] = {}
+            bandIndex = f"Modifier::{modifier.get('Number')}::Modifier"
+            color = ModifierStyles.index(modifier.get('Number') - 101).get('Color')
+            faceBandset[cap][bandIndex] = {
+                'Label': f"Modifier-{str(modifier.get('Number') - 100)}",
+                'Color': color, 'StripColors': [], 'Hold': False,
+            }
+
+    return faceBandset, unmapped
+
+
+def _balance_wrap(text, num_lines):
+    """Wrap text across num_lines with balanced line lengths."""
+    from itertools import combinations as _comb
+    words = text.split()
+    if num_lines <= 1 or len(words) <= 1:
+        return text
+    word_lengths = [len(w) for w in words]
+    total_chars = sum(word_lengths)
+    ideal_length = total_chars / num_lines
+    best_score = float('inf')
+    best_breaks = None
+    for breaks in _comb(range(1, len(words)), num_lines - 1):
+        segments = []
+        start = 0
+        for b in breaks:
+            segments.append(word_lengths[start:b])
+            start = b
+        segments.append(word_lengths[start:])
+        line_lengths = [sum(seg) + len(seg) - 1 for seg in segments]
+        score = max(abs(line_len - ideal_length) for line_len in line_lengths)
+        if score < best_score:
+            best_score = score
+            best_breaks = breaks
+    result = []
+    start = 0
+    for b in best_breaks:
+        result.append(' '.join(words[start:b]))
+        start = b
+    result.append(' '.join(words[start:]))
+    return '\n'.join(result)
+
+
+def _writeCenteredWrapableText(context, sourceImg, x, y, w, h, text):
+    """Draw text centered and word-wrapped within a rectangle."""
+    def _writeCentered(ctx, img, x, y, w, h, t):
+        m = ctx.get_font_metrics(img, t, multiline=True)
+        x2 = int(x + (w - m.text_width) / 2)
+        y2 = int(y + (h - m.text_height) / 2 + m.ascender)
+        ctx.text(x=x2, y=y2, body=t)
+
+    metrics = context.get_font_metrics(sourceImg, 'A', multiline=False)
+    stdH = metrics.text_height
+    maxLines = max(int(h / stdH), 1)
+    spaces = text.count(' ')
+    if spaces < maxLines:
+        text = text.replace(' ', '\n', maxLines - 1)
+    else:
+        text = _balance_wrap(text, maxLines)
+    lines = text.split('\n')
+    y2 = y - stdH * (len(lines) - 1) / 2
+    for line in lines:
+        _writeCentered(context, sourceImg, x, y2, w, h, line)
+        y2 += stdH
+
+
+def _drawFaceBands(context, sourceImg, faceBands, faceX, faceWidth, faceTop, faceBottom):
+    """Draw one horizontal colored band per binding on the key face."""
+    bandTop = faceTop
+    bandHeight = int((faceBottom - faceTop) / len(faceBands))
+    bandWidth = 30
+    for bandIndex, controlSet in faceBands.items():
+        context.stroke_color = Color('DarkGrey')
+        context.stroke_width = 1
+        bandInset = 0
+        bindKey = '::'.join(bandIndex.split('::')[2:])
+        if bindKey == 'Keyboard::0::HOLD':
+            context.stroke_color = Color('Black')
+            context.stroke_width = 6
+        elif bindKey not in ('Unmodified', 'Modifier'):
+            for bandColor in controlSet['StripColors']:
+                context.fill_color = bandColor
+                context.rectangle(int(faceX + bandInset), top=bandTop,
+                                  width=bandWidth, height=bandHeight - 2, radius=5)
+                bandInset += bandWidth
+
+        context.fill_color = controlSet['Color']
+        context.rectangle(int(faceX + bandInset), top=bandTop,
+                          width=faceWidth - bandInset, height=bandHeight - 2, radius=5)
+        context.stroke_width = 1
+        context.stroke_color = Color('Black')
+        context.fill_color = Color('Black')
+        _writeCenteredWrapableText(context, sourceImg, faceX, bandTop,
+                                   faceWidth, bandHeight, controlSet['Label'])
+        bandTop += bandHeight
+
+
+def _drawKeyLabel(context, sourceImg, x, y, width, height, bottom, label):
+    """Draw the physical key label (e.g. 'A', 'Tab') at the bottom of the key."""
+    if label != '':
+        context.push()
+        context.stroke_color = Color('Black')
+        context.stroke_width = 1
+        context.fill_color = Color('Black')
+        label = label.replace('\n', ' .. ')
+        metrics = context.get_font_metrics(sourceImg, label, multiline=False)
+        context.text(x=int(x + (width - metrics.text_width) / 2),
+                     y=int(y + height - bottom) + 24, body=label)
+        context.pop()
+
+
+def _roundCorners(points, radius):
+    """Round the corners of a 5-right-angle notched polygon (for ISO Enter)."""
+    steps = 3
+    step_rad = (math.pi / 2) / steps
+    rounded = [points[0]]
+    for i in range(1, 6):
+        prev = points[i - 1]
+        curr = points[i]
+        if curr[0] > prev[0] and curr[1] == prev[1]:
+            direction = math.pi / 2
+            dx, dy = -1, 1
+        elif curr[0] == prev[0] and curr[1] > prev[1]:
+            direction = math.pi * 2
+            dx, dy = -1, -1
+        elif curr[0] < prev[0] and curr[1] == prev[1]:
+            direction = math.pi * 1.5
+            dx, dy = 1, -1
+        else:
+            direction = math.pi
+            dx, dy = 1, 1
+        cx = curr[0] + radius * dx
+        cy = curr[1] + radius * dy
+        for j in range(steps + 1):
+            angle = direction - j * step_rad
+            rounded.append((cx + radius * math.cos(angle),
+                             cy - radius * math.sin(angle)))
+    return rounded
+
+
+def _drawKey(context, sourceImg, capConfig, capSpecial, cap, faceBands):
+    """Draw a single keycap (rectangle or ISO polygon) with bands and label."""
+    offsetX = int(capConfig['capWidth'] * capSpecial.get('x', 0))
+    offsetY = int(capConfig['capHeight'] * capSpecial.get('y', 0))
+    capConfig['x'] += offsetX
+    capConfig['y'] += offsetY
+    capWidth = int(capConfig['capWidth'] * capSpecial.get('w', 1))
+    capHeight = int(capConfig['capHeight'] * capSpecial.get('h', 1))
+    capRadius = capConfig['capRadius']
+    capAdjustX = 0
+
+    faceX = capConfig['x'] + capConfig['capSideInset']
+    faceWidth = capWidth - (capConfig['capSideInset'] * 2)
+    faceTop = int(capConfig['y'] + capConfig['capTopInset'])
+    faceBottom = int(capConfig['y'] + capHeight - capConfig['capBottomInset'])
+
+    context.stroke_color = Color('Black')
+    context.stroke_width = 3
+    context.fill_color = Color('Silver')
+    context.fill_opacity = 1
+
+    if any(k in capSpecial for k in ('x2', 'y2', 'w2', 'h2')):
+        # ISO Enter — draw as a notched polygon
+        ox2 = int(capConfig['capWidth'] * capSpecial.get('x2', 0))
+        oy2 = int(capConfig['capHeight'] * capSpecial.get('y2', 0))
+        cw2 = int(capConfig['capWidth'] * capSpecial.get('w2', 1))
+        ch2 = int(capConfig['capHeight'] * capSpecial.get('h2', 1))
+        points = []
+        if capSpecial.get('y2', 0) == 0:
+            if capSpecial.get('x2', 0) < 0:
+                points = [
+                    (capConfig['x'], capConfig['y'] + ch2),
+                    (capConfig['x'] + ox2, capConfig['y'] + ch2),
+                    (capConfig['x'] + ox2, capConfig['y']),
+                    (capConfig['x'] + capWidth, capConfig['y']),
+                    (capConfig['x'] + capWidth, capConfig['y'] + capHeight),
+                    (capConfig['x'], capConfig['y'] + capHeight),
+                ]
+                capAdjustX = -int(capConfig['capWidth'] * capSpecial.get('x', 0))
+            else:
+                points = [
+                    (capConfig['x'] + capWidth, capConfig['y'] + ch2),
+                    (capConfig['x'] + capWidth, capConfig['y'] + capHeight),
+                    (capConfig['x'], capConfig['y'] + capHeight),
+                    (capConfig['x'], capConfig['y']),
+                    (capConfig['x'] + cw2, capConfig['y']),
+                    (capConfig['x'] + cw2, capConfig['y'] + ch2),
+                ]
+            capWidth = cw2
+        elif capSpecial.get('y2', 0) > 0:
+            if capSpecial.get('x2', 0) < 0:
+                points = [
+                    (capConfig['x'], capConfig['y'] + oy2),
+                    (capConfig['x'], capConfig['y']),
+                    (capConfig['x'] + capWidth, capConfig['y']),
+                    (capConfig['x'] + capWidth, capConfig['y'] + capHeight),
+                    (capConfig['x'] + ox2, capConfig['y'] + capHeight),
+                    (capConfig['x'] + ox2, capConfig['y'] + oy2),
+                ]
+            else:
+                points = [
+                    (capConfig['x'] + capWidth, capConfig['y'] + oy2),
+                    (capConfig['x'] + cw2, capConfig['y'] + oy2),
+                    (capConfig['x'] + cw2, capConfig['y'] + capHeight),
+                    (capConfig['x'], capConfig['y'] + capHeight),
+                    (capConfig['x'], capConfig['y']),
+                    (capConfig['x'] + capWidth, capConfig['y']),
+                ]
+        context.polygon(_roundCorners(points, capRadius))
+    else:
+        context.rectangle(capConfig['x'], top=capConfig['y'],
+                          width=capWidth, height=capHeight, radius=capRadius)
+
+    label = cap.split('__')[0]
+    context.font_size = capConfig['capFontSize']
+    _drawKeyLabel(context, sourceImg, faceX, capConfig['y'],
+                  width=faceWidth, height=capHeight,
+                  bottom=capConfig['capBottomInset'], label=label)
+
+    context.stroke_color = Color('Silver')
+    context.stroke_width = 1
+    context.fill_color = Color('White')
+    if faceBands is None:
+        context.rectangle(faceX, top=faceTop, width=faceWidth,
+                          height=capHeight - (capConfig['capTopInset'] + capConfig['capBottomInset']),
+                          radius=5)
+    else:
+        _drawFaceBands(context, sourceImg, faceBands, faceX, faceWidth, faceTop, faceBottom)
+
+    capConfig['x'] += capAdjustX + capWidth
+
+
+def _drawLegendEntry(context, sourceImg, label, color, strip_colors, hold, capConfig):
+    """Draw a single legend entry using a fake face band."""
+    bindKey = 'Keyboard::0::HOLD' if hold else ('Modified' if strip_colors else 'Unmodified')
+    fakeBands = {
+        f'Legend::Legend::{bindKey}': {
+            'Label': label, 'Color': color,
+            'StripColors': strip_colors, 'Hold': hold,
+        }
+    }
+    _drawKey(context, sourceImg, capConfig, {}, '', fakeBands)
+
+
+def _writeKeyboardLayout(context, sourceImg, physicalKeys, modifiers, styling, layout):
+    """Iterate through the keyboard layout rows and draw each key."""
+    try:
+        from .keyboardLayouts import keyboardLayouts
+    except ImportError:
+        from keyboardLayouts import keyboardLayouts
+
+    keyboardLayout = keyboardLayouts.get(layout)
+
+    faceBandset, unmapped = _prepareCapList(physicalKeys, modifiers, styling, keyboardLayout)
+
+    stdcapWidth = 165
+    stdcapHeight = 220
+    capConfig = {
+        'x': 0, 'y': 0,
+        'capWidth': stdcapWidth, 'capHeight': stdcapHeight,
+        'capTopInset': 10, 'capBottomInset': 35,
+        'capSideInset': 15, 'capRadius': 25,
+        'capFontSize': 18,
+    }
+    keyboardX = 60
+    keyboardY = 320
+
+    context.font = getFontPath('Regular', 'Normal')
+    context.text_antialias = True
+    context.stroke_color = Color('Black')
+    context.fill_color = Color('Black')
+    context.fill_opacity = 1
+
+    # Legend
+    legendX = 60
+    legendXStep = stdcapWidth * 1.5
+    legendY = 1850
+    legendYStep = 150
+    context.font_size = 32
+    context.text(x=legendX, y=legendY + 60, body='Legend')
+    legendX += legendXStep
+
+    capConfig['capFontSize'] = 24
+    if styling == 'Group':
+        legendEntries = groupStyles.items()
+    elif styling == 'Category':
+        legendEntries = categoryStyles.items()
+    else:
+        legendEntries = []
+
+    capConfig['x'] = legendX
+    capConfig['y'] = legendY
+    capConfig['capWidth'] = int(stdcapWidth * 1.2)
+    capConfig['capHeight'] = stdcapHeight // 2
+    for label, style in legendEntries:
+        _drawLegendEntry(context, sourceImg, label, style['Color'], [], False, capConfig)
+        if (capConfig['x'] + capConfig['capWidth']) > 3800:
+            capConfig['x'] = 60 + legendXStep
+            capConfig['y'] += legendYStep
+
+    modColor = ModifierStyles.index(0).get('Color')
+    _drawLegendEntry(context, sourceImg, 'Modified', 'White', [f'{modColor}'], False, capConfig)
+    if (capConfig['x'] + capConfig['capWidth']) > 3800:
+        capConfig['x'] = 60 + legendXStep
+        capConfig['y'] += legendYStep
+    _drawLegendEntry(context, sourceImg, 'Hold', 'White', [], True, capConfig)
+
+    # Draw keyboard rows
+    capConfig['capWidth'] = stdcapWidth
+    capConfig['capHeight'] = stdcapHeight
+    capConfig['y'] = keyboardY
+    capConfig['capFontSize'] = 18
+
+    for keyboardRow in keyboardLayout:
+        capConfig['x'] = keyboardX
+        capSpecial = {}
+        for keyboardItem in keyboardRow:
+            if isinstance(keyboardItem, dict):
+                capSpecial = keyboardItem
+                continue
+            cap = keyboardItem[0] if isinstance(keyboardItem, list) else keyboardItem
+            faceBands = faceBandset.get(cap)
+            _drawKey(context, sourceImg, capConfig, capSpecial, cap, faceBands)
+            capSpecial = {}
+        capConfig['y'] += stdcapHeight
+
+    if unmapped:
+        context.stroke_color = Color('Black')
+        context.fill_color = Color('Black')
+        context.font_size = 24
+        context.text(x=50, y=2050, body='No keycaps for: ' + str(unmapped).replace('Key_', '')[1:-1])
+
+
+def createKeyboardLayoutImage(physicalKeys, modifiers, layout, config, styling):
+    """Create a visual keyboard layout image by drawing ANSI/ISO keys as keycaps.
+
+    Ported from clockbrain/edrefcard2 PR #39.  Draws each key as a silver
+    rounded rectangle with a coloured inset band for each binding.
+    A legend is drawn at the bottom of the image.
 
     Args:
-        physicalKeys: Dictionary of physical key bindings
-        layout: 'ansi', 'iso', or 'cyrillic'
-        config: Config object (for output file path)
-        styling: Styling mode ('None', 'Group', 'Category', 'Modifier')
+        physicalKeys: dict of physical key bindings from parseBindings
+        modifiers: dict of modifier bindings from parseBindings
+        layout: 'ANSI 104', 'ISO 105', or 'ЙЦУКЕН'
+        config: Config object (for output path and URL)
+        styling: 'None', 'Group', 'Category', or 'Modifier'
 
     Returns:
-        True if image was created, None if layout not supported
+        True on success, None if layout not supported
     """
     if Drawing is None:
         raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed.")
-
-    # Only ANSI is implemented in this simplified version
-    if layout != 'ansi':
-        return None
-
-    _init_styles()
 
     try:
         from .keyboardLayouts import keyboardLayouts
     except ImportError:
         from keyboardLayouts import keyboardLayouts
 
-    layoutMapping = keyboardLayouts.get('ANSI 104', {})
+    if layout not in keyboardLayouts:
+        return None
+
+    _init_styles()
 
     filePath = config.pathWithNameAndSuffix('keyboard-layout', '.jpg')
     if filePath.exists():
         return True
 
-    # The keyboard-layout.jpg is in www/static/images/; renderer runs from www/
-    sourceImagePath = Path('../www/static/images/keyboard-layout.jpg')
-    if not sourceImagePath.exists():
-        # Try alternate relative paths depending on working directory
-        for candidate in [
-            Path('static/images/keyboard-layout.jpg'),
-            Path('../static/images/keyboard-layout.jpg'),
-            Path('/app/www/static/images/keyboard-layout.jpg'),
-        ]:
-            if candidate.exists():
-                sourceImagePath = candidate
-                break
-        else:
-            return None  # Image not found, skip silently
+    # Find the template image (white background with title)
+    from pathlib import Path as _Path
+    for candidate in [
+        _Path('../res/keyboard-layout.jpg'),
+        _Path('res/keyboard-layout.jpg'),
+        _Path('static/images/keyboard-layout.jpg'),
+        _Path('/app/www/res/keyboard-layout.jpg'),
+        _Path('/app/www/static/images/keyboard-layout.jpg'),
+    ]:
+        if candidate.exists():
+            sourceImagePath = candidate
+            break
+    else:
+        return None  # No template found
 
     with Image(filename=str(sourceImagePath)) as sourceImg:
-        imgWidth = sourceImg.width
-        imgHeight = sourceImg.height
-
         with Drawing() as context:
-            context.text_antialias = True
             context.font = getFontPath('Regular', 'Normal')
-            context.font_size = 28
-            context.stroke_width = 0
+            context.text_antialias = True
+            context.font_style = 'normal'
+            context.stroke_width = 1
             context.fill_opacity = 1
-
-            # Add URL watermark at bottom
-            context.push()
-            context.font = getFontPath('SemiBold', 'Normal')
-            context.font_size = 36
             context.fill_color = Color('Black')
-            context.text(x=23, y=imgHeight - 20, body=config.refcardURL())
-            context.pop()
 
-            # Collect one representative binding per key
-            keyBindings = {}  # keyName -> list of (controlName, style)
-            for _physicalKeySpec, physicalKey in physicalKeys.items():
-                if physicalKey.get('Device') != 'Keyboard':
-                    continue
+            # Write URL at top
+            context.font_size = 36
+            context.text(x=60, y=280, body=config.refcardURL())
 
-                keyName = physicalKey.get('Key')
-                displayLabel = layoutMapping.get(keyName)
-                if not displayLabel:
-                    continue  # Key not in ANSI mapping
-
-                if keyName not in keyBindings:
-                    keyBindings[keyName] = []
-
-                for _modifier, bind in physicalKey.get('Binds', {}).items():
-                    for _controlKey, control in bind.get('Controls', {}).items():
-                        if styling == 'Group':
-                            style = groupStyles.get(control.get('Group'), groupStyles.get('General'))
-                        elif styling == 'Category':
-                            style = categoryStyles.get(control.get('Category', 'General'), categoryStyles.get('General'))
-                        elif styling == 'Modifier':
-                            style = ModifierStyles.index(0)
-                        else:
-                            style = groupStyles.get('General')
-                        keyBindings[keyName].append({
-                            'name': control.get('Name', ''),
-                            'style': style,
-                        })
-
-            # Lay out text annotations on a grid matching the keyboard image.
-            # The keyboard-layout.jpg image has a standard ANSI layout.
-            # We use a calculated grid based on the image dimensions.
-            # Row y-positions and per-row key x-positions (as fraction of imgWidth).
-            # These approximate the standard ANSI keyboard photo layout.
-            keyPositions = _ansiKeyPositions(imgWidth, imgHeight)
-
-            for keyName, binds in keyBindings.items():
-                if not binds:
-                    continue
-                pos = keyPositions.get(keyName)
-                if not pos:
-                    continue
-
-                x, y = pos
-                # Clip to at most 2 bindings per key to avoid overlap
-                for i, bindInfo in enumerate(binds[:2]):
-                    name = bindInfo['name']
-                    style = bindInfo['style']
-                    # Shorten long names
-                    if len(name) > 12:
-                        name = name[:11] + '…'
-                    context.fill_color = style['Color']
-                    context.font = style['Font']
-                    context.font_size = 22
-                    context.text(x=x, y=y + i * 26, body=name)
+            _writeKeyboardLayout(context, sourceImg, physicalKeys, modifiers, styling, layout)
 
             context.draw(sourceImg)
             sourceImg.save(filename=str(filePath))
 
     return True
-
-
-def _ansiKeyPositions(imgWidth, imgHeight):
-    """Return approximate pixel positions for each ANSI key in keyboard-layout.jpg.
-
-    Coordinates are the top-left corner of the text annotation area for each key.
-    These are calculated as fractions of the image dimensions so they scale
-    with different image sizes.
-
-    Returns:
-        Dict mapping Elite Dangerous key name -> (x, y) pixel position
-    """
-    # keyboard-layout.jpg is a standard ANSI keyboard photo.
-    # Approximate row y-positions as fractions of image height:
-    w, h = imgWidth, imgHeight
-
-    # Row top y-positions (fraction of height)
-    rFn  = 0.04   # Function key row
-    rNum = 0.19   # Number row
-    rTab = 0.35   # Tab row (QWERTY)
-    rCap = 0.51   # Caps Lock row (ASDF)
-    rSft = 0.66   # Shift row (ZXCV)
-    rBot = 0.82   # Bottom row (Space etc.)
-    rNav = 0.19   # Nav cluster (same height as number row)
-    rNum2= 0.19   # Numpad top
-
-    def p(xf, yf):
-        return (int(xf * w), int(yf * h))
-
-    return {
-        # --- Function keys ---
-        'Key_Escape':      p(0.005, rFn),
-        'Key_F1':          p(0.073, rFn),
-        'Key_F2':          p(0.110, rFn),
-        'Key_F3':          p(0.147, rFn),
-        'Key_F4':          p(0.183, rFn),
-        'Key_F5':          p(0.228, rFn),
-        'Key_F6':          p(0.265, rFn),
-        'Key_F7':          p(0.302, rFn),
-        'Key_F8':          p(0.338, rFn),
-        'Key_F9':          p(0.383, rFn),
-        'Key_F10':         p(0.420, rFn),
-        'Key_F11':         p(0.457, rFn),
-        'Key_F12':         p(0.493, rFn),
-        # --- Number row ---
-        'Key_Grave':       p(0.005, rNum),
-        'Key_1':           p(0.042, rNum),
-        'Key_2':           p(0.079, rNum),
-        'Key_3':           p(0.116, rNum),
-        'Key_4':           p(0.153, rNum),
-        'Key_5':           p(0.190, rNum),
-        'Key_6':           p(0.227, rNum),
-        'Key_7':           p(0.264, rNum),
-        'Key_8':           p(0.301, rNum),
-        'Key_9':           p(0.338, rNum),
-        'Key_0':           p(0.375, rNum),
-        'Key_Minus':       p(0.412, rNum),
-        'Key_Equals':      p(0.449, rNum),
-        'Key_Backspace':   p(0.468, rNum),
-        # --- Tab row ---
-        'Key_Tab':         p(0.005, rTab),
-        'Key_Q':           p(0.057, rTab),
-        'Key_W':           p(0.094, rTab),
-        'Key_E':           p(0.131, rTab),
-        'Key_R':           p(0.168, rTab),
-        'Key_T':           p(0.205, rTab),
-        'Key_Y':           p(0.242, rTab),
-        'Key_U':           p(0.279, rTab),
-        'Key_I':           p(0.316, rTab),
-        'Key_O':           p(0.353, rTab),
-        'Key_P':           p(0.390, rTab),
-        'Key_LeftBracket': p(0.427, rTab),
-        'Key_RightBracket':p(0.464, rTab),
-        'Key_BackSlash':   p(0.486, rTab),
-        # --- Caps row ---
-        'Key_CapsLock':    p(0.005, rCap),
-        'Key_A':           p(0.064, rCap),
-        'Key_S':           p(0.101, rCap),
-        'Key_D':           p(0.138, rCap),
-        'Key_F':           p(0.175, rCap),
-        'Key_G':           p(0.212, rCap),
-        'Key_H':           p(0.249, rCap),
-        'Key_J':           p(0.286, rCap),
-        'Key_K':           p(0.323, rCap),
-        'Key_L':           p(0.360, rCap),
-        'Key_SemiColon':   p(0.397, rCap),
-        'Key_Apostrophe':  p(0.434, rCap),
-        'Key_Enter':       p(0.456, rCap),
-        # --- Shift row ---
-        'Key_LeftShift':   p(0.005, rSft),
-        'Key_Z':           p(0.079, rSft),
-        'Key_X':           p(0.116, rSft),
-        'Key_C':           p(0.153, rSft),
-        'Key_V':           p(0.190, rSft),
-        'Key_B':           p(0.227, rSft),
-        'Key_N':           p(0.264, rSft),
-        'Key_M':           p(0.301, rSft),
-        'Key_Comma':       p(0.338, rSft),
-        'Key_Period':      p(0.375, rSft),
-        'Key_Slash':       p(0.412, rSft),
-        'Key_RightShift':  p(0.438, rSft),
-        # --- Bottom row ---
-        'Key_LeftControl': p(0.005, rBot),
-        'Key_LeftWindows': p(0.057, rBot),
-        'Key_LeftAlt':     p(0.094, rBot),
-        'Key_Space':       p(0.185, rBot),
-        'Key_RightAlt':    p(0.360, rBot),
-        'Key_RightWindows':p(0.397, rBot),
-        'Key_Application': p(0.430, rBot),
-        'Key_RightControl':p(0.460, rBot),
-        # --- Navigation cluster ---
-        'Key_PrintScreen': p(0.545, rNav),
-        'Key_ScrollLock':  p(0.582, rNav),
-        'Key_Pause':       p(0.619, rNav),
-        'Key_Insert':      p(0.545, 0.35),
-        'Key_Home':        p(0.582, 0.35),
-        'Key_PageUp':      p(0.619, 0.35),
-        'Key_Delete':      p(0.545, 0.51),
-        'Key_End':         p(0.582, 0.51),
-        'Key_PageDown':    p(0.619, 0.51),
-        # --- Arrow keys ---
-        'Key_UpArrow':     p(0.582, 0.74),
-        'Key_LeftArrow':   p(0.545, 0.82),
-        'Key_DownArrow':   p(0.582, 0.82),
-        'Key_RightArrow':  p(0.619, 0.82),
-        # --- Numpad ---
-        'Key_NumLock':     p(0.660, rNum2),
-        'Key_Numpad_Divide':   p(0.697, rNum2),
-        'Key_Numpad_Multiply': p(0.734, rNum2),
-        'Key_Numpad_Subtract': p(0.771, rNum2),
-        'Key_Numpad_7':    p(0.660, 0.35),
-        'Key_Numpad_8':    p(0.697, 0.35),
-        'Key_Numpad_9':    p(0.734, 0.35),
-        'Key_Numpad_Add':  p(0.771, 0.35),
-        'Key_Numpad_4':    p(0.660, 0.51),
-        'Key_Numpad_5':    p(0.697, 0.51),
-        'Key_Numpad_6':    p(0.734, 0.51),
-        'Key_Numpad_1':    p(0.660, 0.66),
-        'Key_Numpad_2':    p(0.697, 0.66),
-        'Key_Numpad_3':    p(0.734, 0.66),
-        'Key_Numpad_Enter':p(0.771, 0.66),
-        'Key_Numpad_0':    p(0.660, 0.82),
-        'Key_Numpad_Decimal': p(0.734, 0.82),
-    }
 
 
 def writeText(context, img, text, screenState, font, surround, newLine):

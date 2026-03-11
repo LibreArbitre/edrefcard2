@@ -1,145 +1,53 @@
-# SIMPLIFIED: Minimal keyboard layouts for basic visualization
-# For full implementation with ISO/Cyrillic, see migration_guide.md and PR #39
+# Keyboard layouts for the visual keyboard visualization feature.
+# Format: Each layout is a list of rows. Each row is a list of items:
+#   - str: key label (implicit Key_<label> mapping)
+#   - list: [label, 'Key_EDName'] explicit ED key name
+#   - dict: special instructions for the NEXT key (x=offset, w=width, h=height, etc.)
 #
-# This is a simplified version supporting ANSI 104-key layout only.
-# Each entry maps Elite Dangerous key names to their visual representation
-# on a standard ANSI keyboard.
+# Label suffixes:
+#   __L / __R / __N = trim to the left/right/numpad variant for display
+#   \n = newline within the label (top/bottom of key shown)
+#
+# Ported from clockbrain/edrefcard2 PR #39 (branch: keyboard), bindingsData.py
 
 keyboardLayouts = {
-    # ANSI 104-key layout - Most common in North America
-    'ANSI 104': {
-        # Main alphanumeric keys
-        'Key_Escape': 'Esc',
-        'Key_1': '1',
-        'Key_2': '2',
-        'Key_3': '3',
-        'Key_4': '4',
-        'Key_5': '5',
-        'Key_6': '6',
-        'Key_7': '7',
-        'Key_8': '8',
-        'Key_9': '9',
-        'Key_0': '0',
-        'Key_Minus': '-',
-        'Key_Equals': '=',
-        'Key_Backspace': 'Backspace',
-        
-        # Tab row
-        'Key_Tab': 'Tab',
-       'Key_Q': 'Q',
-        'Key_W': 'W',
-        'Key_E': 'E',
-        'Key_R': 'R',
-        'Key_T': 'T',
-        'Key_Y': 'Y',
-        'Key_U': 'U',
-        'Key_I': 'I',
-        'Key_O': 'O',
-        'Key_P': 'P',
-        'Key_LeftBracket': '[',
-        'Key_RightBracket': ']',
-        'Key_BackSlash': '\\',
-        
-        # Caps Lock row
-        'Key_CapsLock': 'Caps',
-        'Key_A': 'A',
-        'Key_S': 'S',
-        'Key_D': 'D',
-        'Key_F': 'F',
-        'Key_G': 'G',
-        'Key_H': 'H',
-        'Key_J': 'J',
-        'Key_K': 'K',
-        'Key_L': 'L',
-        'Key_SemiColon': ';',
-        'Key_Apostrophe': "'",
-        'Key_Enter': 'Enter',
-        
-        # Shift row
-        'Key_LeftShift': 'L Shift',
-        'Key_Z': 'Z',
-        'Key_X': 'X',
-        'Key_C': 'C',
-        'Key_V': 'V',
-        'Key_B': 'B',
-        'Key_N': 'N',
-        'Key_M': 'M',
-        'Key_Comma': ',',
-        'Key_Period': '.',
-        'Key_Slash': '/',
-        'Key_RightShift': 'R Shift',
-        
-        # Bottom row
-        'Key_LeftControl': 'L Ctrl',
-        'Key_LeftAlt': 'L Alt',
-        'Key_Space': 'Space',
-        'Key_RightAlt': 'R Alt',
-        'Key_RightControl': 'R Ctrl',
-        
-        # Function keys
-        'Key_F1': 'F1',
-        'Key_F2': 'F2',
-        'Key_F3': 'F3',
-        'Key_F4': 'F4',
-        'Key_F5': 'F5',
-        'Key_F6': 'F6',
-        'Key_F7': 'F7',
-        'Key_F8': 'F8',
-        'Key_F9': 'F9',
-        'Key_F10': 'F10',
-        'Key_F11': 'F11',
-        'Key_F12': 'F12',
-        
-        # Navigation cluster
-        'Key_PrintScreen': 'PrtSc',
-        'Key_ScrollLock': 'ScrLk',
-        'Key_Pause': 'Pause',
-        'Key_Insert': 'Ins',
-        'Key_Home': 'Home',
-        'Key_PageUp': 'PgUp',
-        'Key_Delete': 'Del',
-        'Key_End': 'End',
-        'Key_PageDown': 'PgDn',
-        
-        # Arrow keys
-        'Key_UpArrow': '↑',
-        'Key_LeftArrow': '←',
-        'Key_DownArrow': '↓',
-        'Key_RightArrow': '→',
-        
-        # Numpad
-        'Key_NumLock': 'Num',
-        'Key_Numpad_Divide': 'Num /',
-        'Key_Numpad_Multiply': 'Num *',
-        'Key_Numpad_Subtract': 'Num -',
-        'Key_Numpad_7': 'Num 7',
-        'Key_Numpad_8': 'Num 8',
-        'Key_Numpad_9': 'Num 9',
-        'Key_Numpad_Add': 'Num +',
-        'Key_Numpad_4': 'Num 4',
-        'Key_Numpad_5': 'Num 5',
-        'Key_Numpad_6': 'Num 6',
-        'Key_Numpad_1': 'Num 1',
-        'Key_Numpad_2': 'Num 2',
-        'Key_Numpad_3': 'Num 3',
-        'Key_Numpad_Enter': 'Num Enter',
-        'Key_Numpad_0': 'Num 0',
-        'Key_Numpad_Decimal': 'Num .',
-        
-        # Additional keys
-        'Key_Grave': '`',
-        'Key_Application': 'Menu',
-        'Key_LeftWindows': 'L Win',
-        'Key_RightWindows': 'R Win',
-    },
-    
-    # ISO 105 and Cyrillic layouts not implemented in simplified version
-    # See migration_guide.md for full implementation
-}
-
-# Keyboard layout name mapping for UI
-KEYBOARD_LAYOUT_NAMES = {
-    'ansi': 'ANSI 104',
-    'iso': 'ISO 105',  # Not implemented in simplified version
-    'cyrillic': 'ЙЦУКЕН',  # Not implemented in simplified version
+    'ANSI 104': [
+        ['Esc', {'x': 1}, 'F1', 'F2', 'F3', 'F4', {'x': 0.5}, 'F5', 'F6', 'F7', 'F8', {'x': 0.5}, 'F9', 'F10', 'F11', 'F12', {'x': 0.25}, 'PrtSc', ['ScrLk', 'Key_ScrollLock'], ['Pause\nBreak', 'Key_Pause']],
+        [{'y': 0.5}, ['~\n`', 'Key_Grave'], ['!\n1', 'Key_1'], ['@\n2', 'Key_2'], ['#\n3', 'Key_3'], ['$\n4', 'Key_4'], ['%\n5', 'Key_5'], ['^\\n6', 'Key_6'], ['&\n7', 'Key_7'], ['*\n8', 'Key_8'], ['(\n9', 'Key_9'], [')\n0', 'Key_0'], ['_\n-', 'Key_Minus'], ['+\n=', 'Key_Equals'], {'w': 2}, 'Backspace',
+            {'x': 0.25}, 'Insert', 'Home', ['PgUp', 'Key_PageUp'], {'x': 0.25}, ['Num\nLock', 'Key_NumLock'], ['/__N', 'Key_Numpad_Divide'], ['*__N', 'Key_Numpad_Multiply'], ['-__N', 'Key_Numpad_Subtract']],
+        [{'w': 1.5}, 'Tab', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ['{\n[', 'Key_LeftBracket'], ['}\n]', 'Key_RightBracket'], {'w': 1.5}, ['|\n\\', 'Key_BackSlash'], {'x': 0.25},
+            'Delete', 'End', ['PgDn', 'Key_PageDown'], {'x': 0.25}, ['7__N\nHome__N', 'Key_Numpad_7'], ['8__N\n↑', 'Key_Numpad_8'], ['9__N\nPgUp__N', 'Key_Numpad_9'], {'h': 2}, ['+__N', 'Key_Numpad_Add']],
+        [{'w': 1.75}, ['Caps Lock', 'Key_CapsLock'], 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', [':\n;', 'Key_SemiColon'], ['"\n\'', 'Key_Apostrophe'], {'w': 2.25}, 'Enter',
+            {'x': 3.5}, ['4__N\n←', 'Key_Numpad_4'], ['5__N', 'Key_Numpad_5'], ['6__N\n→', 'Key_Numpad_6']],
+        [{'w': 2.25}, ['Shift__L', 'Key_LeftShift'], 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ['<\n,', 'Key_Comma'], ['>\n.', 'Key_Period'], ['?\n/', 'Key_Slash'], {'w': 2.75}, ['Shift__R', 'Key_RightShift'],
+            {'x': 1.25}, ['↑', 'Key_UpArrow'], {'x': 1.25}, ['1__N\nEnd__N', 'Key_Numpad_1'], ['2__N\n↓', 'Key_Numpad_2'], ['3__N\nPgDn__N', 'Key_Numpad_3'], {'h': 2}, ['Enter__N', 'Key_Numpad_Enter']],
+        [{'w': 1.25}, ['Ctrl__L', 'Key_LeftControl'], {'w': 1.25}, ['Win__L', 'Key_LeftWindows'], {'w': 1.25}, ['Alt__L', 'Key_LeftAlt'], {'a': 7, 'w': 6.25}, [' ', 'Key_Space'], {'a': 4, 'w': 1.25}, ['Alt__R', 'Key_RightAlt'], {'w': 1.25}, ['Win__R', 'Key_RightWindows'], {'w': 1.25}, 'Menu', {'w': 1.25}, ['Ctrl__R', 'Key_RightControl'],
+            {'x': 0.25}, ['←', 'Key_LeftArrow'], ['↓', 'Key_DownArrow'], ['→', 'Key_RightArrow'], {'x': 0.25, 'w': 2}, ['0__N\nIns__N', 'Key_Numpad_0'], ['.__N\nDel__N', 'Key_Numpad_Decimal']],
+    ],
+    'ISO 105': [
+        ['Esc', {'x': 1}, 'F1', 'F2', 'F3', 'F4', {'x': 0.5}, 'F5', 'F6', 'F7', 'F8', {'x': 0.5}, 'F9', 'F10', 'F11', 'F12', {'x': 0.25}, 'PrtSc', ['ScrLk', 'Key_ScrollLock'], ['Pause\nBreak', 'Key_Pause']],
+        [{'y': 0.5}, ['¬\n`', 'Key_Grave'], ['!\n1', 'Key_1'], ['"\n2', 'Key_2'], ['£\n3', 'Key_3'], ['$\n4', 'Key_4'], ['%\n5', 'Key_5'], ['^\n6', 'Key_6'], ['&\n7', 'Key_7'], ['*\n8', 'Key_8'], ['(\n9', 'Key_9'], [')\n0', 'Key_0'], ['_\n-', 'Key_Minus'], ['+\n=', 'Key_Equals'], {'w': 2}, 'Backspace',
+            {'x': 0.25}, 'Insert', 'Home', ['PgUp', 'Key_PageUp'], {'x': 0.25}, ['Num Lock', 'Key_NumLock'], ['/__N', 'Key_Numpad_Divide'], ['*__N', 'Key_Numpad_Multiply'], ['-__N', 'Key_Numpad_Subtract']],
+        [{'w': 1.5}, 'Tab', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ['{\n[', 'Key_LeftBracket'], ['}\n]', 'Key_RightBracket'], {'x': 0.25, 'w': 1.25, 'h': 2, 'w2': 1.5, 'h2': 1, 'x2': -0.25}, 'Enter',
+            {'x': 0.25}, 'Delete', 'End', ['PgDn', 'Key_PageDown'], {'x': 0.25}, ['7__N\nHome__N', 'Key_Numpad_7'], ['8__N\n↑', 'Key_Numpad_8'], ['9__N\nPgUp__N', 'Key_Numpad_9'], {'h': 2}, ['+__N', 'Key_Numpad_Add']],
+        [{'w': 1.75}, ['Caps Lock', 'Key_CapsLock'], 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', [':\n;', 'Key_SemiColon'], ["@\n'", 'Key_Apostrophe'], ['~\n#', 'Key_Hash'],
+            {'x': 4.75}, ['4__N\n←', 'Key_Numpad_4'], ['5__N', 'Key_Numpad_5'], ['6__N\n→', 'Key_Numpad_6']],
+        [{'w': 1.25}, ['Shift__L', 'Key_LeftShift'], ['|\n\\', 'Key_BackSlash'], 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ['<\n,', 'Key_Comma'], ['>\n.', 'Key_Period'], ['?\n/', 'Key_Slash'], {'w': 2.75}, ['Shift__R', 'Key_RightShift'],
+            {'x': 1.25}, ['↑', 'Key_UpArrow'], {'x': 1.25}, ['1__N\nEnd__N', 'Key_Numpad_1'], ['2__N\n↓', 'Key_Numpad_2'], ['3__N\nPgDn__N', 'Key_Numpad_3'], {'h': 2}, ['Enter__N', 'Key_Numpad_Enter']],
+        [{'w': 1.25}, ['Ctrl__L', 'Key_LeftControl'], {'w': 1.25}, ['Win__L', 'Key_LeftWindows'], {'w': 1.25}, ['Alt__L', 'Key_LeftAlt'], {'a': 7, 'w': 6.25}, [' ', 'Key_Space'], {'a': 4, 'w': 1.25}, 'AltGr', {'w': 1.25}, ['Win__R', 'Key_RightWindows'], {'w': 1.25}, 'Menu', {'w': 1.25}, ['Ctrl__R', 'Key_RightControl'],
+            {'x': 0.25}, ['←', 'Key_LeftArrow'], ['↓', 'Key_DownArrow'], ['→', 'Key_RightArrow'], {'x': 0.25, 'w': 2}, ['0__N\nIns__N', 'Key_Numpad_0'], ['.__N\nDel__N', 'Key_Numpad_Decimal']],
+    ],
+    'ЙЦУКЕН': [
+        ['Esc', {'x': 1}, 'F1', 'F2', 'F3', 'F4', {'x': 0.5}, 'F5', 'F6', 'F7', 'F8', {'x': 0.5}, 'F9', 'F10', 'F11', 'F12', {'x': 0.25}, 'PrtSc', ['ScrLk', 'Key_ScrollLock'], ['Pause\nBreak', 'Key_Pause']],
+        [{'y': 0.5}, ['Ё\n`', 'Key_Grave'], ['!\n1', 'Key_1'], ['"\n2', 'Key_2'], ['№\n3', 'Key_3'], ['4', 'Key_4'], ['%\n5', 'Key_5'], [':\n6', 'Key_6'], ['?\n7', 'Key_7'], ['*\n8', 'Key_8'], ['(\n9', 'Key_9'], [')\n0', 'Key_0'], ['_\n-', 'Key_Minus'], ['+\n=', 'Key_Equals'], {'w': 2}, 'Backspace',
+            {'x': 0.25}, 'Insert', 'Home', ['PgUp', 'Key_PageUp'], {'x': 0.25}, ['Num Lock', 'Key_NumLock'], ['/__N', 'Key_Numpad_Divide'], ['*__N', 'Key_Numpad_Multiply'], ['-__N', 'Key_Numpad_Subtract']],
+        [{'w': 1.5}, 'Tab', 'Й', 'Ц', 'У', 'К', 'Е', 'Н', 'Г', 'Ш', 'Щ', 'З', ['Х\n[', 'Key_LeftBracket'], ['Ъ\n]', 'Key_RightBracket'], {'x': 0.25, 'w': 1.25, 'h': 2, 'w2': 1.5, 'h2': 1, 'x2': -0.25}, 'Enter',
+            {'x': 0.25}, 'Delete', 'End', ['PgDn', 'Key_PageDown'], {'x': 0.25}, ['7__N\nHome__N', 'Key_Numpad_7'], ['8__N\n↑', 'Key_Numpad_8'], ['9__N\nPgUp__N', 'Key_Numpad_9'], {'h': 2}, ['+__N', 'Key_Numpad_Add']],
+        [{'w': 1.75}, ['Caps Lock', 'Key_CapsLock'], 'Ф', 'Ы', 'В', 'А', 'П', 'Р', 'О', 'Л', 'Д', ['Ж\n;', 'Key_SemiColon'], ['Э\n\'', 'Key_Apostrophe'], ['\\\n|', 'Key_Slash'],
+            {'x': 4.75}, ['4__N\n←', 'Key_Numpad_4'], ['5__N', 'Key_Numpad_5'], ['6__N\n→', 'Key_Numpad_6']],
+        [{'w': 1.25}, ['Shift__L', 'Key_LeftShift'], ['\\\n/', 'Key_BackSlash'], 'Я', 'Ч', 'С', 'М', 'И', 'Т', 'Ь', ['Б\n,', 'Key_Comma'], ['Ю\n.', 'Key_Period'], ['.\n/', 'Key_Period'], {'w': 2.75}, ['Shift__R', 'Key_RightShift'],
+            {'x': 1.25}, ['↑', 'Key_UpArrow'], {'x': 1.25}, ['1__N\nEnd__N', 'Key_Numpad_1'], ['2__N\n↓', 'Key_Numpad_2'], ['3__N\nPgDn__N', 'Key_Numpad_3'], {'h': 2}, ['Enter__N', 'Key_Numpad_Enter']],
+        [{'w': 1.25}, ['Ctrl__L', 'Key_LeftControl'], {'w': 1.25}, ['Win__L', 'Key_LeftWindows'], {'w': 1.25}, ['Alt__L', 'Key_LeftAlt'], {'a': 7, 'w': 6.25}, [' ', 'Key_Space'], {'a': 4, 'w': 1.25}, 'AltGr', {'w': 1.25}, ['Win__R', 'Key_RightWindows'], {'w': 1.25}, 'Menu', {'w': 1.25}, ['Ctrl__R', 'Key_RightControl'],
+            {'x': 0.25}, ['←', 'Key_LeftArrow'], ['↓', 'Key_DownArrow'], ['→', 'Key_RightArrow'], {'x': 0.25, 'w': 2}, ['0__N\nIns__N', 'Key_Numpad_0'], ['.__N\nDel__N', 'Key_Numpad_Decimal']],
+    ],
 }

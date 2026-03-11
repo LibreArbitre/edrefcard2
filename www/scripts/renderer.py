@@ -405,8 +405,8 @@ def _drawFaceBands(context, sourceImg, faceBands, faceX, faceWidth, faceTop, fac
         context.fill_color = controlSet['Color']
         context.rectangle(int(faceX + bandInset), top=bandTop,
                           width=faceWidth - bandInset, height=bandHeight - 2, radius=5)
-        context.stroke_width = 1
-        context.stroke_color = Color('Black')
+        # Text should be drawn solid, without the border stroke from the rectangle
+        context.stroke_color = Color('transparent')
         context.fill_color = _contrastColor(controlSet['Color'])
         _writeCenteredWrapableText(context, sourceImg, faceX, bandTop,
                                    faceWidth, bandHeight, controlSet['Label'])

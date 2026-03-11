@@ -251,6 +251,11 @@ def _prepareCapList(physicalKeys, modifiers, styling, keyboardLayout):
                     entry = control.get('Group')
                 elif styling == 'Category':
                     entry = control.get('Category')
+                else:
+                    # For 'None' and 'Modifier' modes, fall back to group colours
+                    # so the visual keyboard always shows meaningful colours.
+                    # Modifier strip colours still indicate which modifier is used.
+                    entry = control.get('Group')
                 bandIndex = f'{entry}::{controlTag}::{bindKey}'
                 skip = False
                 for sameAs in control.get('HideIfSameAs', []):
@@ -259,10 +264,11 @@ def _prepareCapList(physicalKeys, modifiers, styling, keyboardLayout):
                         break
                 if not skip and bandIndex not in faceBandset.get(cap, {}):
                     color = 'White'
-                    if styling == 'Group':
-                        color = groupStyles.get(entry, groupStyles.get('General')).get('Color')
-                    elif styling == 'Category':
+                    if styling == 'Category':
                         color = categoryStyles.get(entry, categoryStyles.get('General')).get('Color')
+                    else:
+                        # 'Group', 'Modifier', and 'None' all use group colours
+                        color = groupStyles.get(entry, groupStyles.get('General')).get('Color')
                     stripColors = []
                     hold = False
                     if bindKey == 'Keyboard::0::HOLD':
@@ -332,6 +338,27 @@ def _balance_wrap(text, num_lines):
     return '\n'.join(result)
 
 
+def _contrastColor(bg_color):
+    """Return black or white depending on background luminance (WCAG formula).
+
+    Args:
+        bg_color: A Wand Color object
+
+    Returns:
+        A Wand Color object ('Black' or 'White')
+    """
+    try:
+        r = bg_color.red
+        g = bg_color.green
+        b = bg_color.blue
+        # Relative luminance (linearised sRGB)
+        def _lin(c):
+            return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        lum = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+        return Color('White') if lum < 0.35 else Color('Black')
+    except Exception:
+        return Color('Black')
+
 def _writeCenteredWrapableText(context, sourceImg, x, y, w, h, text):
     """Draw text centered and word-wrapped within a rectangle."""
     def _writeCentered(ctx, img, x, y, w, h, t):
@@ -380,7 +407,7 @@ def _drawFaceBands(context, sourceImg, faceBands, faceX, faceWidth, faceTop, fac
                           width=faceWidth - bandInset, height=bandHeight - 2, radius=5)
         context.stroke_width = 1
         context.stroke_color = Color('Black')
-        context.fill_color = Color('Black')
+        context.fill_color = _contrastColor(controlSet['Color'])
         _writeCenteredWrapableText(context, sourceImg, faceX, bandTop,
                                    faceWidth, bandHeight, controlSet['Label'])
         bandTop += bandHeight
@@ -572,12 +599,11 @@ def _writeKeyboardLayout(context, sourceImg, physicalKeys, modifiers, styling, l
     legendX += legendXStep
 
     capConfig['capFontSize'] = 24
-    if styling == 'Group':
-        legendEntries = groupStyles.items()
-    elif styling == 'Category':
+    if styling == 'Category':
         legendEntries = categoryStyles.items()
     else:
-        legendEntries = []
+        # 'Group', 'Modifier', 'None' all use group colours in the visual keyboard
+        legendEntries = groupStyles.items()
 
     capConfig['x'] = legendX
     capConfig['y'] = legendY

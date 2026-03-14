@@ -31,6 +31,11 @@ def index():
     """Render the home page."""
     return render_template('index.html')
 
+@web_bp.route('/privacy')
+def privacy():
+    """Render the Privacy Policy and Legal Notice page."""
+    return render_template('privacy.html')
+
 @web_bp.route('/generate', methods=['POST'])
 @limiter.limit("10 per hour")
 def generate():

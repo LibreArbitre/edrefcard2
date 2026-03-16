@@ -13,6 +13,7 @@ from scripts import (
     parseFormData,
     createHOTASImage,
     appendKeyboardImage,
+    createKeyboardLayoutImage,
     createBlockImage,
     logError,
     slugify
@@ -29,6 +30,11 @@ web_bp = Blueprint('web', __name__)
 def index():
     """Render the home page."""
     return render_template('index.html')
+
+@web_bp.route('/privacy')
+def privacy():
+    """Render the Privacy Policy and Legal Notice page."""
+    return render_template('privacy.html')
 
 @web_bp.route('/generate', methods=['POST'])
 @limiter.limit("10 per hour")
@@ -78,6 +84,7 @@ def generate():
     
     # Parse form options
     display_groups = parseFormData(request.form)
+    keyboard_display = request.form.get('keyboard_display', 'text')
     styling = 'None'
     if request.form.get('styling') == 'group':
         styling = 'Group'
@@ -131,6 +138,7 @@ def generate():
         
         already_handled_devices = []
         created_images = []
+        keyboard_layout_image = False
         
         for supported_device_key, supported_device in supportedDevices.items():
             if supported_device_key == 'Keyboard':
@@ -171,7 +179,17 @@ def generate():
                             already_handled_devices.append(f'{handled_device}::{device_index}')
         
         if devices.get('Keyboard::0') is not None:
-            appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
+            if keyboard_display == 'visual-ansi':
+                result = createKeyboardLayoutImage(
+                    physical_keys, modifiers, 'ANSI 104', config, styling
+                )
+                if result is True:
+                    keyboard_layout_image = True
+                else:
+                    # Fallback to text list if visual not available
+                    appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
+            else:
+                appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
             
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
@@ -203,6 +221,7 @@ def generate():
             styling=styling,
             display_groups=display_groups,
             devices=devices,
+            keyboard_display=keyboard_display,
             unhandled_warnings=errors.unhandledDevicesWarnings,
             device_warnings=errors.deviceWarnings,
             misc_warnings=errors.misconfigurationWarnings
@@ -222,6 +241,7 @@ def generate():
                                'errors': errors.errors,
                            },
                            created_images=created_images,
+                           keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=public,
                            refcard_url=refcard_url_dynamic,
@@ -382,6 +402,7 @@ def show_binds(run_id):
                                error_message=f'<h1>Configuration "{run_id}" invalid</h1>')
     
     created_images = []
+    keyboard_layout_image = False
     
     try:
         if not source_missing:
@@ -436,7 +457,17 @@ def show_binds(run_id):
 
             
             if devices.get('Keyboard::0') is not None:
-                appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+                keyboard_display = db_config.get('keyboard_display', 'text') if db_config else 'text'
+                if keyboard_display == 'visual-ansi':
+                    result = createKeyboardLayoutImage(
+                        physical_keys, modifiers, 'ANSI 104', config, styling
+                    )
+                    if result is True:
+                        keyboard_layout_image = True
+                    else:
+                        appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
+                else:
+                    appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
         else:
             logError(f"Source missing for {run_id}, checking existing images...")
@@ -472,6 +503,7 @@ def show_binds(run_id):
                                'errors': errors.errors,
                            },
                            created_images=created_images,
+                           keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=True,
                            refcard_url=refcard_url_dynamic,

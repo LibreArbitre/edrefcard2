@@ -34,6 +34,7 @@ def init_db(db_path):
                 id TEXT PRIMARY KEY,
                 description TEXT DEFAULT '',
                 styling TEXT DEFAULT 'None',
+                keyboard_display TEXT DEFAULT 'text',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_public INTEGER DEFAULT 1,
                 is_featured INTEGER DEFAULT 0,
@@ -87,6 +88,12 @@ def init_db(db_path):
         from admin.backup import init_backup_tables
         init_backup_tables(conn)
 
+        # Add keyboard_display column if it doesn't exist (migration for existing DBs)
+        try:
+            conn.execute("ALTER TABLE configurations ADD COLUMN keyboard_display TEXT DEFAULT 'text'")
+        except Exception:
+            pass  # Column already exists
+
 
 @contextmanager
 def get_db():
@@ -107,8 +114,8 @@ def get_db():
 # ============== Configuration CRUD ==============
 
 def create_configuration(config_id, description='', styling='None', display_groups=None,
-                         devices=None, unhandled_warnings='', device_warnings='', 
-                         misc_warnings='', created_at=None):
+                         devices=None, keyboard_display='text', unhandled_warnings='',
+                         device_warnings='', misc_warnings='', created_at=None):
     """Create a new configuration in the database.
     
     Args:
@@ -128,10 +135,10 @@ def create_configuration(config_id, description='', styling='None', display_grou
     with get_db() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO configurations 
-            (id, description, styling, created_at, unhandled_devices_warnings,
-             device_warnings, misconfiguration_warnings)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (config_id, description, styling, created_at, 
+            (id, description, styling, keyboard_display, created_at,
+             unhandled_devices_warnings, device_warnings, misconfiguration_warnings)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (config_id, description, styling, keyboard_display, created_at, 
               unhandled_warnings, device_warnings, misc_warnings))
         
         # Insert display groups

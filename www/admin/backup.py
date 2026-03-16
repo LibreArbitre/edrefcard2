@@ -849,6 +849,13 @@ class DiscordNotifier:
 
 def run_scheduled_backup():
     """Run the scheduled nightly backup job."""
+    
+    # Verify settings at runtime (in case it was disabled in UI without restarting workers)
+    settings = get_backup_settings()
+    if not settings.get('auto_backup_enabled'):
+        logger.info("Scheduled backup skipped (disabled in settings)")
+        return
+        
     logger.info("Running scheduled backup...")
     
     try:

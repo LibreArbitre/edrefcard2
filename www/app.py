@@ -117,13 +117,24 @@ def init_backup_scheduler():
         return
         
     # Prevent multiple workers from initializing the scheduler
-    # by using a local socket binding as a lightweight Mutex
-    import socket
+    # using an exclusive file lock (fcntl)
+    lock_file = app.config['CONFIGS_FOLDER'] / 'scheduler.lock'
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(("127.0.0.1", 47200))
-        # Keep the socket open to hold the lock for the life of this worker process
-        app.backup_scheduler_lock = sock 
+        import fcntl
+        f = open(lock_file, 'w')
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Keep the file open to hold the lock for the life of this worker process
+        app.backup_scheduler_lock = f
+    except ImportError:
+        # Fallback for local Windows development where fcntl is not available
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("127.0.0.1", 47200))
+            app.backup_scheduler_lock = sock 
+        except OSError:
+            print("Backup scheduler DISABLED on this worker (already running in another worker)")
+            return
     except OSError:
         print("Backup scheduler DISABLED on this worker (already running in another worker)")
         return

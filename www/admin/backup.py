@@ -267,7 +267,12 @@ class BackupManager:
         """
         timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')
         filename = f"backup_{timestamp}.tar.gz"
-        backup_path = self.backup_dir / filename
+        final_backup_path = self.backup_dir / filename
+        
+        # Use a temporary file to avoid concurrent write corruption
+        temp_fd, temp_path_str = tempfile.mkstemp(suffix='.tar.gz', dir=str(self.backup_dir))
+        temp_path = Path(temp_path_str)
+        os.close(temp_fd)  # Close the fd since tarfile will open it
         
         # Create metadata
         metadata = {
@@ -279,7 +284,7 @@ class BackupManager:
         }
         
         try:
-            with tarfile.open(backup_path, 'w:gz') as tar:
+            with tarfile.open(temp_path, 'w:gz') as tar:
                 # Add metadata
                 metadata_json = json.dumps(metadata, indent=2)
                 metadata_bytes = metadata_json.encode('utf-8')
@@ -306,6 +311,11 @@ class BackupManager:
                     for binds_file in self.configs_path.rglob('*.binds'):
                         rel_path = binds_file.relative_to(self.configs_path)
                         tar.add(binds_file, arcname=f'binds/{rel_path}')
+            
+            # Atomically rename temp file to final location
+            import shutil
+            shutil.move(str(temp_path), str(final_backup_path))
+            backup_path = final_backup_path
             
             # Get file size
             size_bytes = backup_path.stat().st_size
@@ -335,6 +345,11 @@ class BackupManager:
             
         except Exception as e:
             logger.error(f"Backup creation failed: {e}")
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
             log_backup_history(
                 backup_type=backup_type,
                 filename=filename,

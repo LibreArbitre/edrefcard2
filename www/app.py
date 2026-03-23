@@ -115,6 +115,28 @@ def init_backup_scheduler():
     if app_env != 'production':
         print(f"Backup scheduler DISABLED (APP_ENV={app_env}, requires 'production')")
         return
+    # Prevent multiple workers from initializing the scheduler
+    # using an exclusive file lock (fcntl)
+    lock_file = app.config['CONFIGS_FOLDER'] / 'scheduler.lock'
+    try:
+        import fcntl
+        f = open(lock_file, 'w')
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Keep the file open to hold the lock for the life of this worker process
+        app.backup_scheduler_lock = f
+    except ImportError:
+        # Fallback for local Windows development where fcntl is not available
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("127.0.0.1", 47200))
+            app.backup_scheduler_lock = sock 
+        except OSError:
+            print("Backup scheduler DISABLED on this worker (already running in another worker)")
+            return
+    except (IOError, OSError):
+        print("Backup scheduler DISABLED on this worker (already running in another worker)")
+        return
     
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -124,7 +146,7 @@ def init_backup_scheduler():
         settings = get_backup_settings()
         
         if not settings.get('auto_backup_enabled'):
-            print("Backup scheduler DISABLED (auto_backup_enabled=False in settings)")
+            print("Backup scheduler will NOT run (auto_backup_enabled=False in settings)")
             return
         
         scheduler = BackgroundScheduler()

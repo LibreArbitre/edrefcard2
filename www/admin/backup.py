@@ -819,7 +819,7 @@ class DiscordNotifier:
             'description': message,
             'color': 0x28a745 if success else 0xdc3545,  # Green or red
             'timestamp': datetime.datetime.now(datetime.UTC).isoformat(),
-            'footer': {'text': 'EDRefCard Backup System'}
+            'footer': {'text': f'EDRefCard Backup System • {os.environ.get("BACKUP_ENV_LABEL", "unknown")}'}
         }
         
         if fields:
@@ -911,7 +911,7 @@ def run_scheduled_backup():
         if notifier.webhook_url:
             size_mb = backup_path.stat().st_size / (1024 * 1024)
             notifier.send_notification(
-                title="✅ Scheduled Backup Complete",
+                title=f"✅ Scheduled Backup Complete [{os.environ.get('BACKUP_ENV_LABEL', 'unknown')}]",
                 message="Nightly backup completed successfully.",
                 success=True,
                 fields=[
@@ -930,7 +930,7 @@ def run_scheduled_backup():
         notifier = DiscordNotifier.from_settings()
         if notifier.webhook_url:
             notifier.send_notification(
-                title="❌ Scheduled Backup Failed",
+                title=f"❌ Scheduled Backup Failed [{os.environ.get('BACKUP_ENV_LABEL', 'unknown')}]",
                 message=f"The nightly backup encountered an error:\n```{e}```",
                 success=False
             )

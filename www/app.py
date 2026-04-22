@@ -115,6 +115,7 @@ def init_backup_scheduler():
     if app_env != 'production':
         print(f"Backup scheduler DISABLED (APP_ENV={app_env}, requires 'production')")
         return
+        
     # Prevent multiple workers from initializing the scheduler
     # using an exclusive file lock (fcntl)
     lock_file = app.config['CONFIGS_FOLDER'] / 'scheduler.lock'
@@ -134,7 +135,7 @@ def init_backup_scheduler():
         except OSError:
             print("Backup scheduler DISABLED on this worker (already running in another worker)")
             return
-    except (IOError, OSError):
+    except OSError:
         print("Backup scheduler DISABLED on this worker (already running in another worker)")
         return
     

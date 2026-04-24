@@ -825,7 +825,10 @@ class DiscordNotifier:
         if fields:
             embed['fields'] = fields
         
-        payload = {'embeds': [embed]}
+        payload = {
+            'username': f'EDRefCard2-{os.environ.get("BACKUP_ENV_LABEL", "unknown")}',
+            'embeds': [embed]
+        }
         
         try:
             response = requests.post(

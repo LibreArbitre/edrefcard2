@@ -12,6 +12,7 @@ services:
       - FLASK_SECRET_KEY
       - APP_URL
       - APP_ENV
+      - BACKUP_ENV_LABEL
       - EDREFCARD_CONFIGS_DIR=/app/www/configs
     restart: unless-stopped
     # NO PORT MAPPING - Dokploy/Traefik handles routing automatically

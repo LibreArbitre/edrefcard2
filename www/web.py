@@ -3,7 +3,7 @@ import random
 import string
 import tempfile
 from pathlib import Path
-from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app
+from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app, abort
 from extensions import limiter
 from scripts import (
     Config,
@@ -23,6 +23,11 @@ from scripts import database
 
 
 web_bp = Blueprint('web', __name__)
+
+# Extensions servable as static front-end assets (never source code or data files).
+_STATIC_ASSET_EXTS = frozenset({'.css', '.js', '.ico', '.png', '.jpg', '.jpeg', '.svg', '.woff', '.woff2', '.txt', '.map'})
+# Extensions servable from the configs directory (generated artifacts only, never the DB/logs).
+_CONFIG_SERVABLE_EXTS = frozenset({'.jpg', '.jpeg', '.binds'})
 
 # Route handlers
 
@@ -694,25 +699,44 @@ def download_pdf(run_id):
 
 @web_bp.route('/configs/<path:path>')
 def serve_config(path):
-    """Serve generated configuration images and files."""
+    """Serve generated configuration artifacts (images and .binds files only).
+
+    The configs directory also holds the SQLite DB and logs, so access is
+    restricted to an explicit allow-list of generated-artifact extensions.
+    """
+    if Path(path).suffix.lower() not in _CONFIG_SERVABLE_EXTS:
+        abort(404)
     configs_folder = current_app.config['CONFIGS_FOLDER']
     return send_from_directory(configs_folder, path)
 
 @web_bp.route('/scripts/<path:filename>')
 def serve_scripts(filename):
-    """Serve script files."""
+    """Serve front-end script files only (never Python source)."""
+    if Path(filename).suffix.lower() != '.js':
+        abort(404)
     scripts_path = current_app.config['WWW_DIR'] / 'scripts'
     return send_from_directory(scripts_path, filename)
 
 @web_bp.route('/static/<path:filename>')
 def serve_static(filename):
-    """Serve static files."""
+    """Serve static front-end assets (allow-listed extensions only).
+
+    WWW_DIR contains source code and the configs/ data dir, so this route is
+    limited to genuine asset file types to avoid exposing .py/.db/.log files.
+    """
+    if Path(filename).suffix.lower() not in _STATIC_ASSET_EXTS:
+        abort(404)
     return send_from_directory(current_app.config['WWW_DIR'], filename)
 
 @web_bp.route('/ed.css')
 def serve_css():
     """Serve the main CSS file."""
     return send_from_directory(current_app.config['WWW_DIR'], 'ed.css')
+
+@web_bp.route('/robots.txt')
+def serve_robots():
+    """Serve robots.txt (previously served by the now-disabled built-in static)."""
+    return send_from_directory(current_app.config['WWW_DIR'], 'robots.txt')
 
 @web_bp.route('/favicon.ico')
 def serve_favicon():

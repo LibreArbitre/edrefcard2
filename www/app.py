@@ -31,9 +31,12 @@ from commands import clean_cache_command, find_unsupported_command, import_defau
 from flask_limiter.errors import RateLimitExceeded  # noqa: E402
 
 
-app = Flask(__name__, 
-            static_folder=str(WWW_DIR), 
-            static_url_path='',
+# Built-in static serving is DISABLED on purpose: WWW_DIR contains the application
+# source code AND the configs/ data directory (including the SQLite DB and logs).
+# Serving it at the web root (static_url_path='') exposed /web.py, /configs/edrefcard.db,
+# etc. Assets are served via explicit, extension-allow-listed routes in web.py.
+app = Flask(__name__,
+            static_folder=None,
             template_folder=str(WWW_DIR / 'templates'))
 
 # Configure the application
@@ -185,23 +188,30 @@ def handle_ratelimit_error(e):
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Handle uncaught exceptions and log them."""
+    from werkzeug.exceptions import HTTPException
+
+    # Let Flask render real HTTP errors (404, 405, 413, ...) with their own
+    # status code instead of masking every one of them as a 500.
+    if isinstance(e, HTTPException):
+        return e
+
+    # Re-raise key system exceptions
+    if isinstance(e, KeyboardInterrupt | SystemExit):
+        raise e
+
     import traceback
     tb = traceback.format_exc()
-    
+
     # Log to our memory buffer
     try:
         from scripts import logError
         logError(f"UNCAUGHT 500: {str(e)}\n{tb}")
-    except Exception as e:
-        print(f"Failed to log to memory buffer: {e}")
-        
-    # Re-raise key system exceptions
-    if isinstance(e,  KeyboardInterrupt | SystemExit):
-        raise e
-        
-    # Prepare error message for user
-    return render_template('error.html', 
-                           error_message=f'<h1>Internal Server Error</h1><p>An unexpected error occurred.</p><!-- {str(e)} -->'), 500
+    except Exception as log_err:
+        print(f"Failed to log to memory buffer: {log_err}")
+
+    # Prepare error message for user (no exception details leaked to the client)
+    return render_template('error.html',
+                           error_message='<h1>Internal Server Error</h1><p>An unexpected error occurred.</p>'), 500
 
 
 def get_configs_path():

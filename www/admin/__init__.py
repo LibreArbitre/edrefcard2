@@ -9,7 +9,8 @@ import sys
 import re
 import shutil
 from pathlib import Path
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from urllib.parse import urlparse
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from scripts import database, parseBindings, slugify
 
 from scripts.models import Config, Errors
@@ -19,11 +20,33 @@ from .auth import require_admin
 
 
 # Create blueprint
-admin_bp = Blueprint('admin', __name__, 
+admin_bp = Blueprint('admin', __name__,
                      url_prefix='/admin',
                      template_folder='templates')
 
 
+_CSRF_SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS'})
+
+
+@admin_bp.before_request
+def _csrf_protect_admin():
+    """Same-origin CSRF guard for state-changing admin requests.
+
+    The admin panel uses HTTP Basic auth, so a browser auto-sends credentials
+    on cross-site requests. For any non-safe method we require the Origin (or
+    Referer fallback) to match the current host, which blocks forged POSTs from
+    a malicious page (delete config, restore, settings change, ...).
+    """
+    if request.method in _CSRF_SAFE_METHODS:
+        return
+    for header in ('Origin', 'Referer'):
+        value = request.headers.get(header)
+        if value:
+            if urlparse(value).netloc != request.host:
+                abort(403, description='Cross-origin request blocked (CSRF protection)')
+            return
+    # No Origin and no Referer on a state-changing request: reject.
+    abort(403, description='Missing Origin/Referer on state-changing request')
 
 
 @admin_bp.route('/')

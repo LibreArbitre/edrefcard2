@@ -413,6 +413,35 @@ class BackupManager:
 
 # ============== SFTP Manager ==============
 
+def _resolve_safe_public_ip(host: str) -> str:
+    """Resolve host and return a validated public IP, or raise ValueError.
+
+    SSRF guard: refuses private/loopback/link-local/reserved addresses so an
+    admin-configured (or CSRF-forced) SFTP target cannot be used to probe
+    internal services or cloud metadata (169.254.169.254). The connection is
+    then made to the returned IP to avoid DNS-rebinding between check and use.
+    """
+    import socket
+    import ipaddress
+    if not host:
+        raise ValueError("Empty host")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise ValueError(f"Cannot resolve host '{host}': {e}")
+    safe_ip = None
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise ValueError(f"Refusing to connect to non-public address ({ip}) for host '{host}'")
+        if safe_ip is None:
+            safe_ip = info[4][0]
+    if safe_ip is None:
+        raise ValueError(f"No address found for host '{host}'")
+    return safe_ip
+
+
 class SFTPManager:
     """Handles SFTP operations for remote backups."""
     
@@ -437,7 +466,10 @@ class SFTPManager:
     
     def _connect(self) -> paramiko.SFTPClient:
         """Establish SFTP connection."""
-        transport = paramiko.Transport((self.host, self.port))
+        # SSRF guard: validate the host resolves to a public IP and connect to
+        # that exact IP (prevents probing internal services / DNS rebinding).
+        safe_ip = _resolve_safe_public_ip(self.host)
+        transport = paramiko.Transport((safe_ip, self.port))
         transport.connect(username=self.user, password=self.password)
         return paramiko.SFTPClient.from_transport(transport)
     
@@ -706,25 +738,37 @@ class RestoreManager:
                 # Restore binds files
                 if restore_binds:
                     binds_count = 0
+                    configs_root = self.configs_path.resolve()
                     for member in tar.getmembers():
-                        if member.name.startswith('binds/') and member.name.endswith('.binds'):
-                            try:
-                                # Extract relative path
-                                rel_path = member.name[6:]  # Remove 'binds/' prefix
-                                target_path = self.configs_path / rel_path
-                                
-                                # Create parent directory
-                                target_path.parent.mkdir(parents=True, exist_ok=True)
-                                
-                                # Extract file
-                                with tempfile.TemporaryDirectory() as tmpdir:
-                                    tar.extract(member, path=tmpdir)
-                                    extracted_file = Path(tmpdir) / member.name
-                                    shutil.copy2(extracted_file, target_path)
-                                    binds_count += 1
-                            except Exception as e:
-                                results['errors'].append(f"Failed to restore {member.name}: {e}")
-                    
+                        # Only regular files under binds/ with a .binds extension.
+                        # Skipping non-regular members blocks symlink/hardlink tar-slip vectors.
+                        if not (member.isfile() and member.name.startswith('binds/')
+                                and member.name.endswith('.binds')):
+                            continue
+
+                        rel_path = member.name[6:]  # Remove 'binds/' prefix
+                        target_path = (self.configs_path / rel_path).resolve()
+
+                        # Containment check: a malicious archive could carry a member like
+                        # 'binds/../../etc/x.binds'. Ensure the resolved target stays inside
+                        # configs_path before writing anything (prevents tar-slip).
+                        if target_path != configs_root and configs_root not in target_path.parents:
+                            results['errors'].append(f"Skipped unsafe path in archive: {member.name}")
+                            continue
+
+                        try:
+                            # Read the member's content directly instead of extract(path=...),
+                            # which would itself honor the traversal in member.name.
+                            source = tar.extractfile(member)
+                            if source is None:
+                                continue
+                            target_path.parent.mkdir(parents=True, exist_ok=True)
+                            with source, open(target_path, 'wb') as dest:
+                                shutil.copyfileobj(source, dest)
+                            binds_count += 1
+                        except Exception as e:
+                            results['errors'].append(f"Failed to restore {member.name}: {e}")
+
                     results['binds_restored'] = binds_count
                     logger.info(f"Restored {binds_count} binds files")
             
@@ -786,6 +830,23 @@ class RestoreManager:
 
 # ============== Discord Notifier ==============
 
+_ALLOWED_DISCORD_HOSTS = frozenset({
+    'discord.com', 'discordapp.com', 'ptb.discord.com', 'canary.discord.com',
+})
+
+
+def _assert_discord_webhook(url: str):
+    """Raise ValueError unless url is an https Discord webhook URL.
+
+    SSRF guard: the webhook target is admin-supplied, so restrict server-side
+    POSTs to official Discord hosts only (no internal URLs / metadata).
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(url or '')
+    if parsed.scheme != 'https' or parsed.hostname not in _ALLOWED_DISCORD_HOSTS:
+        raise ValueError("Discord webhook must be an https://discord.com/... URL")
+
+
 class DiscordNotifier:
     """Sends notifications to Discord webhook."""
     
@@ -813,7 +874,14 @@ class DiscordNotifier:
         """
         if not self.webhook_url:
             return False
-        
+
+        # SSRF guard: only POST to official Discord hosts.
+        try:
+            _assert_discord_webhook(self.webhook_url)
+        except ValueError as e:
+            logger.error(f"Refusing to send to invalid Discord webhook: {e}")
+            return False
+
         embed = {
             'title': title,
             'description': message,

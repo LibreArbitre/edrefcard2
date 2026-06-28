@@ -1529,6 +1529,15 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
                              'Style': groupStyles.get(b.get('group', 'General'), groupStyles['General'])}
                             for b in (row.get('binds') or [])
                         ]
+                # In generation mode, drop rows the user didn't bind and skip a box
+                # entirely if none of its controls are used (each user binds a different
+                # subset: VR/no-VR, multiple files, with/without pedals). Editor preview
+                # (physicalKeys is None) keeps every box/row so the layout stays visible.
+                if physicalKeys is not None:
+                    kept = [r for r in box.get('rows', []) if r.get('_texts')]
+                    if not kept:
+                        continue
+                    box = {**box, 'rows': kept}
                 _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling)
 
             context.draw(sourceImg)

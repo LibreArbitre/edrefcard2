@@ -314,27 +314,48 @@ def seed_aeromax_command():
     def r(symbol, number, joy, typ='Digital'):
         return {'symbol': symbol, 'number': number, 'joy': joy, 'type': typ}
 
+    # Labels/numbers come from the VIRPIL CDT-AEROMAX R callout sheet (number == Joy_N
+    # in game). Positions are a provisional two-column layout with NO leader lines yet:
+    # exact button anchoring is done later from the manual + the click-to-place editor.
+    # The mini-thruster (U axis) is a floating box (no button_xy) because the module is
+    # removable (left/right/both). Empty boxes/rows are hidden per user at render time.
     mapping = {
         'title': 'VIRPIL CDT-AEROMAX R Flightstick',
         'image': 'vpc-aeromax-r',
         'device_ids': ['334444B0'],
         'styling': 'Group',
         'boxes': [
-            {'label': 'Main hat', 'box_xy': [90, 250], 'box_wh': [1320, 300], 'button_xy': [2160, 185],
+            # --- left column ---
+            {'label': 'FIRE', 'box_xy': [90, 200], 'box_wh': [1500, 184],
+             'rows': [r('stage1', '1', 'Joy_1'), r('stage2', '2', 'Joy_2')]},
+            {'label': 'CMS', 'box_xy': [90, 420], 'box_wh': [1500, 328],
+             'rows': [r('up', '8', 'Joy_8'), r('left', '11', 'Joy_11'),
+                      r('press', '7', 'Joy_7'), r('right', '9', 'Joy_9')]},
+            {'label': 'AP', 'box_xy': [90, 790], 'box_wh': [1500, 184],
+             'rows': [r('up', '3', 'Joy_3'), r('down', '4', 'Joy_4')]},
+            {'label': 'NWS / MSLS', 'box_xy': [90, 1010], 'box_wh': [1500, 112],
+             'rows': [r('press', '5', 'Joy_5')]},
+            {'label': 'GEAR', 'box_xy': [90, 1160], 'box_wh': [1500, 112],
+             'rows': [r('press', '25', 'Joy_25')]},
+            {'label': 'UI / FSS', 'box_xy': [90, 1310], 'box_wh': [1500, 112],
+             'rows': [r('press', '6', 'Joy_6')]},
+            # floating: removable mini-thruster module (no physical anchor)
+            {'label': 'MINI-THRUSTER', 'box_xy': [90, 1480], 'box_wh': [1100, 112],
+             'rows': [r(None, 'U', 'Joy_UAxis', 'Analogue')]},
+            # --- right column ---
+            {'label': 'VIEW / TRIM', 'box_xy': [2800, 200], 'box_wh': [1500, 400],
+             'rows': [r('up', '27', 'Joy_27'), r('right', '28', 'Joy_28'),
+                      r('down', '29', 'Joy_29'), r('left', '30', 'Joy_30'),
+                      r('right', '16', 'Joy_16')]},
+            {'label': 'POV1', 'box_xy': [2800, 640], 'box_wh': [1500, 328],
              'rows': [r('up', None, 'Joy_POV1Up'), r('right', None, 'Joy_POV1Right'),
                       r('down', None, 'Joy_POV1Down'), r('left', None, 'Joy_POV1Left')]},
-            {'label': 'Trigger', 'box_xy': [90, 600], 'box_wh': [1320, 170], 'button_xy': [2080, 770],
-             'rows': [r('stage1', '1', 'Joy_1'), r('stage2', '2', 'Joy_2')]},
-            {'label': 'Top buttons', 'box_xy': [90, 820], 'box_wh': [1320, 320], 'button_xy': [2030, 330],
-             'rows': [r('press', '3', 'Joy_3'), r('press', '4', 'Joy_4'),
-                      r('press', '5', 'Joy_5'), r('press', '6', 'Joy_6')]},
-            {'label': 'Buttons (right)', 'box_xy': [2990, 250], 'box_wh': [1320, 320], 'button_xy': [2300, 200],
-             'rows': [r('press', '7', 'Joy_7'), r('press', '8', 'Joy_8'),
-                      r('press', '9', 'Joy_9'), r('press', '11', 'Joy_11')]},
-            {'label': 'Pitch / Roll', 'box_xy': [2990, 640], 'box_wh': [1320, 170], 'button_xy': [2200, 1300],
-             'rows': [r(None, None, 'Joy_YAxis', 'Analogue'), r(None, None, 'Joy_XAxis', 'Analogue')]},
-            {'label': 'Twist', 'box_xy': [2990, 880], 'box_wh': [1320, 120], 'button_xy': [2200, 1520],
-             'rows': [r(None, None, 'Joy_ZAxis', 'Analogue')]},
+            {'label': 'STICK', 'box_xy': [2800, 1010], 'box_wh': [1500, 184],
+             'rows': [r(None, 'X', 'Joy_XAxis', 'Analogue'), r(None, 'Y', 'Joy_YAxis', 'Analogue')]},
+            {'label': 'RUDDER (twist)', 'box_xy': [2800, 1230], 'box_wh': [1500, 112],
+             'rows': [r(None, 'Z', 'Joy_ZAxis', 'Analogue')]},
+            {'label': 'WHEEL BRAKE', 'box_xy': [2800, 1380], 'box_wh': [1500, 112],
+             'rows': [r(None, 'RZ', 'Joy_RZAxis', 'Analogue')]},
         ],
     }
     mj = json.dumps(mapping)

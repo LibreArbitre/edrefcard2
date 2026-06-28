@@ -254,8 +254,13 @@ def rebuild_db_command():
 @with_appcontext
 def render_dd_test_command():
     """Render a data-driven test card (feature B1 staging validation, temporary)."""
+    import os
+    from flask import current_app
     from scripts import createDataDrivenImage
     from scripts.models import Config
+    # The renderer resolves ../res and ../fonts relative to the scripts dir, which
+    # the web layer guarantees via os.chdir per request. Replicate that here for CLI.
+    os.chdir(current_app.config['WWW_DIR'] / 'scripts')
     mapping = {
         'title': 'Data-driven render test (B1)',
         'image': 'dd-test',

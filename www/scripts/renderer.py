@@ -1298,8 +1298,8 @@ def _drawControlSymbol(context, x, y, kind, size=26):
     context.pop()
 
 
-def _drawDataDrivenBox(context, sourceImg, box):
-    """Draw chrome for one box: leader line, header label, frame, per-row symbol + number."""
+def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Group'):
+    """Draw one box: leader line, header label, frame, per-row symbol + number + binding text."""
     x, y = box['box_xy']
     w, h = box['box_wh']
     rows = box.get('rows', [])
@@ -1347,6 +1347,7 @@ def _drawDataDrivenBox(context, sourceImg, box):
     rows_h = h - header_h
     n = max(len(rows), 1)
     row_h = rows_h / n
+    sym_size = int(min(30, row_h * 0.5))
     for i, row in enumerate(rows):
         ry = rows_top + i * row_h
         if i > 0:
@@ -1356,15 +1357,35 @@ def _drawDataDrivenBox(context, sourceImg, box):
             context.line((x + 1, ry), (x + w - 1, ry))
             context.pop()
         if row.get('symbol'):
-            _drawControlSymbol(context, x + 10, int(ry + (row_h - 26) / 2), row['symbol'], 26)
+            _drawControlSymbol(context, x + 14, int(ry + (row_h - sym_size) / 2), row['symbol'], sym_size)
         if row.get('number') is not None:
             context.push()
             context.stroke_color = Color('transparent')
             context.fill_color = Color('#555555')
             context.font = getFontPath('Bold', 'Normal')
             context.font_size = 24
-            context.text(x=int(x + 48), y=int(ry + row_h / 2 + 8), body=str(row['number']))
+            context.text(x=int(x + 52), y=int(ry + row_h / 2 + 8), body=str(row['number']))
             context.pop()
+        # Binding text - reuses the proven layoutText fitting + per-group colours
+        binds = row.get('binds') or []
+        if binds:
+            texts = []
+            for b in binds:
+                grp = b.get('group', 'General')
+                texts.append({'Text': b.get('name', ''), 'Group': grp,
+                              'Style': groupStyles.get(grp, groupStyles['General'])})
+            gutter = 100
+            rect = {'x': int(x + gutter), 'y': int(ry + 6),
+                    'width': int(w - gutter - 14), 'height': int(row_h - 12)}
+            laid = layoutText(sourceImg, context, texts, rect, biggestFontSize)
+            for t in laid:
+                context.push()
+                context.stroke_color = Color('transparent')
+                context.font_size = t['Size']
+                context.font = t['Style']['Font']
+                context.fill_color = t['Style']['Color']
+                context.text(x=t['X'], y=t['Y'], body=t['Text'])
+                context.pop()
 
 
 def createDataDrivenImage(mapping, config, public, deviceIndex=0):
@@ -1403,10 +1424,19 @@ def createDataDrivenImage(mapping, config, public, deviceIndex=0):
                 context.fill_color = Color('Black')
                 context.text(x=40, y=64, body=mapping['title'])
                 context.pop()
-            writeUrlToDrawing(config, context, public)
+            # URL under the title (legacy writeUrlToDrawing uses a fixed position
+            # that collides with data-driven boxes).
+            context.push()
+            context.stroke_color = Color('transparent')
+            context.font = getFontPath('Bold', 'Normal')
+            context.font_size = 30
+            context.fill_color = Color(_LEADER_COLOR)
+            context.text(x=44, y=118, body=config.refcardURL())
+            context.pop()
 
+            styling = mapping.get('styling', 'Group')
             for box in mapping.get('boxes', []):
-                _drawDataDrivenBox(context, sourceImg, box)
+                _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling)
 
             context.draw(sourceImg)
             sourceImg.save(filename=str(filePath))

@@ -261,27 +261,44 @@ def render_dd_test_command():
     # The renderer resolves ../res and ../fonts relative to the scripts dir, which
     # the web layer guarantees via os.chdir per request. Replicate that here for CLI.
     os.chdir(current_app.config['WWW_DIR'] / 'scripts')
+    def r(symbol, number, *binds):
+        return {'symbol': symbol, 'number': number,
+                'binds': [{'name': n, 'group': g} for (n, g) in binds]}
     mapping = {
-        'title': 'Data-driven render test (B1)',
-        'image': 'dd-test',
+        'title': 'VIRPIL CDT-AEROMAX R Flightstick',
+        'image': 'vpc-aeromax-r',
+        'styling': 'Group',
         'boxes': [
-            {'label': 'A1', 'box_xy': [60, 160], 'box_wh': [520, 300], 'button_xy': [925, 320],
-             'rows': [{'symbol': 'press', 'number': '0'}, {'symbol': 'up'}, {'symbol': 'right'},
-                      {'symbol': 'down'}, {'symbol': 'left'}]},
-            {'label': 'FIRE', 'box_xy': [60, 500], 'box_wh': [520, 120], 'button_xy': [965, 250],
-             'rows': [{'symbol': 'stage1', 'number': '1'}, {'symbol': 'stage2', 'number': '2'}]},
-            {'label': 'Throttle', 'box_xy': [60, 900], 'box_wh': [520, 90], 'button_xy': [940, 930],
-             'rows': [{}]},
-            {'label': 'A4', 'box_xy': [1420, 160], 'box_wh': [520, 300], 'button_xy': [1055, 290],
-             'rows': [{'symbol': 'up', 'number': '11'}, {'symbol': 'right', 'number': '12'},
-                      {'symbol': 'down', 'number': '13'}, {'symbol': 'left', 'number': '14'},
-                      {'symbol': 'press', 'number': '15'}]},
-            {'label': 'B1', 'box_xy': [1420, 500], 'box_wh': [520, 80], 'button_xy': [1065, 335],
-             'rows': [{'number': '4'}]},
+            # LEFT column
+            {'label': 'A1 - Main hat', 'box_xy': [90, 250], 'box_wh': [1320, 400], 'button_xy': [2160, 185],
+             'rows': [r('press', '0', ('UI Select', 'UI')),
+                      r('up', None, ('Target Ahead', 'Ship'), ('Cam Forward', 'Camera')),
+                      r('right', None, ('Next Hostile', 'Ship')),
+                      r('down', None, ('Next Contact', 'Ship')),
+                      r('left', None, ('Prev Hostile', 'Ship'))]},
+            {'label': 'A2 - Ministick', 'box_xy': [90, 700], 'box_wh': [1320, 120], 'button_xy': [2030, 330],
+             'rows': [r('press', '5', ('Boost', 'Ship'))]},
+            {'label': 'FIRE', 'box_xy': [90, 870], 'box_wh': [1320, 170], 'button_xy': [2080, 770],
+             'rows': [r('stage1', '1', ('Fire 1', 'Ship'), ('FSS Honk', 'Scanners')),
+                      r('stage2', '2')]},
+            {'label': 'A3 - Side hat', 'box_xy': [90, 1090], 'box_wh': [1320, 360], 'button_xy': [2010, 560],
+             'rows': [r('up', None, ('Pitch Up', 'Ship')),
+                      r('right', None, ('Roll Right', 'Ship')),
+                      r('down', None, ('Pitch Down', 'Ship')),
+                      r('left', None, ('Roll Left', 'Ship'))]},
+            # RIGHT column
+            {'label': 'A4 - Right cluster', 'box_xy': [2990, 250], 'box_wh': [1320, 400], 'button_xy': [2300, 200],
+             'rows': [r('up', '11', ('ENG', 'Ship'), ('UI Up', 'UI')),
+                      r('right', '12', ('WEP', 'Ship'), ('UI Right', 'UI')),
+                      r('down', '13', ('RST', 'Ship')),
+                      r('left', '14', ('SYS', 'Ship')),
+                      r('press', '15', ('Turret Mode', 'Fighter'))]},
+            {'label': 'Twist axis', 'box_xy': [2990, 1300], 'box_wh': [1320, 130], 'button_xy': [2200, 1500],
+             'rows': [r(None, None, ('Yaw', 'Ship'), ('SRV Steer', 'SRV'))]},
         ],
     }
     config = Config('ddtest')
     config.makeDir()
     createDataDrivenImage(mapping, config, public=True)
-    out = config.pathWithNameAndSuffix('dd-test', '.jpg')
+    out = config.pathWithNameAndSuffix(mapping['image'], '.jpg')
     click.echo(f"Rendered: {out}")

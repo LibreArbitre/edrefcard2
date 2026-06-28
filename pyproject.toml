@@ -9,8 +9,6 @@ exclude = [
     ".venv",
     "__pycache__",
     "bindings",
-    "www/scripts/bindings.py", # Exclude legacy file
-    "test_bindings.py", # Exclude test file with known issues
 ]
 
 [tool.ruff.lint]

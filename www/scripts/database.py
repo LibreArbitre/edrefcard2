@@ -386,11 +386,7 @@ def get_all_config_ids():
     with get_db() as conn:
         rows = conn.execute("SELECT id FROM configurations").fetchall()
         return {r['id'] for r in rows}
-#!/usr/bin/env python3
-"""
-Controller Mappings CRUD functions for database.py
-Append these functions to www/scripts/database.py
-"""
+
 
 # ============== Controller Mapping CRUD ==============
 

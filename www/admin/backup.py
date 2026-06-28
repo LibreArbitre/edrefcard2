@@ -249,9 +249,9 @@ class BackupManager:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         
         # Debug logging
-        print(f"[BackupManager] configs_path: {self.configs_path}")
-        print(f"[BackupManager] data_path: {self.data_path}")
-        print(f"[BackupManager] backup_dir: {self.backup_dir}")
+        logger.debug(f"[BackupManager] configs_path: {self.configs_path}")
+        logger.debug(f"[BackupManager] data_path: {self.data_path}")
+        logger.debug(f"[BackupManager] backup_dir: {self.backup_dir}")
     
     def create_backup(self, include_db: bool = True, include_binds: bool = True,
                       backup_type: str = 'manual') -> Path:
@@ -698,7 +698,7 @@ class RestoreManager:
                 if restore_db:
                     try:
                         db_member = tar.getmember('database/edrefcard.db')
-                        print(f"[RESTORE] Found database in backup: {db_member.name}")
+                        logger.debug(f"[RESTORE] Found database in backup: {db_member.name}")
                         
                         with tempfile.TemporaryDirectory() as tmpdir:
                             tar.extract(db_member, path=tmpdir)
@@ -709,30 +709,30 @@ class RestoreManager:
                             target_db = self.configs_path / 'edrefcard.db'
                             target_db.parent.mkdir(parents=True, exist_ok=True)
                             
-                            print(f"[RESTORE] Extracted DB size: {extracted_db.stat().st_size} bytes")
-                            print(f"[RESTORE] Target path: {target_db}")
+                            logger.debug(f"[RESTORE] Extracted DB size: {extracted_db.stat().st_size} bytes")
+                            logger.debug(f"[RESTORE] Target path: {target_db}")
                             
                             # Check current DB state before overwrite
                             if target_db.exists():
-                                print(f"[RESTORE] Existing DB size: {target_db.stat().st_size} bytes")
+                                logger.debug(f"[RESTORE] Existing DB size: {target_db.stat().st_size} bytes")
                             else:
-                                print("[RESTORE] No existing DB at target path")
+                                logger.debug("[RESTORE] No existing DB at target path")
                             
                             # Copy the restored database
                             shutil.copy2(extracted_db, target_db)
                             
-                            print(f"[RESTORE] After copy, DB size: {target_db.stat().st_size} bytes")
+                            logger.debug(f"[RESTORE] After copy, DB size: {target_db.stat().st_size} bytes")
                             
                             results['db_restored'] = True
                             results['db_path'] = str(target_db)
                             logger.info(f"Database restored to {target_db}")
-                            print(f"[RESTORE] Database restored successfully to {target_db}")
+                            logger.debug(f"[RESTORE] Database restored successfully to {target_db}")
                             
                     except KeyError:
-                        print("[RESTORE] ERROR: Database not found in backup archive")
+                        logger.debug("[RESTORE] ERROR: Database not found in backup archive")
                         results['errors'].append("Database not found in backup")
                     except Exception as e:
-                        print(f"[RESTORE] ERROR: Database restore failed: {e}")
+                        logger.debug(f"[RESTORE] ERROR: Database restore failed: {e}")
                         results['errors'].append(f"Database restore failed: {e}")
                 
                 # Restore binds files
@@ -784,7 +784,7 @@ class RestoreManager:
                     if db_path:
                         database.init_db(db_path)
                         logger.info(f"Database reconnected: {db_path}")
-                        print(f"[RESTORE] Database reconnected: {db_path}")
+                        logger.debug(f"[RESTORE] Database reconnected: {db_path}")
                 except Exception as e:
                     results['errors'].append(f"Database reconnection failed: {e}")
                     logger.error(f"Database reconnection failed: {e}")
@@ -795,10 +795,10 @@ class RestoreManager:
                     reloaded = self.reload_gunicorn()
                     if reloaded:
                         results['gunicorn_reloaded'] = True
-                        print("[RESTORE] Gunicorn HUP signal sent - workers will reload")
+                        logger.debug("[RESTORE] Gunicorn HUP signal sent - workers will reload")
                 except Exception as e:
                     # Don't fail the restore if reload fails
-                    print(f"[RESTORE] Warning: Gunicorn reload failed: {e}")
+                    logger.debug(f"[RESTORE] Warning: Gunicorn reload failed: {e}")
             
         except Exception as e:
             results['errors'].append(f"Restore failed: {e}")

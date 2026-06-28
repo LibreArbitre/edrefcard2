@@ -1264,3 +1264,150 @@ def calculateBestFontSize(context, text, hotasDetail, biggestFontSize):
                         fontSize = fontSize - 1
 
     return (fitText, fontSize, metrics)
+
+
+# ============== Data-driven controller rendering (feature B1) ==============
+# Renders a card by DRAWING the chrome (box frame, leader line, group header,
+# per-row symbol + number) from a mapping_json structure, on top of a CLEAN
+# controller image - instead of relying on an artwork baked into the template.
+# Legacy createHOTASImage is unchanged. Binding text rendering is reused from
+# layoutText (added in a later step).
+
+_LEADER_COLOR = '#962320'
+
+
+def _drawControlSymbol(context, x, y, kind, size=26):
+    """Draw a control symbol (hat direction / press) as a filled shape, top-left at (x, y)."""
+    context.push()
+    context.stroke_color = Color('transparent')
+    context.stroke_width = 0
+    context.fill_color = Color('Black')
+    s = size
+    cy = y + s / 2
+    if kind in ('press', 'dot', 'stage1', 'stage2'):
+        r = s * 0.42
+        context.circle((x + s / 2, cy), (x + s / 2 + r, cy))
+    elif kind == 'up':
+        context.polygon([(x, y + s), (x + s, y + s), (x + s / 2, y)])
+    elif kind == 'down':
+        context.polygon([(x, y), (x + s, y), (x + s / 2, y + s)])
+    elif kind == 'left':
+        context.polygon([(x + s, y), (x + s, y + s), (x, cy)])
+    elif kind == 'right':
+        context.polygon([(x, y), (x, y + s), (x + s, cy)])
+    context.pop()
+
+
+def _drawDataDrivenBox(context, sourceImg, box):
+    """Draw chrome for one box: leader line, header label, frame, per-row symbol + number."""
+    x, y = box['box_xy']
+    w, h = box['box_wh']
+    rows = box.get('rows', [])
+    header_h = 40 if box.get('label') else 0
+
+    # Leader line (orthogonal elbow) from the box side facing the button to the button point
+    btn = box.get('button_xy')
+    if btn:
+        bx, by = btn
+        context.push()
+        context.stroke_color = Color(_LEADER_COLOR)
+        context.stroke_width = 3
+        context.fill_color = Color('transparent')
+        sx = x + w if bx >= x + w else x
+        sy = y + h / 2
+        midx = (sx + bx) / 2
+        context.line((sx, sy), (midx, sy))
+        context.line((midx, sy), (midx, by))
+        context.line((midx, by), (bx, by))
+        context.pop()
+
+    # Header bar + label
+    if header_h:
+        context.push()
+        context.stroke_color = Color('transparent')
+        context.fill_color = Color('#cfcfcf')
+        context.rectangle(left=x, top=y, width=w, height=header_h)
+        context.fill_color = Color('Black')
+        context.font = getFontPath('Bold', 'Normal')
+        context.font_size = 26
+        m = context.get_font_metrics(sourceImg, box['label'], multiline=False)
+        context.text(x=int(x + (w - m.text_width) / 2), y=int(y + header_h - 12), body=box['label'])
+        context.pop()
+
+    # Outer frame
+    context.push()
+    context.stroke_color = Color('Black')
+    context.stroke_width = 2
+    context.fill_color = Color('transparent')
+    context.rectangle(left=x, top=y, width=w, height=h)
+    context.pop()
+
+    # Per-row symbol + number gutters (+ light separators)
+    rows_top = y + header_h
+    rows_h = h - header_h
+    n = max(len(rows), 1)
+    row_h = rows_h / n
+    for i, row in enumerate(rows):
+        ry = rows_top + i * row_h
+        if i > 0:
+            context.push()
+            context.stroke_color = Color('#dddddd')
+            context.stroke_width = 1
+            context.line((x + 1, ry), (x + w - 1, ry))
+            context.pop()
+        if row.get('symbol'):
+            _drawControlSymbol(context, x + 10, int(ry + (row_h - 26) / 2), row['symbol'], 26)
+        if row.get('number') is not None:
+            context.push()
+            context.stroke_color = Color('transparent')
+            context.fill_color = Color('#555555')
+            context.font = getFontPath('Bold', 'Normal')
+            context.font_size = 24
+            context.text(x=int(x + 48), y=int(ry + row_h / 2 + 8), body=str(row['number']))
+            context.pop()
+
+
+def createDataDrivenImage(mapping, config, public, deviceIndex=0):
+    """Render a data-driven controller card (chrome) from a mapping_json structure.
+
+    mapping = {'title': str, 'image': '<res name without .jpg>',
+               'boxes': [{'label', 'box_xy':[x,y], 'box_wh':[w,h],
+                          'button_xy':[bx,by], 'rows':[{'symbol','number','joy','type'}]}]}
+    """
+    if Drawing is None:
+        raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed or failed to load.")
+    _init_styles()
+
+    source = mapping['image']
+    name = source if deviceIndex == 0 else '%s-%s' % (source, deviceIndex)
+    filePath = config.pathWithNameAndSuffix(name, '.jpg')
+
+    from pathlib import Path
+    template_path = Path('../res') / (source + '.jpg')
+    if not template_path.exists():
+        raise FileNotFoundError(f"Clean image '../res/{source}.jpg' not found")
+
+    with Image(filename=str(template_path)) as sourceImg:
+        with Drawing() as context:
+            context.font = getFontPath('Regular', 'Normal')
+            context.text_antialias = True
+            context.font_style = 'normal'
+            context.stroke_width = 0
+            context.fill_color = Color('Black')
+            context.fill_opacity = 1
+
+            if mapping.get('title'):
+                context.push()
+                context.font = getFontPath('Black', 'Normal')
+                context.font_size = 52
+                context.fill_color = Color('Black')
+                context.text(x=40, y=64, body=mapping['title'])
+                context.pop()
+            writeUrlToDrawing(config, context, public)
+
+            for box in mapping.get('boxes', []):
+                _drawDataDrivenBox(context, sourceImg, box)
+
+            context.draw(sourceImg)
+            sourceImg.save(filename=str(filePath))
+    return True

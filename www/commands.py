@@ -248,3 +248,35 @@ def rebuild_db_command():
         utils.logError = original_log_error
             
     click.echo(f"Rebuild complete: {count} recovered, {errors_count} errors.")
+
+
+@click.command('render-dd-test')
+@with_appcontext
+def render_dd_test_command():
+    """Render a data-driven test card (feature B1 staging validation, temporary)."""
+    from scripts import createDataDrivenImage
+    from scripts.models import Config
+    mapping = {
+        'title': 'Data-driven render test (B1)',
+        'image': 'dd-test',
+        'boxes': [
+            {'label': 'A1', 'box_xy': [60, 160], 'box_wh': [520, 300], 'button_xy': [925, 320],
+             'rows': [{'symbol': 'press', 'number': '0'}, {'symbol': 'up'}, {'symbol': 'right'},
+                      {'symbol': 'down'}, {'symbol': 'left'}]},
+            {'label': 'FIRE', 'box_xy': [60, 500], 'box_wh': [520, 120], 'button_xy': [965, 250],
+             'rows': [{'symbol': 'stage1', 'number': '1'}, {'symbol': 'stage2', 'number': '2'}]},
+            {'label': 'Throttle', 'box_xy': [60, 900], 'box_wh': [520, 90], 'button_xy': [940, 930],
+             'rows': [{}]},
+            {'label': 'A4', 'box_xy': [1420, 160], 'box_wh': [520, 300], 'button_xy': [1055, 290],
+             'rows': [{'symbol': 'up', 'number': '11'}, {'symbol': 'right', 'number': '12'},
+                      {'symbol': 'down', 'number': '13'}, {'symbol': 'left', 'number': '14'},
+                      {'symbol': 'press', 'number': '15'}]},
+            {'label': 'B1', 'box_xy': [1420, 500], 'box_wh': [520, 80], 'button_xy': [1065, 335],
+             'rows': [{'number': '4'}]},
+        ],
+    }
+    config = Config('ddtest')
+    config.makeDir()
+    createDataDrivenImage(mapping, config, public=True)
+    out = config.pathWithNameAndSuffix('dd-test', '.jpg')
+    click.echo(f"Rendered: {out}")

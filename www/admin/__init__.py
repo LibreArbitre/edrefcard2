@@ -566,11 +566,15 @@ def backup_settings():
             'discord_webhook_url': request.form.get('discord_webhook_url', ''),
         }
         
-        # Don't overwrite password if not provided (keep existing)
-        if not settings['sftp_password']:
+        # Secrets (SFTP password, Discord webhook) are never echoed back to the
+        # form, so a blank submission means "keep existing" rather than "clear".
+        if not settings['sftp_password'] or not settings['discord_webhook_url']:
             existing = get_backup_settings()
-            settings['sftp_password'] = existing.get('sftp_password', '')
-        
+            if not settings['sftp_password']:
+                settings['sftp_password'] = existing.get('sftp_password', '')
+            if not settings['discord_webhook_url']:
+                settings['discord_webhook_url'] = existing.get('discord_webhook_url', '')
+
         save_backup_settings(settings)
         flash('Backup settings saved.', 'success')
         return redirect(url_for('admin.backup_settings'))
@@ -764,11 +768,9 @@ def restore_from_local():
 @require_admin
 def restore_from_sftp():
     """Restore from a backup on SFTP server."""
-    print("[ROUTE] restore_from_sftp called")
     from .backup import RestoreManager, SFTPManager, DiscordNotifier
     
     filename = request.form.get('filename')
-    print(f"[ROUTE] filename={filename}")
     
     if not filename:
         flash('No backup file selected.', 'danger')
@@ -776,19 +778,15 @@ def restore_from_sftp():
     
     restore_db = request.form.get('restore_db') == 'on'
     restore_binds = request.form.get('restore_binds') == 'on'
-    print(f"[ROUTE] restore_db={restore_db}, restore_binds={restore_binds}")
     
     if not restore_db and not restore_binds:
         flash('Please select at least one component to restore.', 'warning')
         return redirect(url_for('admin.restore_dashboard'))
     
     try:
-        print("[ROUTE] Connecting to SFTP...")
         # Download from SFTP
         sftp_manager = SFTPManager.from_settings()
-        print(f"[ROUTE] SFTP host: {sftp_manager.host}")
         local_path = sftp_manager.download_backup(filename)
-        print(f"[ROUTE] Downloaded to: {local_path}")
         
         # Perform restore
         restore_manager = RestoreManager()

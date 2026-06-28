@@ -46,7 +46,6 @@ app.config['WWW_DIR'] = WWW_DIR
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Configure the bindings Config class for Flask
-# Configure the bindings Config class for Flask
 Config.setDirRoot(WWW_DIR)
 # Prioritize APP_URL, then SCRIPT_URI, then default
 web_root = os.environ.get('APP_URL') or os.environ.get('SCRIPT_URI', 'http://localhost:8080/')
@@ -71,7 +70,6 @@ else:
 print(f"Application configured with Web Root: {web_root}")
 
 # Initialize SQLite database
-# Store DB# Initialize database
 with app.app_context():
     db_path = app.config['CONFIGS_FOLDER'] / 'edrefcard.db'
     database.init_db(str(db_path))

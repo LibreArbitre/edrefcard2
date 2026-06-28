@@ -7,6 +7,7 @@ Credentials are read from environment variables.
 """
 
 import os
+import hmac
 import logging
 from functools import wraps
 from flask import request, Response
@@ -17,9 +18,7 @@ from scripts.models import Config
 ADMIN_USERNAME = os.environ.get('EDREFCARD_ADMIN_USER', 'admin')
 ADMIN_PASSWORD = os.environ.get('EDREFCARD_ADMIN_PASS', 'changeme')
 
-# Configure admin access logging
-# Configure admin access logging
-# Use persistent configs directory
+# Configure admin access logging (use persistent configs directory)
 log_dir = Config.configsPath()
 # Note: mkdir should be handled by app startup, but safe to allow existing
 try:
@@ -55,22 +54,35 @@ except Exception as e:
 admin_logger.addHandler(handler)
 
 
+def _sanitize_log(value, max_len=200):
+    """Strip CR/LF and control chars from a value before logging (anti log-injection)."""
+    text = str(value or '')
+    text = text.replace('\r', ' ').replace('\n', ' ')
+    text = ''.join(ch for ch in text if ch >= ' ')
+    return text[:max_len]
+
+
 def check_auth(username, password):
     """Check if username/password combination is valid.
-    
+
     Args:
         username: Provided username
         password: Provided password
-    
+
     Returns:
         True if valid, False otherwise
     """
-    is_valid = username == ADMIN_USERNAME and password == ADMIN_PASSWORD
-    
-    # Log authentication attempts
-    ip_address = request.headers.get('X-Forwarded-For', request.remote_addr)
-    user_agent = request.headers.get('User-Agent', 'Unknown')
-    
+    # Constant-time comparison to avoid leaking credential length/prefix via timing.
+    # Compute both halves before AND-ing so the check doesn't short-circuit.
+    user_ok = hmac.compare_digest(username or '', ADMIN_USERNAME)
+    pass_ok = hmac.compare_digest(password or '', ADMIN_PASSWORD)
+    is_valid = user_ok and pass_ok
+
+    # Log authentication attempts (values sanitized: IP/UA/username are attacker-controlled)
+    ip_address = _sanitize_log(request.headers.get('X-Forwarded-For', request.remote_addr))
+    user_agent = _sanitize_log(request.headers.get('User-Agent', 'Unknown'))
+    username = _sanitize_log(username)
+
     if is_valid:
         admin_logger.info(
             f"SUCCESS - User: {username} | IP: {ip_address} | UA: {user_agent}"

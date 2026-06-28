@@ -13,7 +13,7 @@
 keyboardLayouts = {
     'ANSI 104': [
         ['Esc', {'x': 1}, 'F1', 'F2', 'F3', 'F4', {'x': 0.5}, 'F5', 'F6', 'F7', 'F8', {'x': 0.5}, 'F9', 'F10', 'F11', 'F12', {'x': 0.25}, 'PrtSc', ['ScrLk', 'Key_ScrollLock'], ['Pause\nBreak', 'Key_Pause']],
-        [{'y': 0.5}, ['~\n`', 'Key_Grave'], ['!\n1', 'Key_1'], ['@\n2', 'Key_2'], ['#\n3', 'Key_3'], ['$\n4', 'Key_4'], ['%\n5', 'Key_5'], ['^\\n6', 'Key_6'], ['&\n7', 'Key_7'], ['*\n8', 'Key_8'], ['(\n9', 'Key_9'], [')\n0', 'Key_0'], ['_\n-', 'Key_Minus'], ['+\n=', 'Key_Equals'], {'w': 2}, 'Backspace',
+        [{'y': 0.5}, ['~\n`', 'Key_Grave'], ['!\n1', 'Key_1'], ['@\n2', 'Key_2'], ['#\n3', 'Key_3'], ['$\n4', 'Key_4'], ['%\n5', 'Key_5'], ['^\n6', 'Key_6'], ['&\n7', 'Key_7'], ['*\n8', 'Key_8'], ['(\n9', 'Key_9'], [')\n0', 'Key_0'], ['_\n-', 'Key_Minus'], ['+\n=', 'Key_Equals'], {'w': 2}, 'Backspace',
             {'x': 0.25}, 'Insert', 'Home', ['PgUp', 'Key_PageUp'], {'x': 0.25}, ['Num\nLock', 'Key_NumLock'], ['/__N', 'Key_Numpad_Divide'], ['*__N', 'Key_Numpad_Multiply'], ['-__N', 'Key_Numpad_Subtract']],
         [{'w': 1.5}, 'Tab', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', ['{\n[', 'Key_LeftBracket'], ['}\n]', 'Key_RightBracket'], {'w': 1.5}, ['|\n\\', 'Key_BackSlash'], {'x': 0.25},
             'Delete', 'End', ['PgDn', 'Key_PageDown'], {'x': 0.25}, ['7__N\nHome__N', 'Key_Numpad_7'], ['8__N\n↑', 'Key_Numpad_8'], ['9__N\nPgUp__N', 'Key_Numpad_9'], {'h': 2}, ['+__N', 'Key_Numpad_Add']],

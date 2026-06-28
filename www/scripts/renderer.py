@@ -1417,9 +1417,15 @@ def createDataDrivenImage(mapping, config, public, deviceIndex=0):
     filePath = config.pathWithNameAndSuffix(name, '.jpg')
 
     from pathlib import Path
-    template_path = Path('../res') / (source + '.jpg')
-    if not template_path.exists():
-        raise FileNotFoundError(f"Clean image '../res/{source}.jpg' not found")
+    # Data-driven clean images live in the persistent volume (added at runtime via
+    # the mapping editor); fall back to baked res/ for bundled images.
+    candidates = [
+        config.configsPath() / 'controllers' / (source + '.jpg'),
+        Path('../res') / (source + '.jpg'),
+    ]
+    template_path = next((c for c in candidates if c.exists()), None)
+    if template_path is None:
+        raise FileNotFoundError(f"Clean image '{source}.jpg' not found in controllers/ or res/")
 
     with Image(filename=str(template_path)) as sourceImg:
         with Drawing() as context:

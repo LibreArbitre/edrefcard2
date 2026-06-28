@@ -105,8 +105,9 @@
 
         <div class="form-group">
             <label>Webhook URL</label>
-            <input type="text" name="discord_webhook_url" value="{{ settings.discord_webhook_url or '' }}"
-                placeholder="https://discord.com/api/webhooks/...">
+            <input type="text" name="discord_webhook_url" value="" autocomplete="off"
+                placeholder="{% if settings.discord_webhook_url %}(unchanged){% else %}https://discord.com/api/webhooks/...{% endif %}">
+            <small style="color: var(--text-muted);">Leave empty to keep the current webhook</small>
         </div>
 
         <button type="button" class="btn btn-outline" id="test-discord-btn" onclick="testDiscord()">

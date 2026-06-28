@@ -566,11 +566,15 @@ def backup_settings():
             'discord_webhook_url': request.form.get('discord_webhook_url', ''),
         }
         
-        # Don't overwrite password if not provided (keep existing)
-        if not settings['sftp_password']:
+        # Secrets (SFTP password, Discord webhook) are never echoed back to the
+        # form, so a blank submission means "keep existing" rather than "clear".
+        if not settings['sftp_password'] or not settings['discord_webhook_url']:
             existing = get_backup_settings()
-            settings['sftp_password'] = existing.get('sftp_password', '')
-        
+            if not settings['sftp_password']:
+                settings['sftp_password'] = existing.get('sftp_password', '')
+            if not settings['discord_webhook_url']:
+                settings['discord_webhook_url'] = existing.get('discord_webhook_url', '')
+
         save_backup_settings(settings)
         flash('Backup settings saved.', 'success')
         return redirect(url_for('admin.backup_settings'))

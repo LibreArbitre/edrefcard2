@@ -302,3 +302,49 @@ def render_dd_test_command():
     createDataDrivenImage(mapping, config, public=True)
     out = config.pathWithNameAndSuffix(mapping['image'], '.jpg')
     click.echo(f"Rendered: {out}")
+
+
+@click.command('seed-aeromax')
+@with_appcontext
+def seed_aeromax_command():
+    """Seed a controller_mapping for the VIRPIL CDT-AEROMAX R (334444B0). Test scaffolding."""
+    import json
+    from scripts import database
+
+    def r(symbol, number, joy, typ='Digital'):
+        return {'symbol': symbol, 'number': number, 'joy': joy, 'type': typ}
+
+    mapping = {
+        'title': 'VIRPIL CDT-AEROMAX R Flightstick',
+        'image': 'vpc-aeromax-r',
+        'device_ids': ['334444B0'],
+        'styling': 'Group',
+        'boxes': [
+            {'label': 'Main hat', 'box_xy': [90, 250], 'box_wh': [1320, 300], 'button_xy': [2160, 185],
+             'rows': [r('up', None, 'Joy_POV1Up'), r('right', None, 'Joy_POV1Right'),
+                      r('down', None, 'Joy_POV1Down'), r('left', None, 'Joy_POV1Left')]},
+            {'label': 'Trigger', 'box_xy': [90, 600], 'box_wh': [1320, 170], 'button_xy': [2080, 770],
+             'rows': [r('stage1', '1', 'Joy_1'), r('stage2', '2', 'Joy_2')]},
+            {'label': 'Top buttons', 'box_xy': [90, 820], 'box_wh': [1320, 320], 'button_xy': [2030, 330],
+             'rows': [r('press', '3', 'Joy_3'), r('press', '4', 'Joy_4'),
+                      r('press', '5', 'Joy_5'), r('press', '6', 'Joy_6')]},
+            {'label': 'Buttons (right)', 'box_xy': [2990, 250], 'box_wh': [1320, 320], 'button_xy': [2300, 200],
+             'rows': [r('press', '7', 'Joy_7'), r('press', '8', 'Joy_8'),
+                      r('press', '9', 'Joy_9'), r('press', '11', 'Joy_11')]},
+            {'label': 'Pitch / Roll', 'box_xy': [2990, 640], 'box_wh': [1320, 170], 'button_xy': [2200, 1300],
+             'rows': [r(None, None, 'Joy_YAxis', 'Analogue'), r(None, None, 'Joy_XAxis', 'Analogue')]},
+            {'label': 'Twist', 'box_xy': [2990, 880], 'box_wh': [1320, 120], 'button_xy': [2200, 1520],
+             'rows': [r(None, None, 'Joy_ZAxis', 'Analogue')]},
+        ],
+    }
+    mj = json.dumps(mapping)
+    existing = database.get_controller_mapping_by_device_id('334444B0')
+    if existing:
+        database.update_controller_mapping(existing['id'], device_name=mapping['title'],
+                                           template_name=mapping['image'],
+                                           image_filename=mapping['image'] + '.jpg', mapping_json=mj)
+        click.echo(f"Updated AEROMAX mapping id {existing['id']}")
+    else:
+        mid = database.create_controller_mapping('334444B0', mapping['title'], mapping['image'],
+                                                 mapping['image'] + '.jpg', 4400, 2560, mj)
+        click.echo(f"Created AEROMAX mapping id {mid}")

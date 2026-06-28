@@ -1379,14 +1379,9 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
             context.text(x=int(col_x), y=int(row_cy + 8), body=str(row['number']))
             context.pop()
             col_x += 56
-        # Binding text - reuses the proven layoutText fitting + per-group colours
-        binds = row.get('binds') or []
-        if binds:
-            texts = []
-            for b in binds:
-                grp = b.get('group', 'General')
-                texts.append({'Text': b.get('name', ''), 'Group': grp,
-                              'Style': groupStyles.get(grp, groupStyles['General'])})
+        # Binding text (pre-resolved by createDataDrivenImage), reusing layoutText fitting
+        texts = row.get('_texts') or []
+        if texts:
             tx = col_x + 10
             rect = {'x': int(tx), 'y': int(ry + 6),
                     'width': int(x + w - tx - 14), 'height': int(row_h - 12)}
@@ -1401,12 +1396,78 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
                 context.pop()
 
 
-def createDataDrivenImage(mapping, config, public, deviceIndex=0):
-    """Render a data-driven controller card (chrome) from a mapping_json structure.
+def _buildJoyTexts(deviceIds, joyKey, deviceIndex, physicalKeys, modifiers, styling):
+    """Build the coloured texts list for one Joy_* key from the uploaded bindings.
 
-    mapping = {'title': str, 'image': '<res name without .jpg>',
-               'boxes': [{'label', 'box_xy':[x,y], 'box_wh':[w,h],
-                          'button_xy':[bx,by], 'rows':[{'symbol','number','joy','type'}]}]}
+    Mirrors createHOTASImage's per-key logic so a data-driven card shows the user's
+    REAL bindings (not the mapping's sample binds). Returns [{Text, Group, Style}].
+    """
+    texts = []
+    pk = None
+    pkspec = None
+    for spec, k in physicalKeys.items():
+        if (k.get('Key') == joyKey and int(k.get('DeviceIndex', 0)) == deviceIndex
+                and k.get('Device') in deviceIds):
+            pk = k
+            pkspec = spec
+            break
+    if pk is None:
+        return texts
+
+    for keyModifier in modifiers.get(pkspec, []):
+        style = ModifierStyles.index(keyModifier.get('Number')) if styling == 'Modifier' else groupStyles.get('Modifier')
+        texts.append({'Text': 'Modifier %s' % keyModifier.get('Number'), 'Group': 'Modifier', 'Style': style})
+
+    # Unmodified bindings
+    for modifier, bind in pk.get('Binds', {}).items():
+        if modifier != 'Unmodified':
+            continue
+        for _ck, control in bind.get('Controls', {}).items():
+            if isRedundantSpecialisation(control, bind):
+                continue
+            if styling == 'Modifier':
+                style = ModifierStyles.index(0)
+            elif styling == 'Category':
+                style = categoryStyles.get(control.get('Category', 'General'))
+            else:
+                style = groupStyles.get(control.get('Group'))
+            texts.append({'Text': control.get('Name'), 'Group': control.get('Group'), 'Style': style})
+
+    # Modified bindings, in modifier-number order
+    for curMod in range(1, 200):
+        for modifier, bind in pk.get('Binds', {}).items():
+            if modifier == 'Unmodified':
+                continue
+            mnum = 0
+            for km in modifiers.get(modifier, []):
+                if km['ModifierKey'] == modifier:
+                    mnum = km['Number']
+                    break
+            if mnum != curMod:
+                continue
+            for _ck, control in bind.get('Controls', {}).items():
+                if isRedundantSpecialisation(control, bind):
+                    continue
+                if styling == 'Modifier':
+                    style = ModifierStyles.index(curMod)
+                    txt = control.get('Name')
+                elif styling == 'Category':
+                    style = categoryStyles.get(control.get('Category', 'General'))
+                    txt = '%s[%s]' % (control.get('Name'), curMod)
+                else:
+                    style = groupStyles.get(control.get('Group'))
+                    txt = '%s[%s]' % (control.get('Name'), curMod)
+                texts.append({'Text': txt, 'Group': control.get('Group'), 'Style': style})
+    return texts
+
+
+def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=None,
+                          styling=None, imageDevices=None, deviceIndex=0):
+    """Render a data-driven controller card from a mapping_json structure.
+
+    If physicalKeys/modifiers are given, each row's text comes from the user's real
+    bindings (matched by row['joy']); otherwise the row's sample 'binds' are used
+    (editor preview). mapping = {'title','image','device_ids':[...],'boxes':[...]}.
     """
     if Drawing is None:
         raise RuntimeError("Image generation library (ImageMagick/Wand) is not installed or failed to load.")
@@ -1453,8 +1514,21 @@ def createDataDrivenImage(mapping, config, public, deviceIndex=0):
             context.text(x=44, y=118, body=config.refcardURL())
             context.pop()
 
-            styling = mapping.get('styling', 'Group')
+            styling = styling or mapping.get('styling', 'Group')
+            device_ids = imageDevices or mapping.get('device_ids') or []
             for box in mapping.get('boxes', []):
+                # Resolve each row's coloured texts: from the user's real bindings
+                # (generation) or the row's sample binds (editor preview).
+                for row in box.get('rows', []):
+                    if physicalKeys is not None and row.get('joy'):
+                        row['_texts'] = _buildJoyTexts(device_ids, row['joy'], deviceIndex,
+                                                       physicalKeys, modifiers or {}, styling)
+                    else:
+                        row['_texts'] = [
+                            {'Text': b.get('name', ''), 'Group': b.get('group', 'General'),
+                             'Style': groupStyles.get(b.get('group', 'General'), groupStyles['General'])}
+                            for b in (row.get('binds') or [])
+                        ]
                 _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling)
 
             context.draw(sourceImg)

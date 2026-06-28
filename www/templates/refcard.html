@@ -51,7 +51,7 @@
         {% endif %}
 
 
-        {% if created_images or device_for_block_image %}
+        {% if created_images or data_driven_images or device_for_block_image %}
         {% for image in created_images %}
         {% if '::' in image %}
         {% set parts = image.split('::') %}
@@ -72,6 +72,14 @@
             alt="{{ device }} Reference Card ({{ device_index }})" />
         {% endif %}
         {% endfor %}
+
+        {% if data_driven_images %}
+        {% for base in data_driven_images %}
+        <img class="refcard-image lightbox-trigger"
+            src="{{ url_for('web.serve_config', path=run_id[:2] + '/' + run_id + '-' + base + '.jpg') }}"
+            alt="Controller Reference Card" />
+        {% endfor %}
+        {% endif %}
 
         {% if keyboard_layout_image %}
         <img class="refcard-image lightbox-trigger"

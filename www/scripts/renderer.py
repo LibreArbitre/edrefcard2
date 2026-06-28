@@ -1276,25 +1276,34 @@ def calculateBestFontSize(context, text, hotasDetail, biggestFontSize):
 _LEADER_COLOR = '#962320'
 
 
-def _drawControlSymbol(context, x, y, kind, size=26):
-    """Draw a control symbol (hat direction / press) as a filled shape, top-left at (x, y)."""
+# Legacy EdRefCard uses TEXT glyphs in the symbol column (matches the reference
+# cards), not drawn shapes: ^ > v < 0 for hat up/right/down/left/press, and words
+# for trigger stages / levers.
+_SYMBOL_GLYPHS = {
+    'press': '0', 'up': '^', 'right': '>', 'down': 'v', 'left': '<',
+    'stage1': 'stage 1', 'stage2': 'stage 2', 'push': 'push', 'pull': 'pull',
+}
+
+
+def _symbolColumnWidth(symbol):
+    """Width reserved for the symbol column (wider for word glyphs like 'stage 1')."""
+    g = _SYMBOL_GLYPHS.get(symbol or '', '')
+    if not g:
+        return 0
+    return 150 if len(g) > 2 else 44
+
+
+def _drawControlSymbol(context, x, y_center, symbol):
+    """Render the legacy text glyph for a control, vertically centred on y_center."""
+    g = _SYMBOL_GLYPHS.get(symbol or '')
+    if not g:
+        return
     context.push()
     context.stroke_color = Color('transparent')
-    context.stroke_width = 0
-    context.fill_color = Color('Black')
-    s = size
-    cy = y + s / 2
-    if kind in ('press', 'dot', 'stage1', 'stage2'):
-        r = s * 0.42
-        context.circle((x + s / 2, cy), (x + s / 2 + r, cy))
-    elif kind == 'up':
-        context.polygon([(x, y + s), (x + s, y + s), (x + s / 2, y)])
-    elif kind == 'down':
-        context.polygon([(x, y), (x + s, y), (x + s / 2, y + s)])
-    elif kind == 'left':
-        context.polygon([(x + s, y), (x + s, y + s), (x, cy)])
-    elif kind == 'right':
-        context.polygon([(x, y), (x, y + s), (x + s, cy)])
+    context.fill_color = Color('#333333')
+    context.font = getFontPath('Bold', 'Normal')
+    context.font_size = 28
+    context.text(x=int(x), y=int(y_center + 10), body=g)
     context.pop()
 
 
@@ -1347,25 +1356,29 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     rows_h = h - header_h
     n = max(len(rows), 1)
     row_h = rows_h / n
-    sym_size = int(min(30, row_h * 0.5))
     for i, row in enumerate(rows):
         ry = rows_top + i * row_h
+        row_cy = ry + row_h / 2
         if i > 0:
             context.push()
             context.stroke_color = Color('#dddddd')
             context.stroke_width = 1
             context.line((x + 1, ry), (x + w - 1, ry))
             context.pop()
-        if row.get('symbol'):
-            _drawControlSymbol(context, x + 14, int(ry + (row_h - sym_size) / 2), row['symbol'], sym_size)
+        # Column layout: [symbol glyph][number][binding text]
+        sym_w = _symbolColumnWidth(row.get('symbol'))
+        if sym_w:
+            _drawControlSymbol(context, x + 16, row_cy, row['symbol'])
+        col_x = x + 16 + sym_w
         if row.get('number') is not None:
             context.push()
             context.stroke_color = Color('transparent')
             context.fill_color = Color('#555555')
             context.font = getFontPath('Bold', 'Normal')
             context.font_size = 24
-            context.text(x=int(x + 52), y=int(ry + row_h / 2 + 8), body=str(row['number']))
+            context.text(x=int(col_x), y=int(row_cy + 8), body=str(row['number']))
             context.pop()
+            col_x += 56
         # Binding text - reuses the proven layoutText fitting + per-group colours
         binds = row.get('binds') or []
         if binds:
@@ -1374,9 +1387,9 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
                 grp = b.get('group', 'General')
                 texts.append({'Text': b.get('name', ''), 'Group': grp,
                               'Style': groupStyles.get(grp, groupStyles['General'])})
-            gutter = 100
-            rect = {'x': int(x + gutter), 'y': int(ry + 6),
-                    'width': int(w - gutter - 14), 'height': int(row_h - 12)}
+            tx = col_x + 10
+            rect = {'x': int(tx), 'y': int(ry + 6),
+                    'width': int(x + w - tx - 14), 'height': int(row_h - 12)}
             laid = layoutText(sourceImg, context, texts, rect, biggestFontSize)
             for t in laid:
                 context.push()

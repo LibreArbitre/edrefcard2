@@ -176,8 +176,9 @@ function renderPanel(){
     });
     card.innerHTML=`<div class="hd">
         <input type="text" data-i="${i}" data-k="label" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label (A1...)">
-        <button class="ghost" data-setbtn="${i}">${b.button_xy?'● btn':'Set btn'}</button>
-        <button class="del" data-delbox="${i}">Suppr</button>
+        <button class="ghost" data-setbtn="${i}" title="Placer/déplacer le point du bouton">${b.button_xy?'● btn':'Set btn'}</button>
+        ${b.button_xy?`<button class="ghost" data-clrbtn="${i}" title="Retirer seulement le point rouge">✕ pt</button>`:''}
+        <button class="del" data-delbox="${i}" title="Supprimer toute la box">Suppr box</button>
       </div>
       ${rowsHtml}
       <button class="ghost" data-addrow="${i}" style="font-size:.78rem;padding:3px 8px">+ ligne</button>`;
@@ -197,7 +198,8 @@ function bindPanel(){
     });
   });
   $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Clique le bouton sur l'image…";}));
-  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();state.boxes.splice(+b.dataset.delbox,1);sel=-1;renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point retiré.";renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Supprimer toute la box "'+(state.boxes[i].label||'box '+(i+1))+'" ?'))return;state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
   $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();}));
   $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);state.boxes[i].rows.splice(j,1);renderPanel();}));
 }

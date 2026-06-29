@@ -89,11 +89,28 @@ function loadExisting(){
   try{
     const m = JSON.parse(EXISTING.mapping_json);
     state = Object.assign({title:"",image:null,width:0,height:0,boxes:[]}, m);
+    state.width = state.width || EXISTING.image_width || 0;
+    state.height = state.height || EXISTING.image_height || 0;
     $("#title").value = state.title||EXISTING.device_name||"";
     $("#imgname").value = state.image||"";
     $("#deviceid").value = EXISTING.device_id||"";
-    if(state.image){ img.src = "/configs/controllers/"+state.image+".jpg"; }
+    if(state.image){ loadImage(state.image); }
   }catch(e){ console.warn(e); }
+}
+
+// Load the clean image, trying the editable volume first, then the baked res/ fallback.
+function loadImage(slug){
+  img.onload = ()=>{
+    if(!state.width) state.width = img.naturalWidth;
+    if(!state.height) state.height = img.naturalHeight;
+    renderStage(); renderPanel();
+  };
+  img.onerror = ()=>{
+    if(img.dataset.fb){ $("#status").textContent = "Image introuvable: "+slug; renderPanel(); return; }
+    img.dataset.fb = "1"; img.src = "/res/"+slug+".jpg";
+  };
+  delete img.dataset.fb;
+  img.src = "/configs/controllers/"+slug+".jpg";
 }
 
 function computeScale(){ scale = img.clientWidth / (state.width||img.naturalWidth||1); }
@@ -225,7 +242,7 @@ $("#btnsave").addEventListener('click',async()=>{
 
 window.addEventListener('resize',renderStage);
 loadExisting();
-if(state.image){ img.onload=renderStage; } else { renderStage(); }
+if(!state.image){ renderStage(); renderPanel(); }
 </script>
 </body>
 </html>

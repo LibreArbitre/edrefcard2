@@ -5,7 +5,9 @@
 {% block content %}
 <div class="page-header">
     <h1>🎛️ Controllers</h1>
-    <p>Data-driven mappings and the unknown-device triage queue.</p>
+    <p>Vocabulaire : un <strong>device</strong> = un hardware ID vu dans un .binds ; un <strong>controller</strong> = la carte rendue.
+       Deux moteurs : <span class="badge badge-success">data-driven</span> (table éditable, photo propre + boxes)
+       et <span class="badge badge-muted">legacy</span> (artwork baké + coordonnées en dur dans bindingsData.py).</p>
 </div>
 
 <div class="card">
@@ -104,4 +106,47 @@
     <p style="color:var(--text-secondary)">No mappings yet.</p>
     {% endif %}
 </div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Legacy controllers ({{ legacy|length }})</h2>
+        <input type="search" id="legacyfilter" placeholder="Filtrer..." style="width:220px">
+    </div>
+    <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:0">
+        Artwork et coordonnées bakés dans <code>bindingsData.py</code> : non éditables ici.
+        Pour migrer l'un d'eux en data-driven, crée un mapping pour ses device IDs dans l'éditeur.
+    </p>
+    <table id="legacytable">
+        <thead>
+            <tr>
+                <th>Controller</th>
+                <th>Template</th>
+                <th>Device IDs</th>
+                <th>Engine</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in legacy %}
+            <tr>
+                <td>{{ l.key }}</td>
+                <td>{{ l.template }}</td>
+                <td>{% for did in l.device_ids %}<code>{{ did }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+                <td>
+                    <span class="badge badge-muted">legacy</span>
+                    {% if l.dd_overlap %}<span class="badge badge-success" title="Un mapping data-driven couvre aussi un de ses device IDs">+ data-driven</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.getElementById('legacyfilter').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#legacytable tbody tr').forEach(tr => {
+        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+</script>
 {% endblock %}

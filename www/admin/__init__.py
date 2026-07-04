@@ -875,7 +875,20 @@ def controllers():
         })
     unknown = [u for u in database.list_unknown_devices()
                if _find_mapping_for_device(u['device_id']) is None]
-    return render_template('admin/controllers.html', mappings=mappings, unknown=unknown)
+    # Legacy controllers: baked artwork + coords in bindingsData.py (read-only
+    # here; migrating one to data-driven = create a mapping for its device IDs)
+    from scripts.bindingsData import supportedDevices
+    dd_ids = {did for m in mappings for did in m['device_ids']}
+    legacy = []
+    for key, sd in sorted(supportedDevices.items()):
+        ids = [h.split('::')[0] for h in sd.get('HandledDevices', [])]
+        legacy.append({
+            'key': key, 'template': sd.get('Template'),
+            'device_ids': sorted(set(ids)),
+            'dd_overlap': any(i in dd_ids for i in ids),
+        })
+    return render_template('admin/controllers.html', mappings=mappings,
+                           unknown=unknown, legacy=legacy)
 
 
 @admin_bp.route('/controllers/attach', methods=['POST'])

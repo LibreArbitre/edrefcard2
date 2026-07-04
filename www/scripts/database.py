@@ -77,6 +77,15 @@ def init_db(db_path):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             
+            -- Unknown controllers seen at generation time (admin triage queue)
+            CREATE TABLE IF NOT EXISTS unknown_device_sightings (
+                device_id TEXT PRIMARY KEY,
+                sighting_count INTEGER NOT NULL DEFAULT 1,
+                last_run_id TEXT,
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_config_created ON configurations(created_at);
             CREATE INDEX IF NOT EXISTS idx_config_public ON configurations(is_public);
@@ -518,3 +527,33 @@ def get_all_controller_mappings():
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM controller_mappings").fetchall()
         return [dict(r) for r in rows]
+
+
+def record_unknown_device(device_id, run_id):
+    """Upsert a sighting of an unmapped controller (admin triage queue)."""
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO unknown_device_sightings (device_id, last_run_id)
+            VALUES (?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                sighting_count = sighting_count + 1,
+                last_run_id = excluded.last_run_id,
+                last_seen = CURRENT_TIMESTAMP
+        """, (device_id, run_id))
+
+
+def list_unknown_devices():
+    """Return unknown-device sightings, most requested first."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM unknown_device_sightings
+            ORDER BY sighting_count DESC, last_seen DESC
+        """).fetchall()
+        return [dict(r) for r in rows]
+
+
+def dismiss_unknown_device(device_id):
+    """Remove a device from the unknown-sightings queue."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM unknown_device_sightings WHERE device_id = ?",
+                     (device_id,))

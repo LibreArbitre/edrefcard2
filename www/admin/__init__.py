@@ -838,15 +838,185 @@ def maintenance_toggle():
 
 # ============== Controller mapping editor (feature B1) ==============
 
+def _find_mapping_for_device(device_id):
+    """Find a controller mapping by primary device_id, falling back to the
+    attached device_ids list inside mapping_json (same hardware, different
+    hardware ID: country / colour / revision variants)."""
+    import json
+    row = database.get_controller_mapping_by_device_id(device_id)
+    if row:
+        return row
+    for r in database.get_all_controller_mappings():
+        try:
+            if device_id in (json.loads(r['mapping_json']).get('device_ids') or []):
+                return r
+        except Exception:
+            continue
+    return None
+
+
+@admin_bp.route('/controllers')
+@require_admin
+def controllers():
+    """Control tower: existing data-driven mappings + unknown-device queue."""
+    import json
+    mappings = []
+    for r in database.get_all_controller_mappings():
+        try:
+            m = json.loads(r['mapping_json'])
+        except Exception:
+            m = {}
+        mappings.append({
+            'id': r['id'], 'device_id': r['device_id'],
+            'device_name': r['device_name'],
+            'device_ids': m.get('device_ids') or [r['device_id']],
+            'image': m.get('image'), 'box_count': len(m.get('boxes') or []),
+            'updated_at': r.get('updated_at'),
+        })
+    unknown = [u for u in database.list_unknown_devices()
+               if _find_mapping_for_device(u['device_id']) is None]
+    # Legacy controllers: baked artwork + coords in bindingsData.py (read-only
+    # here; migrating one to data-driven = create a mapping for its device IDs)
+    from scripts.bindingsData import supportedDevices
+    dd_ids = {did for m in mappings for did in m['device_ids']}
+    legacy = []
+    for key, sd in sorted(supportedDevices.items()):
+        ids = [h.split('::')[0] for h in sd.get('HandledDevices', [])]
+        legacy.append({
+            'key': key, 'template': sd.get('Template'),
+            'device_ids': sorted(set(ids)),
+            'dd_overlap': any(i in dd_ids for i in ids),
+        })
+    return render_template('admin/controllers.html', mappings=mappings,
+                           unknown=unknown, legacy=legacy)
+
+
+@admin_bp.route('/controllers/attach', methods=['POST'])
+@require_admin
+def controllers_attach():
+    """Attach an unknown hardware ID to an existing mapping (variant IDs)."""
+    import json
+    device_id = (request.form.get('device_id') or '').strip()
+    mapping_id = request.form.get('mapping_id')
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not device_id or not row:
+        flash('Device ID et mapping requis.', 'error')
+        return redirect(url_for('admin.controllers'))
+    m = json.loads(row['mapping_json'])
+    ids = m.get('device_ids') or [row['device_id']]
+    if device_id not in ids:
+        ids.append(device_id)
+    m['device_ids'] = ids
+    database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
+    database.dismiss_unknown_device(device_id)
+    flash(f'{device_id} rattaché à "{row["device_name"]}".', 'success')
+    return redirect(url_for('admin.controllers'))
+
+
+@admin_bp.route('/controllers/dismiss', methods=['POST'])
+@require_admin
+def controllers_dismiss():
+    """Drop a device from the unknown queue (not a real controller, etc.)."""
+    device_id = (request.form.get('device_id') or '').strip()
+    if device_id:
+        database.dismiss_unknown_device(device_id)
+        flash(f'{device_id} ignoré.', 'success')
+    return redirect(url_for('admin.controllers'))
+
+
+@admin_bp.route('/controllers/duplicate', methods=['POST'])
+@require_admin
+def controllers_duplicate():
+    """Duplicate a mapping under a new device ID (L/R or extended variants)."""
+    import json
+    mapping_id = request.form.get('mapping_id')
+    new_device_id = (request.form.get('new_device_id') or '').strip()
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not row or not new_device_id:
+        flash('Mapping source et nouveau Device ID requis.', 'error')
+        return redirect(url_for('admin.controllers'))
+    if _find_mapping_for_device(new_device_id):
+        flash(f'{new_device_id} est déjà couvert par un mapping.', 'error')
+        return redirect(url_for('admin.controllers'))
+    m = json.loads(row['mapping_json'])
+    m['device_ids'] = [new_device_id]
+    m['title'] = f"{m.get('title') or row['device_name']} (copy)"
+    mid = database.create_controller_mapping(
+        new_device_id, m['title'], row['template_name'], row['image_filename'],
+        row['image_width'], row['image_height'], json.dumps(m))
+    database.dismiss_unknown_device(new_device_id)
+    flash(f'Mapping dupliqué (id {mid}). Ouvre-le pour ajuster.', 'success')
+    return redirect(url_for('admin.mapping_editor', device=new_device_id))
+
+
+def _read_binds_xml(run_id):
+    """Return the raw .binds XML of an uploaded config, or None."""
+    try:
+        path = Config(run_id).pathWithSuffix('.binds')
+        with open(str(path), 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception:
+        return None
+
+
 @admin_bp.route('/mapping-editor')
 @require_admin
 def mapping_editor():
-    """Interactive click-to-place editor for data-driven controller mappings."""
+    """Interactive click-to-place editor for data-driven controller mappings.
+
+    ?device=<ID> loads the stored mapping for that device.
+    ?device=<ID>&from=<run_id> semi-automates the work from a real .binds:
+      - no stored mapping yet -> auto-scaffold a full draft (grouped boxes,
+        provisional two-column layout) from every input used in that file;
+      - stored mapping exists -> enrich it with the file's not-yet-covered
+        inputs, appended as an UNASSIGNED box (VIRPIL config variance).
+    """
     import json
+    from scripts import scaffold
     device_id = request.args.get('device')
-    existing = database.get_controller_mapping_by_device_id(device_id) if device_id else None
+    from_id = request.args.get('from')
+    existing = _find_mapping_for_device(device_id) if device_id else None
+    draft_note = ''
+
+    if device_id and from_id:
+        xml = _read_binds_xml(from_id)
+        if xml is None:
+            draft_note = f'Fichier .binds introuvable pour "{from_id}"'
+        elif existing is None:
+            # Scaffold a brand-new draft mapping from the .binds
+            try:
+                draft = scaffold.scaffold_mapping_from_binds(xml, device_id)
+                existing = {'device_id': device_id, 'device_name': '',
+                            'mapping_json': json.dumps(draft),
+                            'image_width': draft['width'], 'image_height': draft['height']}
+                draft_note = (f'Draft scaffolded depuis "{from_id}": '
+                              f'{len(draft["boxes"])} boxes (non sauvegardé)')
+            except Exception as e:
+                draft_note = f'Scaffold impossible: {e}'
+        else:
+            # Enrichment: surface inputs used in this .binds but absent from the mapping
+            try:
+                m = json.loads(existing['mapping_json'])
+                keys = scaffold.extract_device_keys(xml, device_id)
+                missing = scaffold.missing_keys(m, keys)
+                if missing:
+                    m['boxes'] = m['boxes'] + [
+                        {'label': 'UNASSIGNED', 'box_xy': [70, 70],
+                         'box_wh': [1380, 40 + 72 * len(missing)], 'button_xy': None,
+                         'rows': [{'symbol': None, 'number': None, 'joy': k, 'type': 'Digital'}
+                                  for k in missing]}]
+                    existing = dict(existing)
+                    existing['mapping_json'] = json.dumps(m)
+                    draft_note = (f'{len(missing)} inputs de "{from_id}" absents du mapping, '
+                                  f'ajoutés en box UNASSIGNED (non sauvegardé)')
+                else:
+                    draft_note = f'Rien à enrichir: "{from_id}" est déjà couvert par le mapping'
+            except Exception as e:
+                draft_note = f'Enrichissement impossible: {e}'
+
     existing_json = json.dumps(existing) if existing else 'null'
-    return render_template('admin/mapping_editor.html', existing_json=existing_json)
+    return render_template('admin/mapping_editor.html', existing_json=existing_json,
+                           draft_note=draft_note)
 
 
 @admin_bp.route('/mapping-editor/upload', methods=['POST'])

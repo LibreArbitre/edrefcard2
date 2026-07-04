@@ -64,6 +64,25 @@
   <div id="panel">
     <h2>Boxes</h2>
     <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.</div>
+    {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
+    <details id="scaffolder"><summary class="small">Scaffold vierge (depuis la doc, sans .binds)</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
+        <label class="small">Boutons <input type="number" id="sc_btn" value="16" min="0" max="128" style="width:64px"></label>
+        <label class="small">POVs <input type="number" id="sc_pov" value="1" min="0" max="4" style="width:52px"></label>
+      </div>
+      <div class="small" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        Axes :
+        <label><input type="checkbox" class="sc_ax" value="X" checked>X</label>
+        <label><input type="checkbox" class="sc_ax" value="Y" checked>Y</label>
+        <label><input type="checkbox" class="sc_ax" value="Z">Z</label>
+        <label><input type="checkbox" class="sc_ax" value="RX">RX</label>
+        <label><input type="checkbox" class="sc_ax" value="RY">RY</label>
+        <label><input type="checkbox" class="sc_ax" value="RZ">RZ</label>
+        <label><input type="checkbox" class="sc_ax" value="U">U</label>
+        <label><input type="checkbox" class="sc_ax" value="V">V</label>
+      </div>
+      <button id="btnscaffold" class="ghost" style="margin-bottom:8px">Générer les boxes</button>
+    </details>
     <div id="boxes"></div>
     <details><summary class="small">mapping_json</summary><textarea id="json" readonly></textarea></details>
     <div id="preview"></div>
@@ -204,7 +223,44 @@ function bindPanel(){
   $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);state.boxes[i].rows.splice(j,1);renderPanel();}));
 }
 
-function mapping(){ return {title:$("#title").value, image:state.image, styling:"Group", boxes:state.boxes}; }
+function mapping(){
+  const did=$("#deviceid").value.trim();
+  return {title:$("#title").value, image:state.image, device_ids:did?[did]:[],
+          styling:"Group", width:state.width, height:state.height, boxes:state.boxes};
+}
+
+// Blank scaffold: same grouping/layout heuristics as scripts/scaffold.py,
+// for proactive mappings built from manufacturer docs (no .binds yet).
+$("#btnscaffold").addEventListener('click',()=>{
+  const nb=+$("#sc_btn").value||0, np=+$("#sc_pov").value||0;
+  const axes=[...document.querySelectorAll('.sc_ax:checked')].map(c=>c.value);
+  const W=state.width||4400, H=state.height||2560, k=W/4400;
+  const colW=Math.round(W*0.314), colX=[Math.round(W*0.016), W-colW-Math.round(W*0.016)];
+  const boxes=[];
+  for(let s=1;s<=nb;s+=6){
+    const e=Math.min(nb,s+5);
+    boxes.push({label:e>s?`BTN ${s}-${e}`:`BTN ${s}`,
+      rows:Array.from({length:e-s+1},(_,q)=>({symbol:'press',number:String(s+q),joy:'Joy_'+(s+q),type:'Digital'}))});
+  }
+  for(let p=1;p<=np;p++)
+    boxes.push({label:'POV'+p, rows:['Up','Right','Down','Left'].map(d=>({symbol:d.toLowerCase(),number:null,joy:`Joy_POV${p}${d}`,type:'Digital'}))});
+  const albl={Z:'AXIS Z (twist)',RX:'AXIS RX',RY:'AXIS RY',RZ:'AXIS RZ',U:'AXIS U (slider)',V:'AXIS V (dial)'};
+  const stick=['X','Y'].filter(a=>axes.includes(a));
+  if(stick.length) boxes.push({label:'STICK', rows:stick.map(a=>({symbol:null,number:a,joy:`Joy_${a}Axis`,type:'Analogue'}))});
+  axes.filter(a=>a!=='X'&&a!=='Y').forEach(a=>
+    boxes.push({label:albl[a]||('AXIS '+a),rows:[{symbol:null,number:a,joy:`Joy_${a}Axis`,type:'Analogue'}]}));
+  let col=0,y=Math.round(H*0.08);
+  boxes.forEach(b=>{
+    const h=Math.round((40+72*Math.max(1,b.rows.length))*k);
+    if(col===0 && y+h>H-Math.round(100*k)){col=1;y=Math.round(H*0.08);}
+    b.box_xy=[colX[Math.min(col,1)],y]; b.box_wh=[colW,h]; b.button_xy=null;
+    y+=h+Math.round(60*k);
+  });
+  if(!state.width){state.width=W;state.height=H;}
+  state.boxes=state.boxes.concat(boxes);
+  sel=-1; renderPanel(); renderStage();
+  $("#status").textContent=boxes.length+" boxes générées.";
+});
 
 $("#btnaddbox").addEventListener('click',()=>{
   if(!state.image){ alert("Upload d'abord une image."); return; }
@@ -219,6 +275,16 @@ $("#btnupload").addEventListener('click',async()=>{
   $("#status").textContent="Upload…";
   const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
   const j=await r.json(); if(j.error){$("#status").textContent="Erreur: "+j.error;return;}
+  // Rescale existing boxes (e.g. a scaffolded draft on the nominal canvas)
+  // proportionally onto the real image dimensions.
+  if(state.boxes.length && state.width && state.height && (state.width!==j.width || state.height!==j.height)){
+    const fx=j.width/state.width, fy=j.height/state.height;
+    state.boxes.forEach(b=>{
+      b.box_xy=[Math.round(b.box_xy[0]*fx),Math.round(b.box_xy[1]*fy)];
+      b.box_wh=[Math.round(b.box_wh[0]*fx),Math.round(b.box_wh[1]*fy)];
+      if(b.button_xy) b.button_xy=[Math.round(b.button_xy[0]*fx),Math.round(b.button_xy[1]*fy)];
+    });
+  }
   state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
   img.onload=()=>{renderStage();}; img.src=j.url+'?t='+Date.now();
   $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;

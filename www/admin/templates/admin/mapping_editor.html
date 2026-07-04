@@ -72,8 +72,17 @@
   </div>
   <div id="panel">
     <h2>Boxes</h2>
-    <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.<br>
-      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; flèches = bouger la box (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</div>
+    <div class="hint" id="hint">
+      <span style="float:right;white-space:nowrap">
+        <a href="#" data-lang="en">EN</a> &middot; <a href="#" data-lang="fr">FR</a> &middot; <a href="#" data-lang="es">ES</a>
+      </span>
+      <span id="hint_en">1) Upload a clean photo. 2) + Box, drag/resize it. 3) Add rows (symbol, number, Joy). 4) "Set btn" then click the physical button on the photo. 5) Preview / Save.<br>
+      <b>Shortcuts</b>: Ctrl+wheel = zoom &middot; Space+drag = pan &middot; arrows = move selected box (Shift = x10) &middot; Del = delete &middot; Ctrl+D = duplicate &middot; Ctrl+Z/Y = undo/redo.</span>
+      <span id="hint_fr" hidden>1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set btn" puis clique le bouton sur l'image. 5) Preview / Save.<br>
+      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; flèches = bouger la box (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</span>
+      <span id="hint_es" hidden>1) Sube una foto limpia. 2) + Box, arrastra/redimensiona. 3) A&ntilde;ade filas (s&iacute;mbolo, n&uacute;mero, Joy). 4) "Set btn" y haz clic en el bot&oacute;n f&iacute;sico sobre la foto. 5) Preview / Save.<br>
+      <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; flechas = mover la box (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer.</span>
+    </div>
     {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
     <details id="scaffolder"><summary class="small">Scaffold vierge (depuis la doc, sans .binds)</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
@@ -429,6 +438,15 @@ document.addEventListener('keydown',e=>{
   if(mv){ e.preventDefault(); snapshot('arrow'); b.box_xy=[Math.max(0,b.box_xy[0]+mv[0]),Math.max(0,b.box_xy[1]+mv[1])]; renderStage(); }
 });
 document.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; wrap.classList.remove('panning'); }});
+
+// hint language toggle (mappers are mostly English-speaking; EN by default)
+function setHintLang(l){
+  ['en','fr','es'].forEach(x=>{ $("#hint_"+x).hidden = (x!==l); });
+  document.querySelectorAll('#hint [data-lang]').forEach(a=>a.style.fontWeight = a.dataset.lang===l?'700':'400');
+  try{ localStorage.setItem('mapedit:lang', l); }catch(e){}
+}
+document.querySelectorAll('#hint [data-lang]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();setHintLang(a.dataset.lang);}));
+setHintLang((()=>{ try{ return localStorage.getItem('mapedit:lang')||'en'; }catch(e){ return 'en'; } })());
 
 window.addEventListener('beforeunload',e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
 ["#title","#deviceid"].forEach(s=>$(s).addEventListener('input',autosave));

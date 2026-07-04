@@ -90,10 +90,12 @@
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
                            href="{{ url_for('admin.mapping_editor', device=m.device_id) }}">Ouvrir</a>
-                        <form method="post" action="{{ url_for('admin.controllers_duplicate') }}" style="display:flex;gap:0.25rem">
+                        <form method="post" action="{{ url_for('admin.controllers_duplicate') }}" style="display:flex;gap:0.25rem;align-items:center">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">
                             <input type="text" name="new_device_id" placeholder="Nouveau Device ID"
                                    style="width:150px;padding:0.25rem 0.5rem;font-size:0.8rem" required>
+                            <label style="font-size:0.75rem;white-space:nowrap" title="Variante L/R : photo retournée + coordonnées en miroir automatiques">
+                                <input type="checkbox" name="mirror" value="1"> miroir</label>
                             <button class="btn btn-outline btn-sm" type="submit">Dupliquer</button>
                         </form>
                     </div>

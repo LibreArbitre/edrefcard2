@@ -49,30 +49,30 @@
 <header>
   <h1>Mapping editor</h1>
   <input type="file" id="file" accept="image/*">
-  <input type="text" id="imgname" placeholder="image name (slug)" title="Nom de l'image (slug)">
+  <input type="text" id="imgname" placeholder="image name (slug)" title="Image name (slug)">
   <button id="btnupload" class="ghost">Upload image</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
-  <input type="text" id="title" placeholder="Titre (ex. VIRPIL AEROMAX R)">
-  <input type="text" id="deviceid" placeholder="Device ID (ex. 231D0F0F)">
+  <input type="text" id="title" placeholder="Title (e.g. VIRPIL AEROMAX R)">
+  <input type="text" id="deviceid" placeholder="Device ID (e.g. 231D0F0F)">
   <button id="btnaddbox" class="ghost">+ Box</button>
-  <select id="stamp" title="Mode rafale : choisis un tampon puis clique les contrôles physiques sur la photo (1 clic = 1 box ancrée)">
-    <option value="">Tampon: off</option>
-    <option value="btn">Bouton</option>
-    <option value="hat4">Hat 4 dir</option>
-    <option value="hat5">Hat 4+push</option>
+  <select id="stamp" title="Burst mode: pick a stamp then click each physical control on the photo (1 click = 1 anchored box)">
+    <option value="">Stamp: off</option>
+    <option value="btn">Button</option>
+    <option value="hat4">Hat 4-way</option>
+    <option value="hat5">Hat 4-way + push</option>
     <option value="pov">POV</option>
-    <option value="trigger">Trigger 2 étages</option>
-    <option value="axis">Axe</option>
+    <option value="trigger">2-stage trigger</option>
+    <option value="axis">Axis</option>
   </select>
-  <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Prochain Joy_N (auto-incrémenté)">
-  <input type="number" id="stamppov" value="1" min="1" style="width:44px" title="Prochain POV">
-  <button id="btnarrange" class="ghost" title="Auto-ranger les boxes en 2 colonnes triées par position du bouton (aucun croisement de traits)">Ranger</button>
+  <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Next Joy_N (auto-incremented)">
+  <input type="number" id="stamppov" value="1" min="1" style="width:44px" title="Next POV">
+  <button id="btnarrange" class="ghost" title="Auto-arrange boxes into 2 columns sorted by button position (no leader-line crossings)">Arrange</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
-  <button id="zoomout" class="ghost" title="Zoom - (Ctrl+molette)">&minus;</button>
-  <button id="zoomfit" class="ghost" title="Ajuster à la fenêtre">Fit</button>
-  <button id="zoomin" class="ghost" title="Zoom + (Ctrl+molette)">+</button>
-  <button id="btnundo" class="ghost" title="Annuler (Ctrl+Z)">&#8630;</button>
-  <button id="btnredo" class="ghost" title="Rétablir (Ctrl+Y)">&#8631;</button>
+  <button id="zoomout" class="ghost" title="Zoom out (Ctrl+wheel)">&minus;</button>
+  <button id="zoomfit" class="ghost" title="Fit to window">Fit</button>
+  <button id="zoomin" class="ghost" title="Zoom in (Ctrl+wheel)">+</button>
+  <button id="btnundo" class="ghost" title="Undo (Ctrl+Z)">&#8630;</button>
+  <button id="btnredo" class="ghost" title="Redo (Ctrl+Y)">&#8631;</button>
   <button id="btnpreview" class="ghost">Preview</button>
   <button id="btnsave" class="primary">Save</button>
   <span id="status"></span>
@@ -96,13 +96,13 @@
       <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; flechas = mover la box (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer.</span>
     </div>
     {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
-    <details id="scaffolder"><summary class="small">Scaffold vierge (depuis la doc, sans .binds)</summary>
+    <details id="scaffolder"><summary class="small">Blank scaffold (from manufacturer docs, no .binds)</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
-        <label class="small">Boutons <input type="number" id="sc_btn" value="16" min="0" max="128" style="width:64px"></label>
+        <label class="small">Buttons <input type="number" id="sc_btn" value="16" min="0" max="128" style="width:64px"></label>
         <label class="small">POVs <input type="number" id="sc_pov" value="1" min="0" max="4" style="width:52px"></label>
       </div>
       <div class="small" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        Axes :
+        Axes:
         <label><input type="checkbox" class="sc_ax" value="X" checked>X</label>
         <label><input type="checkbox" class="sc_ax" value="Y" checked>Y</label>
         <label><input type="checkbox" class="sc_ax" value="Z">Z</label>
@@ -112,7 +112,7 @@
         <label><input type="checkbox" class="sc_ax" value="U">U</label>
         <label><input type="checkbox" class="sc_ax" value="V">V</label>
       </div>
-      <button id="btnscaffold" class="ghost" style="margin-bottom:8px">Générer les boxes</button>
+      <button id="btnscaffold" class="ghost" style="margin-bottom:8px">Generate boxes</button>
     </details>
     <div id="boxes"></div>
     <details><summary class="small">mapping_json</summary><textarea id="json" readonly></textarea></details>
@@ -202,7 +202,7 @@ function loadImage(slug){
     applyZoom(); renderStage(); renderPanel();
   };
   img.onerror = ()=>{
-    if(img.dataset.fb){ $("#status").textContent = "Image introuvable: "+slug; renderPanel(); return; }
+    if(img.dataset.fb){ $("#status").textContent = "Image not found: "+slug; renderPanel(); return; }
     img.dataset.fb = "1"; img.src = "/res/"+slug+".jpg";
   };
   delete img.dataset.fb;
@@ -273,7 +273,7 @@ stage.addEventListener('click',e=>{
   if(setBtnFor>=0){
     snapshot('btn');
     state.boxes[setBtnFor].button_xy=[px,py];
-    setBtnFor=-1; $("#status").textContent="Bouton placé."; renderStage(); renderPanel();
+    setBtnFor=-1; $("#status").textContent="Button point set."; renderStage(); renderPanel();
     return;
   }
   const st=$("#stamp").value;
@@ -301,7 +301,7 @@ function stampAt(kind,px,py){
   $("#stampnum").value=n; $("#stamppov").value=p;
   sel=state.boxes.length-1;
   renderPanel(); renderStage();
-  $("#status").textContent=label+" ancré ("+px+","+py+"). Clique le contrôle suivant, ou Ranger à la fin.";
+  $("#status").textContent=label+" anchored ("+px+","+py+"). Click the next control, then Arrange.";
 }
 
 // Auto-arrange: two margin columns, each sorted by the anchor's Y, so leader
@@ -324,7 +324,7 @@ $("#btnarrange").addEventListener('click',()=>{
     });
   });
   sel=-1; renderPanel(); renderStage();
-  $("#status").textContent="Rangé : "+left.length+" à gauche, "+right.length+" à droite.";
+  $("#status").textContent="Arranged: "+left.length+" left, "+right.length+" right.";
 });
 
 function renderPanel(){
@@ -342,12 +342,12 @@ function renderPanel(){
     });
     card.innerHTML=`<div class="hd">
         <input type="text" data-i="${i}" data-k="label" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label (A1...)">
-        <button class="ghost" data-setbtn="${i}" title="Placer/déplacer le point du bouton">${b.button_xy?'● btn':'Set btn'}</button>
-        ${b.button_xy?`<button class="ghost" data-clrbtn="${i}" title="Retirer seulement le point rouge">✕ pt</button>`:''}
-        <button class="del" data-delbox="${i}" title="Supprimer toute la box">Suppr box</button>
+        <button class="ghost" data-setbtn="${i}" title="Set/move the button point">${b.button_xy?'● btn':'Set btn'}</button>
+        ${b.button_xy?`<button class="ghost" data-clrbtn="${i}" title="Remove only the red point">✕ pt</button>`:''}
+        <button class="del" data-delbox="${i}" title="Delete the whole box">Del box</button>
       </div>
       ${rowsHtml}
-      <button class="ghost" data-addrow="${i}" style="font-size:.78rem;padding:3px 8px">+ ligne</button>`;
+      <button class="ghost" data-addrow="${i}" style="font-size:.78rem;padding:3px 8px">+ row</button>`;
     card.addEventListener('click',()=>{ if(sel!==i){sel=i; renderPanel(); renderStage();} });
     c.appendChild(card);
   });
@@ -364,9 +364,9 @@ function bindPanel(){
       renderStage();
     });
   });
-  $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Clique le bouton sur l'image…";}));
-  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();snapshot('clrbtn');state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point retiré.";renderPanel();renderStage();}));
-  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Supprimer toute la box "'+(state.boxes[i].label||'box '+(i+1))+'" ? (Ctrl+Z pour annuler)'))return;snapshot('delbox');state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Click the button on the photo…";}));
+  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();snapshot('clrbtn');state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point removed.";renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Delete the whole box "'+(state.boxes[i].label||'box '+(i+1))+'"? (Ctrl+Z to undo)'))return;snapshot('delbox');state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
   $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;snapshot('addrow');(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();renderStage();}));
   $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);snapshot('delrow');state.boxes[i].rows.splice(j,1);renderPanel();renderStage();}));
 }
@@ -408,11 +408,11 @@ $("#btnscaffold").addEventListener('click',()=>{
   snapshot('scaffold');
   state.boxes=state.boxes.concat(boxes);
   sel=-1; renderPanel(); renderStage();
-  $("#status").textContent=boxes.length+" boxes générées.";
+  $("#status").textContent=boxes.length+" boxes generated.";
 });
 
 $("#btnaddbox").addEventListener('click',()=>{
-  if(!state.image){ alert("Upload d'abord une image."); return; }
+  if(!state.image){ alert("Upload an image first."); return; }
   snapshot('addbox');
   const w=Math.round(state.width*0.28);
   state.boxes.push({label:'A'+(state.boxes.length+1), box_xy:[40,40], box_wh:[w,160], button_xy:null, rows:[]});
@@ -420,11 +420,11 @@ $("#btnaddbox").addEventListener('click',()=>{
 });
 
 $("#btnupload").addEventListener('click',async()=>{
-  const f=$("#file").files[0]; if(!f){alert("Choisis un fichier image.");return;}
+  const f=$("#file").files[0]; if(!f){alert("Pick an image file.");return;}
   const fd=new FormData(); fd.append('image',f); fd.append('name',$("#imgname").value||f.name);
   $("#status").textContent="Upload…";
   const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
-  const j=await r.json(); if(j.error){$("#status").textContent="Erreur: "+j.error;return;}
+  const j=await r.json(); if(j.error){$("#status").textContent="Error: "+j.error;return;}
   // Rescale existing boxes (e.g. a scaffolded draft on the nominal canvas)
   // proportionally onto the real image dimensions.
   if(state.boxes.length && state.width && state.height && (state.width!==j.width || state.height!==j.height)){
@@ -442,21 +442,21 @@ $("#btnupload").addEventListener('click',async()=>{
 });
 
 $("#btnpreview").addEventListener('click',async()=>{
-  if(!state.image){alert("Pas d'image.");return;}
-  $("#status").textContent="Rendu…";
+  if(!state.image){alert("No image.");return;}
+  $("#status").textContent="Rendering…";
   const r=await fetch('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping()})});
-  const j=await r.json(); if(j.error){$("#status").textContent="Erreur preview: "+j.error;return;}
+  const j=await r.json(); if(j.error){$("#status").textContent="Preview error: "+j.error;return;}
   $("#preview").innerHTML='<h2>Preview</h2><img src="'+j.url+'?t='+Date.now()+'">';
   $("#status").textContent="Preview OK";
 });
 
 $("#btnsave").addEventListener('click',async()=>{
   const did=$("#deviceid").value.trim();
-  if(!did){alert("Renseigne un Device ID.");return;}
-  if(!state.image){alert("Pas d'image.");return;}
-  $("#status").textContent="Sauvegarde…";
+  if(!did){alert("Enter a Device ID.");return;}
+  if(!state.image){alert("No image.");return;}
+  $("#status").textContent="Saving…";
   const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping()})});
-  const j=await r.json(); $("#status").textContent=j.ok?("Sauvegardé (id "+j.id+(j.updated?", maj":"")+")"):("Erreur: "+(j.error||'?'));
+  const j=await r.json(); $("#status").textContent=j.ok?("Saved (id "+j.id+(j.updated?", updated":"")+")"):("Error: "+(j.error||'?'));
   if(j.ok){ dirty=false; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
 });
 
@@ -523,8 +523,8 @@ if(!state.image){ renderStage(); renderPanel(); }
   let saved=null; try{ saved=JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){}
   if(!saved || !saved.state || !(saved.state.boxes||[]).length) return;
   const btn=document.createElement('button'); btn.className='ghost';
-  btn.textContent='Restaurer brouillon local ('+new Date(saved.ts).toLocaleString()+')';
-  btn.title='Session non sauvegardée retrouvée dans ce navigateur';
+  btn.textContent='Restore local draft ('+new Date(saved.ts).toLocaleString()+')';
+  btn.title='Unsaved session found in this browser';
   btn.addEventListener('click',()=>{
     snapshot('restore');
     state=Object.assign({title:'',image:null,width:0,height:0,boxes:[]}, saved.state);

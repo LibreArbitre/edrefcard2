@@ -1021,9 +1021,35 @@ def controllers_duplicate():
         return redirect(url_for('admin.controllers'))
     m = json.loads(row['mapping_json'])
     m['device_ids'] = [new_device_id]
-    m['title'] = f"{m.get('title') or row['device_name']} (copy)"
+    template_name = row['template_name']
+    suffix = '(copy)'
+    if request.form.get('mirror'):
+        # L/R variant: flip the clean photo and mirror every coordinate.
+        # Chrome and text are drawn at runtime, so nothing ends up reversed
+        # (unlike baked legacy artwork, cf. the TCA Sidestick Left saga).
+        from PIL import Image as PILImage
+        cdir = Config.configsPath() / 'controllers'
+        res_dir = Path(__file__).parent.parent / 'res'
+        src = next((p for p in (cdir / f'{template_name}.jpg',
+                                res_dir / f'{template_name}.jpg') if p.exists()), None)
+        if src is None:
+            flash(f'Image source "{template_name}.jpg" introuvable, miroir impossible.', 'error')
+            return redirect(url_for('admin.controllers'))
+        template_name = f'{template_name}-mirror'
+        cdir.mkdir(parents=True, exist_ok=True)
+        with PILImage.open(str(src)) as im:
+            flipped = im.transpose(PILImage.FLIP_LEFT_RIGHT)
+            flipped.save(str(cdir / f'{template_name}.jpg'), quality=92)
+            width = m.get('width') or row['image_width'] or im.width
+        for b in m.get('boxes', []):
+            b['box_xy'][0] = width - b['box_xy'][0] - b['box_wh'][0]
+            if b.get('button_xy'):
+                b['button_xy'][0] = width - b['button_xy'][0]
+        m['image'] = template_name
+        suffix = '(mirror)'
+    m['title'] = f"{m.get('title') or row['device_name']} {suffix}"
     mid = database.create_controller_mapping(
-        new_device_id, m['title'], row['template_name'], row['image_filename'],
+        new_device_id, m['title'], template_name, f'{template_name}.jpg',
         row['image_width'], row['image_height'], json.dumps(m))
     database.dismiss_unknown_device(new_device_id)
     flash(f'Mapping dupliqué (id {mid}). Ouvre-le pour ajuster.', 'success')

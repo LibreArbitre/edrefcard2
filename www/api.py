@@ -170,6 +170,15 @@ def generate_api():
         if devices.get('Keyboard::0') is not None:
             appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
+        # Data-driven controllers (from controller_mappings), same path as the web UI.
+        try:
+            from web import render_data_driven
+            dd_created, _handled = render_data_driven(physical_keys, modifiers, devices,
+                                                      config, True, styling)
+            created_images.extend(dd_created)
+        except Exception as e:
+            logError(f'API data-driven render failed for {run_id}: {e}')
+
         # 4. Save Metadata to SQLite database (no longer using .replay pickle files)
         
         database.create_configuration(

@@ -15,6 +15,7 @@ from scripts import (
     appendKeyboardImage,
     createKeyboardLayoutImage,
     createBlockImage,
+    createDataDrivenImage,
     logError,
     slugify
 )
@@ -30,6 +31,54 @@ _STATIC_ASSET_EXTS = frozenset({'.css', '.js', '.ico', '.png', '.jpg', '.jpeg', 
 _CONFIG_SERVABLE_EXTS = frozenset({'.jpg', '.jpeg', '.binds'})
 
 # Route handlers
+
+
+def render_data_driven(physical_keys, modifiers, devices, config, public, styling):
+    """Render data-driven cards for any device matching a controller_mappings entry.
+
+    Returns (image_base_names, handled_device_keys). The clean image + box layout
+    come from controller_mappings; the binding text comes from the uploaded config.
+    """
+    import json
+    created, handled = [], set()
+    try:
+        rows = database.get_all_controller_mappings()
+    except Exception as e:
+        logError(f"data-driven: cannot load mappings: {e}\n")
+        return created, handled
+    index = {}
+    for row in rows:
+        try:
+            m = json.loads(row['mapping_json'])
+        except Exception:
+            continue
+        for did in (m.get('device_ids') or [row.get('device_id')]):
+            if did:
+                index[did] = m
+    if not index:
+        return created, handled
+    for device_key in list(devices.keys()):
+        parts = device_key.split('::')
+        if len(parts) != 2:
+            continue
+        dev_id, idx = parts[0], parts[1]
+        try:
+            idx = int(idx)
+        except ValueError:
+            continue
+        m = index.get(dev_id)
+        if not m:
+            continue
+        try:
+            createDataDrivenImage(m, config, public, physicalKeys=physical_keys,
+                                  modifiers=modifiers, styling=styling,
+                                  imageDevices=[dev_id], deviceIndex=idx)
+            created.append(m['image'] if idx == 0 else f"{m['image']}-{idx}")
+            handled.add(device_key)
+        except Exception as e:
+            logError(f"data-driven render failed for {device_key}: {e}\n")
+    return created, handled
+
 
 @web_bp.route('/')
 def index():
@@ -136,15 +185,17 @@ def generate():
 
 
     
-    public = True 
-    
+    public = True
+    data_driven_images = []
+    handled_dd = set()
+
     try:
         (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
         
         already_handled_devices = []
         created_images = []
         keyboard_layout_image = False
-        
+
         for supported_device_key, supported_device in supportedDevices.items():
             if supported_device_key == 'Keyboard':
                 continue
@@ -195,7 +246,13 @@ def generate():
                     appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
             else:
                 appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, public)
-            
+
+        # Data-driven controllers (from controller_mappings) - rendered from the
+        # clean image + box layout, filled with this config's real bindings.
+        dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
+                                                    config, public, styling)
+        data_driven_images.extend(dd_created)
+
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
         errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
@@ -207,14 +264,14 @@ def generate():
     
     for device_key, device in devices.items():
         ignored_devices = ['Mouse::0', 'ArduinoLeonardo::0', 'vJoy::0', 'vJoy::1', '16D00AEA::0']
-        if device is None and device_key not in ignored_devices:
+        if device is None and device_key not in ignored_devices and device_key not in handled_dd:
             logError(f'{run_id}: found unsupported device {device_key}\n')
             if errors.unhandledDevicesWarnings == '':
                 errors.unhandledDevicesWarnings = f'<h1>Unknown controller detected</h1>You have a device that is not supported at this time. Please report details of your device by following the link at the bottom of this page supplying the reference "{run_id}" and we will attempt to add support for it.'
         if device is not None and 'ThrustMasterWarthogCombined' in device['HandledDevices'] and errors.deviceWarnings == '':
             errors.deviceWarnings = '<h2>Mapping Software Detected</h2>You are using the ThrustMaster TARGET software. As a result it is possible that not all of the controls will show up. If you have missing controls then you should remove the mapping from TARGET and map them using Elite\'s own configuration UI.'
     
-    if len(created_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
+    if len(created_images) == 0 and len(data_driven_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
         errors.errors = '<h1>The file supplied does not have any bindings for a supported controller or keyboard.</h1>'
     
     # Store configuration in SQLite database (no longer using .replay pickle files)
@@ -246,6 +303,7 @@ def generate():
                                'errors': errors.errors,
                            },
                            created_images=created_images,
+                           data_driven_images=data_driven_images,
                            keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=public,
@@ -408,7 +466,9 @@ def show_binds(run_id):
     
     created_images = []
     keyboard_layout_image = False
-    
+    data_driven_images = []
+    handled_dd = set()
+
     try:
         if not source_missing:
             # Ensure directory exists for image regeneration
@@ -474,6 +534,11 @@ def show_binds(run_id):
                 else:
                     appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
+            # Data-driven controllers (from controller_mappings), same path as generate()
+            dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
+                                                        config, True, styling)
+            data_driven_images.extend(dd_created)
+
         else:
             logError(f"Source missing for {run_id}, checking existing images...")
             errors.errors = "<strong>Source file missing.</strong><br>The `.binds` file for this configuration is missing from the server. Showing archived images if available."
@@ -486,6 +551,19 @@ def show_binds(run_id):
                 img_path_1 = config.pathWithNameAndSuffix(f'{template}-1', '.jpg')
                 if img_path_1.exists():
                      created_images.append(f'{supported_device_key}::1')
+
+            # Archived data-driven images (controller_mappings)
+            try:
+                import json as _json
+                for _row in database.get_all_controller_mappings():
+                    try:
+                        _img = _json.loads(_row['mapping_json']).get('image')
+                    except Exception:
+                        _img = None
+                    if _img and config.pathWithNameAndSuffix(_img, '.jpg').exists():
+                        data_driven_images.append(_img)
+            except Exception:
+                pass
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
@@ -508,6 +586,7 @@ def show_binds(run_id):
                                'errors': errors.errors,
                            },
                            created_images=created_images,
+                           data_driven_images=data_driven_images,
                            keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=True,

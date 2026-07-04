@@ -406,6 +406,10 @@
                 class="nav-item {% if request.endpoint == 'admin.batch_import' %}active{% endif %}">
                 <span>📤</span> Batch Import
             </a>
+            <a href="{{ url_for('admin.mapping_editor') }}"
+                class="nav-item {% if request.endpoint == 'admin.mapping_editor' %}active{% endif %}">
+                <span>🗺️</span> Mapping Editor
+            </a>
 
             <hr style="border-color: var(--border-color); margin: 1rem 0;">
 

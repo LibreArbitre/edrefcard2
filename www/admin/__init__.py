@@ -834,3 +834,95 @@ def maintenance_toggle():
     flash(f'Maintenance mode {status}.', 'success')
     
     return redirect(request.referrer or url_for('admin.dashboard'))
+
+
+# ============== Controller mapping editor (feature B1) ==============
+
+@admin_bp.route('/mapping-editor')
+@require_admin
+def mapping_editor():
+    """Interactive click-to-place editor for data-driven controller mappings."""
+    import json
+    device_id = request.args.get('device')
+    existing = database.get_controller_mapping_by_device_id(device_id) if device_id else None
+    existing_json = json.dumps(existing) if existing else 'null'
+    return render_template('admin/mapping_editor.html', existing_json=existing_json)
+
+
+@admin_bp.route('/mapping-editor/upload', methods=['POST'])
+@require_admin
+def mapping_editor_upload():
+    """Save an uploaded clean controller image to the persistent controllers/ dir."""
+    from flask import jsonify
+    from PIL import Image as PILImage
+    f = request.files.get('image')
+    if not f or not f.filename:
+        return jsonify({'error': 'No image provided'}), 400
+    name = slugify(request.form.get('name') or f.filename.rsplit('.', 1)[0])
+    if not name:
+        return jsonify({'error': 'Invalid name'}), 400
+    cdir = Config.configsPath() / 'controllers'
+    cdir.mkdir(parents=True, exist_ok=True)
+    try:
+        img = PILImage.open(f.stream).convert('RGB')
+    except Exception as e:
+        return jsonify({'error': f'Bad image: {e}'}), 400
+    img.save(str(cdir / f'{name}.jpg'), quality=92)
+    return jsonify({'name': name, 'width': img.width, 'height': img.height,
+                    'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
+
+
+@admin_bp.route('/mapping-editor/preview', methods=['POST'])
+@require_admin
+def mapping_editor_preview():
+    """Render a data-driven preview from a mapping_json (no persistence)."""
+    import os
+    from flask import jsonify, current_app
+    from scripts import createDataDrivenImage
+    mapping = (request.get_json(force=True) or {}).get('mapping')
+    if not mapping or not mapping.get('image'):
+        return jsonify({'error': 'mapping with image required'}), 400
+    os.chdir(current_app.config['WWW_DIR'] / 'scripts')
+    config = Config('ddpreview')
+    config.makeDir()
+    out = config.pathWithNameAndSuffix(mapping['image'], '.jpg')
+    try:
+        if out.exists():
+            out.unlink()
+    except Exception:
+        pass
+    try:
+        createDataDrivenImage(mapping, config, public=True)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'url': url_for('web.serve_config', path=f"dd/ddpreview-{mapping['image']}.jpg")})
+
+
+@admin_bp.route('/mapping-editor/save', methods=['POST'])
+@require_admin
+def mapping_editor_save():
+    """Persist a controller mapping to the controller_mappings table."""
+    import json
+    from flask import jsonify
+    from PIL import Image as PILImage
+    data = request.get_json(force=True) or {}
+    mapping = data.get('mapping') or {}
+    device_id = (data.get('device_id') or '').strip()
+    device_name = (data.get('device_name') or mapping.get('title') or '').strip()
+    if not device_id or not mapping.get('image'):
+        return jsonify({'error': 'device_id and mapping.image are required'}), 400
+    mapping_json = json.dumps(mapping)
+    image_file = f"{mapping['image']}.jpg"
+    existing = database.get_controller_mapping_by_device_id(device_id)
+    if existing:
+        database.update_controller_mapping(existing['id'], device_name=device_name,
+                                           template_name=mapping['image'],
+                                           image_filename=image_file, mapping_json=mapping_json)
+        return jsonify({'ok': True, 'id': existing['id'], 'updated': True})
+    try:
+        w, h = PILImage.open(str(Config.configsPath() / 'controllers' / image_file)).size
+    except Exception:
+        w, h = 0, 0
+    mid = database.create_controller_mapping(device_id, device_name, mapping['image'],
+                                             image_file, w, h, mapping_json)
+    return jsonify({'ok': True, 'id': mid, 'updated': False})

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapping editor - EDRefCard admin</title>
+<style>
+  :root{--ink:#1c1b1a;--muted:#6b6864;--accent:#962320;--line:#dcd9d3;--bg:#f4f3f0;--card:#fff;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);}
+  header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  header h1{font-size:1rem;margin:0 12px 0 0;font-weight:800}
+  input,select,button{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
+  input[type=text],input[type=number]{min-width:90px}
+  button{cursor:pointer;background:#fff}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  button.ghost{background:#fff}
+  #status{color:var(--muted);font-size:.85rem;margin-left:auto}
+  .wrap{display:flex;gap:14px;padding:14px;align-items:flex-start}
+  #stagewrap{flex:1 1 auto;min-width:0}
+  #stage{position:relative;display:inline-block;border:1px solid var(--line);background:#fafafa;max-width:100%}
+  #stage img{display:block;max-width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+  .box{position:absolute;border:2px solid #1c1b1a;background:rgba(255,255,255,.55);cursor:move;font-size:11px}
+  .box.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(150,35,30,.25)}
+  .box .lbl{position:absolute;top:-18px;left:0;background:#cfcfcf;color:#000;padding:0 5px;font-weight:700;white-space:nowrap}
+  .box .rsz{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--accent);border-radius:50%;cursor:nwse-resize}
+  .marker{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #fff;background:var(--accent);border-radius:50%;pointer-events:none;box-shadow:0 0 0 1px var(--accent)}
+  #panel{flex:0 0 380px;max-height:88vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px}
+  #panel h2{font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .boxcard{border:1px solid var(--line);border-radius:6px;padding:8px;margin:0 0 10px}
+  .boxcard.sel{border-color:var(--accent)}
+  .boxcard .hd{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .boxcard .hd input{flex:1}
+  .row{display:grid;grid-template-columns:74px 52px 1fr auto;gap:4px;margin:4px 0}
+  .row select,.row input{padding:4px 5px;font-size:.82rem;min-width:0;width:100%}
+  .small{font-size:.78rem;color:var(--muted)}
+  .del{color:var(--accent);border-color:#e6c7c4;padding:4px 8px}
+  #preview{margin-top:10px}
+  #preview img{max-width:100%;border:1px solid var(--line);border-radius:6px}
+  .hint{background:#fff8e1;border:1px solid #ffe082;padding:6px 9px;border-radius:6px;font-size:.82rem;margin-bottom:8px}
+  details{margin-top:10px}
+  textarea{width:100%;height:130px;font-family:ui-monospace,monospace;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mapping editor</h1>
+  <input type="file" id="file" accept="image/*">
+  <input type="text" id="imgname" placeholder="image name (slug)" title="Nom de l'image (slug)">
+  <button id="btnupload" class="ghost">Upload image</button>
+  <span style="width:1px;height:24px;background:var(--line)"></span>
+  <input type="text" id="title" placeholder="Titre (ex. VIRPIL AEROMAX R)">
+  <input type="text" id="deviceid" placeholder="Device ID (ex. 231D0F0F)">
+  <button id="btnaddbox" class="ghost">+ Box</button>
+  <button id="btnpreview" class="ghost">Preview</button>
+  <button id="btnsave" class="primary">Save</button>
+  <span id="status"></span>
+</header>
+
+<div class="wrap">
+  <div id="stagewrap">
+    <div id="stage"><img id="img" alt="" draggable="false"></div>
+  </div>
+  <div id="panel">
+    <h2>Boxes</h2>
+    <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.</div>
+    <div id="boxes"></div>
+    <details><summary class="small">mapping_json</summary><textarea id="json" readonly></textarea></details>
+    <div id="preview"></div>
+  </div>
+</div>
+
+<script>
+const EXISTING = {{ existing_json|safe }};
+const SYMS = ["","press","up","right","down","left","stage1","stage2","push","pull"];
+const TYPES = ["Digital","Analogue"];
+const GROUPS = ["General","Ship","SRV","UI","Camera","Fighter","Head look","Galaxy map","Scanners","Holo-Me","Multicrew","OnFoot","Settlement","Misc"];
+
+let state = {title:"", image:null, width:0, height:0, boxes:[]};
+let sel = -1;          // selected box index
+let setBtnFor = -1;    // box index awaiting a button-point click
+let scale = 1;
+
+const $ = s => document.querySelector(s);
+const stage = $("#stage"), img = $("#img");
+
+function loadExisting(){
+  if(!EXISTING) return;
+  try{
+    const m = JSON.parse(EXISTING.mapping_json);
+    state = Object.assign({title:"",image:null,width:0,height:0,boxes:[]}, m);
+    state.width = state.width || EXISTING.image_width || 0;
+    state.height = state.height || EXISTING.image_height || 0;
+    $("#title").value = state.title||EXISTING.device_name||"";
+    $("#imgname").value = state.image||"";
+    $("#deviceid").value = EXISTING.device_id||"";
+    if(state.image){ loadImage(state.image); }
+  }catch(e){ console.warn(e); }
+}
+
+// Load the clean image, trying the editable volume first, then the baked res/ fallback.
+function loadImage(slug){
+  img.onload = ()=>{
+    if(!state.width) state.width = img.naturalWidth;
+    if(!state.height) state.height = img.naturalHeight;
+    renderStage(); renderPanel();
+  };
+  img.onerror = ()=>{
+    if(img.dataset.fb){ $("#status").textContent = "Image introuvable: "+slug; renderPanel(); return; }
+    img.dataset.fb = "1"; img.src = "/res/"+slug+".jpg";
+  };
+  delete img.dataset.fb;
+  img.src = "/configs/controllers/"+slug+".jpg";
+}
+
+function computeScale(){ scale = img.clientWidth / (state.width||img.naturalWidth||1); }
+
+function renderStage(){
+  computeScale();
+  // remove existing overlays
+  stage.querySelectorAll('.box,.marker').forEach(n=>n.remove());
+  state.boxes.forEach((b,i)=>{
+    const d=document.createElement('div'); d.className='box'+(i===sel?' sel':'');
+    d.style.left=(b.box_xy[0]*scale)+'px'; d.style.top=(b.box_xy[1]*scale)+'px';
+    d.style.width=(b.box_wh[0]*scale)+'px'; d.style.height=(b.box_wh[1]*scale)+'px';
+    d.innerHTML='<span class="lbl">'+(b.label||'box '+(i+1))+'</span><span class="rsz"></span>';
+    d.addEventListener('mousedown',e=>startDrag(e,i,d));
+    d.querySelector('.rsz').addEventListener('mousedown',e=>{e.stopPropagation();startResize(e,i,d);});
+    stage.appendChild(d);
+    if(b.button_xy){
+      const m=document.createElement('div'); m.className='marker';
+      m.style.left=(b.button_xy[0]*scale)+'px'; m.style.top=(b.button_xy[1]*scale)+'px';
+      stage.appendChild(m);
+    }
+  });
+  $("#json").value = JSON.stringify(mapping(),null,1);
+}
+
+function startDrag(e,i,d){
+  e.preventDefault(); sel=i; renderPanel(); renderStage();
+  const r=stage.getBoundingClientRect(), b=state.boxes[i];
+  const ox=e.clientX-r.left-b.box_xy[0]*scale, oy=e.clientY-r.top-b.box_xy[1]*scale;
+  function mv(ev){ b.box_xy=[Math.max(0,Math.round((ev.clientX-r.left-ox)/scale)),Math.max(0,Math.round((ev.clientY-r.top-oy)/scale))]; renderStage(); }
+  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+}
+function startResize(e,i,d){
+  e.preventDefault(); const r=stage.getBoundingClientRect(), b=state.boxes[i];
+  function mv(ev){ b.box_wh=[Math.max(40,Math.round((ev.clientX-r.left)/scale-b.box_xy[0])),Math.max(30,Math.round((ev.clientY-r.top)/scale-b.box_xy[1]))]; renderStage(); }
+  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+}
+
+stage.addEventListener('click',e=>{
+  if(setBtnFor<0 || e.target.classList.contains('box')||e.target.classList.contains('rsz')||e.target.classList.contains('lbl')) {
+    if(setBtnFor<0) return;
+  }
+  if(setBtnFor<0) return;
+  const r=stage.getBoundingClientRect();
+  state.boxes[setBtnFor].button_xy=[Math.round((e.clientX-r.left)/scale),Math.round((e.clientY-r.top)/scale)];
+  setBtnFor=-1; $("#status").textContent="Bouton placé."; renderStage(); renderPanel();
+});
+
+function renderPanel(){
+  const c=$("#boxes"); c.innerHTML='';
+  state.boxes.forEach((b,i)=>{
+    const card=document.createElement('div'); card.className='boxcard'+(i===sel?' sel':'');
+    let rowsHtml='';
+    (b.rows||[]).forEach((row,j)=>{
+      rowsHtml+=`<div class="row">
+        <select data-i="${i}" data-j="${j}" data-k="symbol">${SYMS.map(s=>`<option ${s===(row.symbol||'')?'selected':''}>${s}</option>`).join('')}</select>
+        <input type="text" data-i="${i}" data-j="${j}" data-k="number" value="${row.number??''}" placeholder="n°">
+        <input type="text" data-i="${i}" data-j="${j}" data-k="joy" value="${row.joy||''}" placeholder="Joy_1">
+        <button class="del" data-delrow="${i}.${j}">x</button>
+      </div>`;
+    });
+    card.innerHTML=`<div class="hd">
+        <input type="text" data-i="${i}" data-k="label" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label (A1...)">
+        <button class="ghost" data-setbtn="${i}" title="Placer/déplacer le point du bouton">${b.button_xy?'● btn':'Set btn'}</button>
+        ${b.button_xy?`<button class="ghost" data-clrbtn="${i}" title="Retirer seulement le point rouge">✕ pt</button>`:''}
+        <button class="del" data-delbox="${i}" title="Supprimer toute la box">Suppr box</button>
+      </div>
+      ${rowsHtml}
+      <button class="ghost" data-addrow="${i}" style="font-size:.78rem;padding:3px 8px">+ ligne</button>`;
+    card.addEventListener('click',()=>{ if(sel!==i){sel=i; renderPanel(); renderStage();} });
+    c.appendChild(card);
+  });
+  bindPanel();
+}
+
+function bindPanel(){
+  $("#boxes").querySelectorAll('input,select').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const i=+el.dataset.i, k=el.dataset.k;
+      if(el.dataset.j!==undefined){ const j=+el.dataset.j; let v=el.value; if(k==='number'&&v==='')v=null; state.boxes[i].rows[j][k]=v; }
+      else if(k==='label'){ state.boxes[i].label=el.value; }
+      renderStage();
+    });
+  });
+  $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Clique le bouton sur l'image…";}));
+  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point retiré.";renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Supprimer toute la box "'+(state.boxes[i].label||'box '+(i+1))+'" ?'))return;state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();}));
+  $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);state.boxes[i].rows.splice(j,1);renderPanel();}));
+}
+
+function mapping(){ return {title:$("#title").value, image:state.image, styling:"Group", boxes:state.boxes}; }
+
+$("#btnaddbox").addEventListener('click',()=>{
+  if(!state.image){ alert("Upload d'abord une image."); return; }
+  const w=Math.round(state.width*0.28);
+  state.boxes.push({label:'A'+(state.boxes.length+1), box_xy:[40,40], box_wh:[w,160], button_xy:null, rows:[]});
+  sel=state.boxes.length-1; renderPanel(); renderStage();
+});
+
+$("#btnupload").addEventListener('click',async()=>{
+  const f=$("#file").files[0]; if(!f){alert("Choisis un fichier image.");return;}
+  const fd=new FormData(); fd.append('image',f); fd.append('name',$("#imgname").value||f.name);
+  $("#status").textContent="Upload…";
+  const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
+  const j=await r.json(); if(j.error){$("#status").textContent="Erreur: "+j.error;return;}
+  state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
+  img.onload=()=>{renderStage();}; img.src=j.url+'?t='+Date.now();
+  $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;
+});
+
+$("#btnpreview").addEventListener('click',async()=>{
+  if(!state.image){alert("Pas d'image.");return;}
+  $("#status").textContent="Rendu…";
+  const r=await fetch('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping()})});
+  const j=await r.json(); if(j.error){$("#status").textContent="Erreur preview: "+j.error;return;}
+  $("#preview").innerHTML='<h2>Preview</h2><img src="'+j.url+'?t='+Date.now()+'">';
+  $("#status").textContent="Preview OK";
+});
+
+$("#btnsave").addEventListener('click',async()=>{
+  const did=$("#deviceid").value.trim();
+  if(!did){alert("Renseigne un Device ID.");return;}
+  if(!state.image){alert("Pas d'image.");return;}
+  $("#status").textContent="Sauvegarde…";
+  const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping()})});
+  const j=await r.json(); $("#status").textContent=j.ok?("Sauvegardé (id "+j.id+(j.updated?", maj":"")+")"):("Erreur: "+(j.error||'?'));
+});
+
+window.addEventListener('resize',renderStage);
+loadExisting();
+if(!state.image){ renderStage(); renderPanel(); }
+</script>
+</body>
+</html>

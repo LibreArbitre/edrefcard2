@@ -507,3 +507,14 @@ def delete_controller_mapping(mapping_id):
     """
     with get_db() as conn:
         conn.execute("DELETE FROM controller_mappings WHERE id = ?", (mapping_id,))
+
+
+def get_all_controller_mappings():
+    """Return all controller mappings as full dicts (including mapping_json).
+
+    Used at generation time to build a device-id -> mapping index for the
+    data-driven render path.
+    """
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM controller_mappings").fetchall()
+        return [dict(r) for r in rows]

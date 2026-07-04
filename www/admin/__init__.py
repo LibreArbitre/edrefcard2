@@ -838,6 +838,104 @@ def maintenance_toggle():
 
 # ============== Controller mapping editor (feature B1) ==============
 
+def _find_mapping_for_device(device_id):
+    """Find a controller mapping by primary device_id, falling back to the
+    attached device_ids list inside mapping_json (same hardware, different
+    hardware ID: country / colour / revision variants)."""
+    import json
+    row = database.get_controller_mapping_by_device_id(device_id)
+    if row:
+        return row
+    for r in database.get_all_controller_mappings():
+        try:
+            if device_id in (json.loads(r['mapping_json']).get('device_ids') or []):
+                return r
+        except Exception:
+            continue
+    return None
+
+
+@admin_bp.route('/controllers')
+@require_admin
+def controllers():
+    """Control tower: existing data-driven mappings + unknown-device queue."""
+    import json
+    mappings = []
+    for r in database.get_all_controller_mappings():
+        try:
+            m = json.loads(r['mapping_json'])
+        except Exception:
+            m = {}
+        mappings.append({
+            'id': r['id'], 'device_id': r['device_id'],
+            'device_name': r['device_name'],
+            'device_ids': m.get('device_ids') or [r['device_id']],
+            'image': m.get('image'), 'box_count': len(m.get('boxes') or []),
+            'updated_at': r.get('updated_at'),
+        })
+    unknown = [u for u in database.list_unknown_devices()
+               if _find_mapping_for_device(u['device_id']) is None]
+    return render_template('admin/controllers.html', mappings=mappings, unknown=unknown)
+
+
+@admin_bp.route('/controllers/attach', methods=['POST'])
+@require_admin
+def controllers_attach():
+    """Attach an unknown hardware ID to an existing mapping (variant IDs)."""
+    import json
+    device_id = (request.form.get('device_id') or '').strip()
+    mapping_id = request.form.get('mapping_id')
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not device_id or not row:
+        flash('Device ID et mapping requis.', 'error')
+        return redirect(url_for('admin.controllers'))
+    m = json.loads(row['mapping_json'])
+    ids = m.get('device_ids') or [row['device_id']]
+    if device_id not in ids:
+        ids.append(device_id)
+    m['device_ids'] = ids
+    database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
+    database.dismiss_unknown_device(device_id)
+    flash(f'{device_id} rattaché à "{row["device_name"]}".', 'success')
+    return redirect(url_for('admin.controllers'))
+
+
+@admin_bp.route('/controllers/dismiss', methods=['POST'])
+@require_admin
+def controllers_dismiss():
+    """Drop a device from the unknown queue (not a real controller, etc.)."""
+    device_id = (request.form.get('device_id') or '').strip()
+    if device_id:
+        database.dismiss_unknown_device(device_id)
+        flash(f'{device_id} ignoré.', 'success')
+    return redirect(url_for('admin.controllers'))
+
+
+@admin_bp.route('/controllers/duplicate', methods=['POST'])
+@require_admin
+def controllers_duplicate():
+    """Duplicate a mapping under a new device ID (L/R or extended variants)."""
+    import json
+    mapping_id = request.form.get('mapping_id')
+    new_device_id = (request.form.get('new_device_id') or '').strip()
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not row or not new_device_id:
+        flash('Mapping source et nouveau Device ID requis.', 'error')
+        return redirect(url_for('admin.controllers'))
+    if _find_mapping_for_device(new_device_id):
+        flash(f'{new_device_id} est déjà couvert par un mapping.', 'error')
+        return redirect(url_for('admin.controllers'))
+    m = json.loads(row['mapping_json'])
+    m['device_ids'] = [new_device_id]
+    m['title'] = f"{m.get('title') or row['device_name']} (copy)"
+    mid = database.create_controller_mapping(
+        new_device_id, m['title'], row['template_name'], row['image_filename'],
+        row['image_width'], row['image_height'], json.dumps(m))
+    database.dismiss_unknown_device(new_device_id)
+    flash(f'Mapping dupliqué (id {mid}). Ouvre-le pour ajuster.', 'success')
+    return redirect(url_for('admin.mapping_editor', device=new_device_id))
+
+
 def _read_binds_xml(run_id):
     """Return the raw .binds XML of an uploaded config, or None."""
     try:
@@ -864,7 +962,7 @@ def mapping_editor():
     from scripts import scaffold
     device_id = request.args.get('device')
     from_id = request.args.get('from')
-    existing = database.get_controller_mapping_by_device_id(device_id) if device_id else None
+    existing = _find_mapping_for_device(device_id) if device_id else None
     draft_note = ''
 
     if device_id and from_id:

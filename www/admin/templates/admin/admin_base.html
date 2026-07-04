@@ -406,6 +406,10 @@
                 class="nav-item {% if request.endpoint == 'admin.batch_import' %}active{% endif %}">
                 <span>📤</span> Batch Import
             </a>
+            <a href="{{ url_for('admin.controllers') }}"
+                class="nav-item {% if request.endpoint == 'admin.controllers' %}active{% endif %}">
+                <span>🎛️</span> Controllers
+            </a>
             <a href="{{ url_for('admin.mapping_editor') }}"
                 class="nav-item {% if request.endpoint == 'admin.mapping_editor' %}active{% endif %}">
                 <span>🗺️</span> Mapping Editor

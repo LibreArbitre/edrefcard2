@@ -281,6 +281,11 @@ def generate():
         if device is None and device_key not in ignored_devices and device_key not in handled_dd:
             logError(f'{run_id}: found unsupported device {device_key} '
                      f'-> scaffold: /admin/mapping-editor?device={device_key.split("::")[0]}&from={run_id}\n')
+            # Feed the admin triage queue (/admin/controllers)
+            try:
+                database.record_unknown_device(device_key.split('::')[0], run_id)
+            except Exception as e:
+                logError(f'{run_id}: cannot record unknown device sighting: {e}\n')
             if errors.unhandledDevicesWarnings == '':
                 errors.unhandledDevicesWarnings = f'<h1>Unknown controller detected</h1>You have a device that is not supported at this time. Please report details of your device by following the link at the bottom of this page supplying the reference "{run_id}" and we will attempt to add support for it.'
         if device is not None and 'ThrustMasterWarthogCombined' in device['HandledDevices'] and errors.deviceWarnings == '':

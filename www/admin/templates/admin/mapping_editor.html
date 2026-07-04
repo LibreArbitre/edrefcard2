@@ -55,6 +55,18 @@
   <input type="text" id="title" placeholder="Titre (ex. VIRPIL AEROMAX R)">
   <input type="text" id="deviceid" placeholder="Device ID (ex. 231D0F0F)">
   <button id="btnaddbox" class="ghost">+ Box</button>
+  <select id="stamp" title="Mode rafale : choisis un tampon puis clique les contrôles physiques sur la photo (1 clic = 1 box ancrée)">
+    <option value="">Tampon: off</option>
+    <option value="btn">Bouton</option>
+    <option value="hat4">Hat 4 dir</option>
+    <option value="hat5">Hat 4+push</option>
+    <option value="pov">POV</option>
+    <option value="trigger">Trigger 2 étages</option>
+    <option value="axis">Axe</option>
+  </select>
+  <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Prochain Joy_N (auto-incrémenté)">
+  <input type="number" id="stamppov" value="1" min="1" style="width:44px" title="Prochain POV">
+  <button id="btnarrange" class="ghost" title="Auto-ranger les boxes en 2 colonnes triées par position du bouton (aucun croisement de traits)">Ranger</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
   <button id="zoomout" class="ghost" title="Zoom - (Ctrl+molette)">&minus;</button>
   <button id="zoomfit" class="ghost" title="Ajuster à la fenêtre">Fit</button>
@@ -254,14 +266,65 @@ function startResize(e,i,d){
 }
 
 stage.addEventListener('click',e=>{
-  if(setBtnFor<0 || e.target.classList.contains('box')||e.target.classList.contains('rsz')||e.target.classList.contains('lbl')) {
-    if(setBtnFor<0) return;
-  }
-  if(setBtnFor<0 || spaceDown) return;
+  if(spaceDown || !scale) return;
+  const onBox = ['box','rsz','lbl','marker'].some(c=>e.target.classList.contains(c));
   const r=stage.getBoundingClientRect();
-  snapshot('btn');
-  state.boxes[setBtnFor].button_xy=[Math.round((e.clientX-r.left)/scale),Math.round((e.clientY-r.top)/scale)];
-  setBtnFor=-1; $("#status").textContent="Bouton placé."; renderStage(); renderPanel();
+  const px=Math.round((e.clientX-r.left)/scale), py=Math.round((e.clientY-r.top)/scale);
+  if(setBtnFor>=0){
+    snapshot('btn');
+    state.boxes[setBtnFor].button_xy=[px,py];
+    setBtnFor=-1; $("#status").textContent="Bouton placé."; renderStage(); renderPanel();
+    return;
+  }
+  const st=$("#stamp").value;
+  if(st && !onBox) stampAt(st,px,py);
+});
+
+// Burst stamping: one click per PHYSICAL control (a box has a single anchor
+// point, so a 4-way hat + push is ONE click, its 5 rows are pre-filled).
+function stampAt(kind,px,py){
+  snapshot('stamp');
+  let n=+$("#stampnum").value||1, p=+$("#stamppov").value||1;
+  const mk=(symbol,number,joy)=>({symbol,number,joy,type:'Digital'});
+  let rows=[],label='';
+  if(kind==='btn'){ label='BTN '+n; rows=[mk('press',String(n),'Joy_'+n)]; n+=1; }
+  else if(kind==='hat4'){ label='HAT '+n+'-'+(n+3); rows=['up','right','down','left'].map((s,i)=>mk(s,String(n+i),'Joy_'+(n+i))); n+=4; }
+  else if(kind==='hat5'){ label='HAT '+n+'-'+(n+4); rows=['up','right','down','left'].map((s,i)=>mk(s,String(n+i),'Joy_'+(n+i))); rows.push(mk('press',String(n+4),'Joy_'+(n+4))); n+=5; }
+  else if(kind==='pov'){ label='POV'+p; rows=['Up','Right','Down','Left'].map(d=>mk(d.toLowerCase(),null,'Joy_POV'+p+d)); p+=1; }
+  else if(kind==='trigger'){ label='TRIGGER'; rows=[mk('stage1',String(n),'Joy_'+n),mk('stage2',String(n+1),'Joy_'+(n+1))]; n+=2; }
+  else if(kind==='axis'){ label='AXIS'; rows=[{symbol:null,number:null,joy:'',type:'Analogue'}]; }
+  else return;
+  const k=(state.width||4400)/4400;
+  const w=Math.round((state.width||4400)*0.25), h=Math.round((40+72*rows.length)*k);
+  const bx=Math.max(0,Math.min(px+Math.round(60*k),(state.width||4400)-w));
+  state.boxes.push({label, box_xy:[bx,py], box_wh:[w,h], button_xy:[px,py], rows});
+  $("#stampnum").value=n; $("#stamppov").value=p;
+  sel=state.boxes.length-1;
+  renderPanel(); renderStage();
+  $("#status").textContent=label+" ancré ("+px+","+py+"). Clique le contrôle suivant, ou Ranger à la fin.";
+}
+
+// Auto-arrange: two margin columns, each sorted by the anchor's Y, so leader
+// lines never cross within a column. Floating boxes go under the left column.
+$("#btnarrange").addEventListener('click',()=>{
+  if(!state.boxes.length) return;
+  snapshot('arrange');
+  const W=state.width||4400,H=state.height||2560,k=W/4400;
+  const colW=Math.round(W*0.314), colX=[Math.round(W*0.016), W-colW-Math.round(W*0.016)];
+  const anch=state.boxes.filter(b=>b.button_xy), free=state.boxes.filter(b=>!b.button_xy);
+  const left=anch.filter(b=>b.button_xy[0]<W/2).sort((a,b)=>a.button_xy[1]-b.button_xy[1]);
+  const right=anch.filter(b=>b.button_xy[0]>=W/2).sort((a,b)=>a.button_xy[1]-b.button_xy[1]);
+  left.push(...free);
+  [[left,0],[right,1]].forEach(([col,ci])=>{
+    let y=Math.round(H*0.08);
+    col.forEach(b=>{
+      const h=Math.round((40+72*Math.max(1,(b.rows||[]).length))*k);
+      b.box_xy=[colX[ci],y]; b.box_wh=[colW,h];
+      y+=h+Math.round(60*k);
+    });
+  });
+  sel=-1; renderPanel(); renderStage();
+  $("#status").textContent="Rangé : "+left.length+" à gauche, "+right.length+" à droite.";
 });
 
 function renderPanel(){

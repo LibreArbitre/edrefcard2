@@ -77,6 +77,17 @@ def init_db(db_path):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             
+            -- Named admin-panel users (role 'admin' = full panel,
+            -- 'mapper' = controllers + mapping editor only)
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'mapper',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
+            );
+
             -- Unknown controllers seen at generation time (admin triage queue)
             CREATE TABLE IF NOT EXISTS unknown_device_sightings (
                 device_id TEXT PRIMARY KEY,
@@ -557,3 +568,46 @@ def dismiss_unknown_device(device_id):
     with get_db() as conn:
         conn.execute("DELETE FROM unknown_device_sightings WHERE device_id = ?",
                      (device_id,))
+
+
+# ---- admin-panel users (session auth) ----
+
+def create_user(username, password_hash, role='mapper'):
+    """Create a named admin-panel user. Returns the new user id."""
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            (username, password_hash, role))
+        return cur.lastrowid
+
+
+def get_user_by_username(username):
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = ?",
+                           (username,)).fetchone()
+        return dict(row) if row else None
+
+
+def list_users():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, username, role, created_at, last_login FROM users "
+            "ORDER BY username").fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_user(user_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+def update_user_password(user_id, password_hash):
+    with get_db() as conn:
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                     (password_hash, user_id))
+
+
+def touch_user_login(user_id):
+    with get_db() as conn:
+        conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?",
+                     (user_id,))

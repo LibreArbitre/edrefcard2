@@ -432,9 +432,18 @@
 
             <hr style="border-color: var(--border-color); margin: 1rem 0;">
 
+            <a href="{{ url_for('admin.users') }}"
+                class="nav-item {% if request.endpoint == 'admin.users' %}active{% endif %}">
+                <span>👥</span> Users
+            </a>
             <a href="/" class="nav-item">
                 <span>🏠</span> Back to Site
             </a>
+            <form method="post" action="{{ url_for('admin.logout') }}" style="margin:0">
+                <button type="submit" class="nav-item" style="width:100%;text-align:left;background:none;border:none;border-left:3px solid transparent;cursor:pointer;font:inherit">
+                    <span>🚪</span> Logout
+                </button>
+            </form>
         </nav>
 
         <main class="main-content">

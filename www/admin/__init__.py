@@ -14,7 +14,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from scripts import database, parseBindings, slugify
 
 from scripts.models import Config, Errors
-from .auth import require_admin
+from .auth import (require_admin, require_mapper, current_user,
+                   login_session_user, logout_session_user)
 
 
 
@@ -838,6 +839,86 @@ def maintenance_toggle():
 
 # ============== Controller mapping editor (feature B1) ==============
 
+# ============== Session auth (multi-user: admin + mappers) ==============
+
+@admin_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    """Session login form. Accepts DB users (admin/mapper roles) and the
+    env-configured admin. HTTP Basic remains usable for scripts/tools."""
+    error = None
+    if request.method == 'POST':
+        user = login_session_user(request.form.get('username', '').strip(),
+                                  request.form.get('password', ''))
+        if user:
+            nxt = request.form.get('next') or request.args.get('next') or ''
+            if not nxt.startswith('/') or nxt.startswith('//'):
+                nxt = ''
+            if not nxt:
+                nxt = url_for('admin.controllers') if user['role'] == 'mapper' \
+                    else url_for('admin.dashboard')
+            return redirect(nxt)
+        error = 'Invalid username or password.'
+    nxt = request.args.get('next', '')
+    return render_template('admin/login.html', error=error, next=nxt)
+
+
+@admin_bp.route('/logout', methods=['POST'])
+def logout():
+    logout_session_user()
+    return redirect(url_for('admin.login'))
+
+
+@admin_bp.route('/users')
+@require_admin
+def users():
+    """Manage admin-panel users (mappers and additional admins)."""
+    return render_template('admin/users.html', users=database.list_users())
+
+
+@admin_bp.route('/users/create', methods=['POST'])
+@require_admin
+def users_create():
+    from werkzeug.security import generate_password_hash
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    role = request.form.get('role') or 'mapper'
+    if role not in ('admin', 'mapper'):
+        role = 'mapper'
+    if not re.fullmatch(r'[A-Za-z0-9_.-]{3,32}', username) or len(password) < 8:
+        flash('Username 3-32 chars [A-Za-z0-9_.-], password 8+ chars.', 'error')
+        return redirect(url_for('admin.users'))
+    if database.get_user_by_username(username):
+        flash(f'User "{username}" already exists.', 'error')
+        return redirect(url_for('admin.users'))
+    database.create_user(username, generate_password_hash(password), role)
+    flash(f'User "{username}" created ({role}).', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@admin_bp.route('/users/delete', methods=['POST'])
+@require_admin
+def users_delete():
+    user_id = request.form.get('user_id')
+    if user_id:
+        database.delete_user(user_id)
+        flash('User deleted.', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@admin_bp.route('/users/reset', methods=['POST'])
+@require_admin
+def users_reset():
+    from werkzeug.security import generate_password_hash
+    user_id = request.form.get('user_id')
+    password = request.form.get('password') or ''
+    if not user_id or len(password) < 8:
+        flash('Password 8+ chars required.', 'error')
+        return redirect(url_for('admin.users'))
+    database.update_user_password(user_id, generate_password_hash(password))
+    flash('Password updated.', 'success')
+    return redirect(url_for('admin.users'))
+
+
 def _find_mapping_for_device(device_id):
     """Find a controller mapping by primary device_id, falling back to the
     attached device_ids list inside mapping_json (same hardware, different
@@ -856,7 +937,7 @@ def _find_mapping_for_device(device_id):
 
 
 @admin_bp.route('/controllers')
-@require_admin
+@require_mapper
 def controllers():
     """Control tower: existing data-driven mappings + unknown-device queue."""
     import json
@@ -892,7 +973,7 @@ def controllers():
 
 
 @admin_bp.route('/controllers/attach', methods=['POST'])
-@require_admin
+@require_mapper
 def controllers_attach():
     """Attach an unknown hardware ID to an existing mapping (variant IDs)."""
     import json
@@ -914,7 +995,7 @@ def controllers_attach():
 
 
 @admin_bp.route('/controllers/dismiss', methods=['POST'])
-@require_admin
+@require_mapper
 def controllers_dismiss():
     """Drop a device from the unknown queue (not a real controller, etc.)."""
     device_id = (request.form.get('device_id') or '').strip()
@@ -925,7 +1006,7 @@ def controllers_dismiss():
 
 
 @admin_bp.route('/controllers/duplicate', methods=['POST'])
-@require_admin
+@require_mapper
 def controllers_duplicate():
     """Duplicate a mapping under a new device ID (L/R or extended variants)."""
     import json
@@ -960,7 +1041,7 @@ def _read_binds_xml(run_id):
 
 
 @admin_bp.route('/mapping-editor')
-@require_admin
+@require_mapper
 def mapping_editor():
     """Interactive click-to-place editor for data-driven controller mappings.
 
@@ -1020,7 +1101,7 @@ def mapping_editor():
 
 
 @admin_bp.route('/mapping-editor/upload', methods=['POST'])
-@require_admin
+@require_mapper
 def mapping_editor_upload():
     """Save an uploaded clean controller image to the persistent controllers/ dir."""
     from flask import jsonify
@@ -1043,7 +1124,7 @@ def mapping_editor_upload():
 
 
 @admin_bp.route('/mapping-editor/preview', methods=['POST'])
-@require_admin
+@require_mapper
 def mapping_editor_preview():
     """Render a data-driven preview from a mapping_json (no persistence)."""
     import os
@@ -1069,7 +1150,7 @@ def mapping_editor_preview():
 
 
 @admin_bp.route('/mapping-editor/save', methods=['POST'])
-@require_admin
+@require_mapper
 def mapping_editor_save():
     """Persist a controller mapping to the controller_mappings table."""
     import json

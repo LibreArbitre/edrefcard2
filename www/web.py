@@ -466,7 +466,9 @@ def show_binds(run_id):
     
     created_images = []
     keyboard_layout_image = False
-    
+    data_driven_images = []
+    handled_dd = set()
+
     try:
         if not source_missing:
             # Ensure directory exists for image regeneration
@@ -532,6 +534,11 @@ def show_binds(run_id):
                 else:
                     appendKeyboardImage(created_images, physical_keys, modifiers, display_groups, run_id, True)
 
+            # Data-driven controllers (from controller_mappings), same path as generate()
+            dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
+                                                        config, True, styling)
+            data_driven_images.extend(dd_created)
+
         else:
             logError(f"Source missing for {run_id}, checking existing images...")
             errors.errors = "<strong>Source file missing.</strong><br>The `.binds` file for this configuration is missing from the server. Showing archived images if available."
@@ -544,6 +551,19 @@ def show_binds(run_id):
                 img_path_1 = config.pathWithNameAndSuffix(f'{template}-1', '.jpg')
                 if img_path_1.exists():
                      created_images.append(f'{supported_device_key}::1')
+
+            # Archived data-driven images (controller_mappings)
+            try:
+                import json as _json
+                for _row in database.get_all_controller_mappings():
+                    try:
+                        _img = _json.loads(_row['mapping_json']).get('image')
+                    except Exception:
+                        _img = None
+                    if _img and config.pathWithNameAndSuffix(_img, '.jpg').exists():
+                        data_driven_images.append(_img)
+            except Exception:
+                pass
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
@@ -566,6 +586,7 @@ def show_binds(run_id):
                                'errors': errors.errors,
                            },
                            created_images=created_images,
+                           data_driven_images=data_driven_images,
                            keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=True,

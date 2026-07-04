@@ -17,9 +17,12 @@
   button.ghost{background:#fff}
   #status{color:var(--muted);font-size:.85rem;margin-left:auto}
   .wrap{display:flex;gap:14px;padding:14px;align-items:flex-start}
-  #stagewrap{flex:1 1 auto;min-width:0}
-  #stage{position:relative;display:inline-block;border:1px solid var(--line);background:#fafafa;max-width:100%}
-  #stage img{display:block;max-width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+  #stagewrap{flex:1 1 auto;min-width:0;overflow:auto;max-height:88vh}
+  #stagewrap.panning{cursor:grab}
+  #stagewrap.panning:active{cursor:grabbing}
+  #stage{position:relative;display:inline-block;border:1px solid var(--line);background:#fafafa}
+  #stage img{display:block;user-select:none;-webkit-user-drag:none}
+  #lines{position:absolute;left:0;top:0;pointer-events:none}
   .box{position:absolute;border:2px solid #1c1b1a;background:rgba(255,255,255,.55);cursor:move;font-size:11px}
   .box.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(150,35,30,.25)}
   .box .lbl{position:absolute;top:-18px;left:0;background:#cfcfcf;color:#000;padding:0 5px;font-weight:700;white-space:nowrap}
@@ -52,6 +55,12 @@
   <input type="text" id="title" placeholder="Titre (ex. VIRPIL AEROMAX R)">
   <input type="text" id="deviceid" placeholder="Device ID (ex. 231D0F0F)">
   <button id="btnaddbox" class="ghost">+ Box</button>
+  <span style="width:1px;height:24px;background:var(--line)"></span>
+  <button id="zoomout" class="ghost" title="Zoom - (Ctrl+molette)">&minus;</button>
+  <button id="zoomfit" class="ghost" title="Ajuster à la fenêtre">Fit</button>
+  <button id="zoomin" class="ghost" title="Zoom + (Ctrl+molette)">+</button>
+  <button id="btnundo" class="ghost" title="Annuler (Ctrl+Z)">&#8630;</button>
+  <button id="btnredo" class="ghost" title="Rétablir (Ctrl+Y)">&#8631;</button>
   <button id="btnpreview" class="ghost">Preview</button>
   <button id="btnsave" class="primary">Save</button>
   <span id="status"></span>
@@ -59,11 +68,12 @@
 
 <div class="wrap">
   <div id="stagewrap">
-    <div id="stage"><img id="img" alt="" draggable="false"></div>
+    <div id="stage"><img id="img" alt="" draggable="false"><canvas id="lines"></canvas></div>
   </div>
   <div id="panel">
     <h2>Boxes</h2>
-    <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.</div>
+    <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.<br>
+      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; flèches = bouger la box (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</div>
     {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
     <details id="scaffolder"><summary class="small">Scaffold vierge (depuis la doc, sans .binds)</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
@@ -102,6 +112,52 @@ let scale = 1;
 
 const $ = s => document.querySelector(s);
 const stage = $("#stage"), img = $("#img");
+const wrap = $("#stagewrap"), lines = $("#lines");
+
+// ---- ergonomics state ----
+let zoom = null;                 // null = fit-to-window
+let spaceDown = false, dirty = false, lastAction = '';
+const undoStack = [], redoStack = [];
+const LS_KEY = 'mapedit:' + (new URLSearchParams(location.search).get('device') || 'new');
+
+function snapshot(action){
+  if(action === 'arrow' && lastAction === 'arrow') return;  // group arrow nudges
+  lastAction = action || '';
+  undoStack.push(JSON.stringify(state.boxes));
+  if(undoStack.length > 100) undoStack.shift();
+  redoStack.length = 0;
+  dirty = true;
+}
+function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(state.boxes)); state.boxes = JSON.parse(undoStack.pop()); sel = -1; lastAction = ''; renderPanel(); renderStage(); }
+function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(state.boxes)); state.boxes = JSON.parse(redoStack.pop()); sel = -1; lastAction = ''; renderPanel(); renderStage(); }
+
+function applyZoom(){
+  if(!state.width || !img.src) return;
+  const z = zoom === null ? Math.min(1, (wrap.clientWidth - 2) / state.width) : zoom;
+  img.style.width = Math.max(1, Math.round(state.width * z)) + 'px';
+}
+function setZoom(z, cx, cy){
+  const wr = wrap.getBoundingClientRect();
+  if(cx === undefined){ cx = wr.left + wrap.clientWidth / 2; cy = wr.top + wrap.clientHeight / 2; }
+  const sr = stage.getBoundingClientRect();
+  const ix = (cx - sr.left) / (scale || 1), iy = (cy - sr.top) / (scale || 1);  // image coords
+  zoom = Math.min(4, Math.max(0.05, z));
+  applyZoom(); computeScale();
+  wrap.scrollLeft = ix * scale - (cx - wr.left);
+  wrap.scrollTop = iy * scale - (cy - wr.top);
+  renderStage();
+}
+
+let saveTimer = null;
+function autosave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({ts: Date.now(), title: $("#title").value,
+        deviceid: $("#deviceid").value, imgname: $("#imgname").value, state}));
+    }catch(e){}
+  }, 400);
+}
 
 function loadExisting(){
   if(!EXISTING) return;
@@ -122,7 +178,7 @@ function loadImage(slug){
   img.onload = ()=>{
     if(!state.width) state.width = img.naturalWidth;
     if(!state.height) state.height = img.naturalHeight;
-    renderStage(); renderPanel();
+    applyZoom(); renderStage(); renderPanel();
   };
   img.onerror = ()=>{
     if(img.dataset.fb){ $("#status").textContent = "Image introuvable: "+slug; renderPanel(); return; }
@@ -152,11 +208,28 @@ function renderStage(){
       stage.appendChild(m);
     }
   });
+  // live leader lines (box edge -> button point), same idea as the renderer
+  lines.width = img.clientWidth || 0; lines.height = img.clientHeight || 0;
+  if(lines.width){
+    const ctx = lines.getContext('2d');
+    ctx.clearRect(0, 0, lines.width, lines.height);
+    ctx.strokeStyle = '#b8241f'; ctx.lineWidth = Math.max(1, 3 * scale);
+    state.boxes.forEach(b => {
+      if(!b.button_xy) return;
+      const [bx, by] = b.button_xy;
+      const ax = Math.min(Math.max(bx, b.box_xy[0]), b.box_xy[0] + b.box_wh[0]);
+      const ay = Math.min(Math.max(by, b.box_xy[1]), b.box_xy[1] + b.box_wh[1]);
+      if(ax === bx && ay === by) return;  // button inside the box
+      ctx.beginPath(); ctx.moveTo(ax * scale, ay * scale); ctx.lineTo(bx * scale, by * scale); ctx.stroke();
+    });
+  }
   $("#json").value = JSON.stringify(mapping(),null,1);
+  autosave();
 }
 
 function startDrag(e,i,d){
-  e.preventDefault(); sel=i; renderPanel(); renderStage();
+  if(spaceDown) return;
+  e.preventDefault(); snapshot('drag'); sel=i; renderPanel(); renderStage();
   const r=stage.getBoundingClientRect(), b=state.boxes[i];
   const ox=e.clientX-r.left-b.box_xy[0]*scale, oy=e.clientY-r.top-b.box_xy[1]*scale;
   function mv(ev){ b.box_xy=[Math.max(0,Math.round((ev.clientX-r.left-ox)/scale)),Math.max(0,Math.round((ev.clientY-r.top-oy)/scale))]; renderStage(); }
@@ -164,7 +237,8 @@ function startDrag(e,i,d){
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 }
 function startResize(e,i,d){
-  e.preventDefault(); const r=stage.getBoundingClientRect(), b=state.boxes[i];
+  if(spaceDown) return;
+  e.preventDefault(); snapshot('resize'); const r=stage.getBoundingClientRect(), b=state.boxes[i];
   function mv(ev){ b.box_wh=[Math.max(40,Math.round((ev.clientX-r.left)/scale-b.box_xy[0])),Math.max(30,Math.round((ev.clientY-r.top)/scale-b.box_xy[1]))]; renderStage(); }
   function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
@@ -174,8 +248,9 @@ stage.addEventListener('click',e=>{
   if(setBtnFor<0 || e.target.classList.contains('box')||e.target.classList.contains('rsz')||e.target.classList.contains('lbl')) {
     if(setBtnFor<0) return;
   }
-  if(setBtnFor<0) return;
+  if(setBtnFor<0 || spaceDown) return;
   const r=stage.getBoundingClientRect();
+  snapshot('btn');
   state.boxes[setBtnFor].button_xy=[Math.round((e.clientX-r.left)/scale),Math.round((e.clientY-r.top)/scale)];
   setBtnFor=-1; $("#status").textContent="Bouton placé."; renderStage(); renderPanel();
 });
@@ -211,16 +286,17 @@ function bindPanel(){
   $("#boxes").querySelectorAll('input,select').forEach(el=>{
     el.addEventListener('change',()=>{
       const i=+el.dataset.i, k=el.dataset.k;
+      snapshot('edit');
       if(el.dataset.j!==undefined){ const j=+el.dataset.j; let v=el.value; if(k==='number'&&v==='')v=null; state.boxes[i].rows[j][k]=v; }
       else if(k==='label'){ state.boxes[i].label=el.value; }
       renderStage();
     });
   });
   $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Clique le bouton sur l'image…";}));
-  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point retiré.";renderPanel();renderStage();}));
-  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Supprimer toute la box "'+(state.boxes[i].label||'box '+(i+1))+'" ?'))return;state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
-  $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();}));
-  $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);state.boxes[i].rows.splice(j,1);renderPanel();}));
+  $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();snapshot('clrbtn');state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point retiré.";renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Supprimer toute la box "'+(state.boxes[i].label||'box '+(i+1))+'" ? (Ctrl+Z pour annuler)'))return;snapshot('delbox');state.boxes.splice(i,1);sel=-1;renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;snapshot('addrow');(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);snapshot('delrow');state.boxes[i].rows.splice(j,1);renderPanel();renderStage();}));
 }
 
 function mapping(){
@@ -257,6 +333,7 @@ $("#btnscaffold").addEventListener('click',()=>{
     y+=h+Math.round(60*k);
   });
   if(!state.width){state.width=W;state.height=H;}
+  snapshot('scaffold');
   state.boxes=state.boxes.concat(boxes);
   sel=-1; renderPanel(); renderStage();
   $("#status").textContent=boxes.length+" boxes générées.";
@@ -264,6 +341,7 @@ $("#btnscaffold").addEventListener('click',()=>{
 
 $("#btnaddbox").addEventListener('click',()=>{
   if(!state.image){ alert("Upload d'abord une image."); return; }
+  snapshot('addbox');
   const w=Math.round(state.width*0.28);
   state.boxes.push({label:'A'+(state.boxes.length+1), box_xy:[40,40], box_wh:[w,160], button_xy:null, rows:[]});
   sel=state.boxes.length-1; renderPanel(); renderStage();
@@ -278,6 +356,7 @@ $("#btnupload").addEventListener('click',async()=>{
   // Rescale existing boxes (e.g. a scaffolded draft on the nominal canvas)
   // proportionally onto the real image dimensions.
   if(state.boxes.length && state.width && state.height && (state.width!==j.width || state.height!==j.height)){
+    snapshot('rescale');
     const fx=j.width/state.width, fy=j.height/state.height;
     state.boxes.forEach(b=>{
       b.box_xy=[Math.round(b.box_xy[0]*fx),Math.round(b.box_xy[1]*fy)];
@@ -286,7 +365,7 @@ $("#btnupload").addEventListener('click',async()=>{
     });
   }
   state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
-  img.onload=()=>{renderStage();}; img.src=j.url+'?t='+Date.now();
+  img.onload=()=>{applyZoom();renderStage();}; img.src=j.url+'?t='+Date.now();
   $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;
 });
 
@@ -306,11 +385,75 @@ $("#btnsave").addEventListener('click',async()=>{
   $("#status").textContent="Sauvegarde…";
   const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping()})});
   const j=await r.json(); $("#status").textContent=j.ok?("Sauvegardé (id "+j.id+(j.updated?", maj":"")+")"):("Erreur: "+(j.error||'?'));
+  if(j.ok){ dirty=false; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
 });
 
-window.addEventListener('resize',renderStage);
+// ---- zoom / pan / keyboard / draft restore ----
+$("#zoomin").addEventListener('click',()=>setZoom(((zoom??scale)||1)*1.25));
+$("#zoomout").addEventListener('click',()=>setZoom(((zoom??scale)||1)/1.25));
+$("#zoomfit").addEventListener('click',()=>{zoom=null;applyZoom();renderStage();});
+$("#btnundo").addEventListener('click',undo);
+$("#btnredo").addEventListener('click',redo);
+
+wrap.addEventListener('wheel',e=>{
+  if(!e.ctrlKey) return;
+  e.preventDefault();
+  setZoom(((zoom??scale)||1)*(e.deltaY<0?1.15:1/1.15), e.clientX, e.clientY);
+},{passive:false});
+
+wrap.addEventListener('mousedown',e=>{
+  if(!spaceDown) return;
+  e.preventDefault();
+  const sx=e.clientX, sy=e.clientY, sl=wrap.scrollLeft, st=wrap.scrollTop;
+  function mv(ev){ wrap.scrollLeft=sl-(ev.clientX-sx); wrap.scrollTop=st-(ev.clientY-sy); }
+  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+});
+
+function isEditable(t){ return t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'); }
+document.addEventListener('keydown',e=>{
+  if(isEditable(e.target)) return;
+  if(e.code==='Space'){ spaceDown=true; wrap.classList.add('panning'); e.preventDefault(); return; }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
+  if((e.ctrlKey||e.metaKey) && (e.key.toLowerCase()==='y' || (e.shiftKey && e.key.toLowerCase()==='z'))){ e.preventDefault(); redo(); return; }
+  if(sel<0 || !state.boxes[sel]) return;
+  const b=state.boxes[sel], step=e.shiftKey?10:1;
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='d'){
+    e.preventDefault(); snapshot('dup');
+    const c=JSON.parse(JSON.stringify(b));
+    c.box_xy=[b.box_xy[0]+20,b.box_xy[1]+20]; c.label=(b.label||'box')+' copy'; c.button_xy=null;
+    state.boxes.push(c); sel=state.boxes.length-1; renderPanel(); renderStage(); return;
+  }
+  if(e.key==='Delete'){ e.preventDefault(); snapshot('del'); state.boxes.splice(sel,1); sel=-1; renderPanel(); renderStage(); return; }
+  const mv={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
+  if(mv){ e.preventDefault(); snapshot('arrow'); b.box_xy=[Math.max(0,b.box_xy[0]+mv[0]),Math.max(0,b.box_xy[1]+mv[1])]; renderStage(); }
+});
+document.addEventListener('keyup',e=>{ if(e.code==='Space'){ spaceDown=false; wrap.classList.remove('panning'); }});
+
+window.addEventListener('beforeunload',e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+["#title","#deviceid"].forEach(s=>$(s).addEventListener('input',autosave));
+
+window.addEventListener('resize',()=>{ applyZoom(); renderStage(); });
 loadExisting();
 if(!state.image){ renderStage(); renderPanel(); }
+
+// offer to restore a locally autosaved draft (survives crash/refresh)
+(function(){
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){}
+  if(!saved || !saved.state || !(saved.state.boxes||[]).length) return;
+  const btn=document.createElement('button'); btn.className='ghost';
+  btn.textContent='Restaurer brouillon local ('+new Date(saved.ts).toLocaleString()+')';
+  btn.title='Session non sauvegardée retrouvée dans ce navigateur';
+  btn.addEventListener('click',()=>{
+    snapshot('restore');
+    state=Object.assign({title:'',image:null,width:0,height:0,boxes:[]}, saved.state);
+    $("#title").value=saved.title||''; $("#deviceid").value=saved.deviceid||''; $("#imgname").value=saved.imgname||state.image||'';
+    sel=-1;
+    if(state.image){ loadImage(state.image); } else { renderPanel(); renderStage(); }
+    btn.remove();
+  });
+  $("#status").before(btn);
+})();
 </script>
 </body>
 </html>

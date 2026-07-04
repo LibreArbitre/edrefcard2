@@ -64,6 +64,7 @@
   <div id="panel">
     <h2>Boxes</h2>
     <div class="hint" id="hint">1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set bouton" puis clique le bouton sur l'image. 5) Preview / Save.</div>
+    {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
     <div id="boxes"></div>
     <details><summary class="small">mapping_json</summary><textarea id="json" readonly></textarea></details>
     <div id="preview"></div>
@@ -204,7 +205,11 @@ function bindPanel(){
   $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);state.boxes[i].rows.splice(j,1);renderPanel();}));
 }
 
-function mapping(){ return {title:$("#title").value, image:state.image, styling:"Group", boxes:state.boxes}; }
+function mapping(){
+  const did=$("#deviceid").value.trim();
+  return {title:$("#title").value, image:state.image, device_ids:did?[did]:[],
+          styling:"Group", width:state.width, height:state.height, boxes:state.boxes};
+}
 
 $("#btnaddbox").addEventListener('click',()=>{
   if(!state.image){ alert("Upload d'abord une image."); return; }
@@ -219,6 +224,16 @@ $("#btnupload").addEventListener('click',async()=>{
   $("#status").textContent="Upload…";
   const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
   const j=await r.json(); if(j.error){$("#status").textContent="Erreur: "+j.error;return;}
+  // Rescale existing boxes (e.g. a scaffolded draft on the nominal canvas)
+  // proportionally onto the real image dimensions.
+  if(state.boxes.length && state.width && state.height && (state.width!==j.width || state.height!==j.height)){
+    const fx=j.width/state.width, fy=j.height/state.height;
+    state.boxes.forEach(b=>{
+      b.box_xy=[Math.round(b.box_xy[0]*fx),Math.round(b.box_xy[1]*fy)];
+      b.box_wh=[Math.round(b.box_wh[0]*fx),Math.round(b.box_wh[1]*fy)];
+      if(b.button_xy) b.button_xy=[Math.round(b.button_xy[0]*fx),Math.round(b.button_xy[1]*fy)];
+    });
+  }
   state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
   img.onload=()=>{renderStage();}; img.src=j.url+'?t='+Date.now();
   $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;

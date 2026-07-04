@@ -77,6 +77,20 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
             handled.add(device_key)
         except Exception as e:
             logError(f"data-driven render failed for {device_key}: {e}\n")
+            continue
+        # Continuous enrichment: surface inputs this user actually bound that the
+        # mapping doesn't cover yet (VIRPIL configs vary per user), with a
+        # ready-to-open editor URL that merges them as an UNASSIGNED box.
+        try:
+            from scripts.scaffold import missing_keys
+            used = sorted({pk['Key'] for pk in physical_keys.values()
+                           if pk['Device'] == dev_id and str(pk['DeviceIndex']) == str(idx)})
+            miss = missing_keys(m, used)
+            if miss:
+                logError(f"data-driven: {dev_id} inputs not in mapping: {', '.join(miss)} "
+                         f"-> /admin/mapping-editor?device={dev_id}&from={config.name}\n")
+        except Exception as e:
+            logError(f"data-driven enrichment check failed for {device_key}: {e}\n")
     return created, handled
 
 

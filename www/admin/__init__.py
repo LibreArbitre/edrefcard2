@@ -981,7 +981,7 @@ def controllers_attach():
     mapping_id = request.form.get('mapping_id')
     row = database.get_controller_mapping(mapping_id) if mapping_id else None
     if not device_id or not row:
-        flash('Device ID et mapping requis.', 'error')
+        flash('Device ID and mapping required.', 'error')
         return redirect(url_for('admin.controllers'))
     m = json.loads(row['mapping_json'])
     ids = m.get('device_ids') or [row['device_id']]
@@ -990,7 +990,7 @@ def controllers_attach():
     m['device_ids'] = ids
     database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
     database.dismiss_unknown_device(device_id)
-    flash(f'{device_id} rattaché à "{row["device_name"]}".', 'success')
+    flash(f'{device_id} attached to "{row["device_name"]}".', 'success')
     return redirect(url_for('admin.controllers'))
 
 
@@ -1001,7 +1001,7 @@ def controllers_dismiss():
     device_id = (request.form.get('device_id') or '').strip()
     if device_id:
         database.dismiss_unknown_device(device_id)
-        flash(f'{device_id} ignoré.', 'success')
+        flash(f'{device_id} dismissed.', 'success')
     return redirect(url_for('admin.controllers'))
 
 
@@ -1014,10 +1014,10 @@ def controllers_duplicate():
     new_device_id = (request.form.get('new_device_id') or '').strip()
     row = database.get_controller_mapping(mapping_id) if mapping_id else None
     if not row or not new_device_id:
-        flash('Mapping source et nouveau Device ID requis.', 'error')
+        flash('Source mapping and new device ID required.', 'error')
         return redirect(url_for('admin.controllers'))
     if _find_mapping_for_device(new_device_id):
-        flash(f'{new_device_id} est déjà couvert par un mapping.', 'error')
+        flash(f'{new_device_id} is already covered by a mapping.', 'error')
         return redirect(url_for('admin.controllers'))
     m = json.loads(row['mapping_json'])
     m['device_ids'] = [new_device_id]
@@ -1033,7 +1033,7 @@ def controllers_duplicate():
         src = next((p for p in (cdir / f'{template_name}.jpg',
                                 res_dir / f'{template_name}.jpg') if p.exists()), None)
         if src is None:
-            flash(f'Image source "{template_name}.jpg" introuvable, miroir impossible.', 'error')
+            flash(f'Source image "{template_name}.jpg" not found, cannot mirror.', 'error')
             return redirect(url_for('admin.controllers'))
         template_name = f'{template_name}-mirror'
         cdir.mkdir(parents=True, exist_ok=True)
@@ -1052,7 +1052,7 @@ def controllers_duplicate():
         new_device_id, m['title'], template_name, f'{template_name}.jpg',
         row['image_width'], row['image_height'], json.dumps(m))
     database.dismiss_unknown_device(new_device_id)
-    flash(f'Mapping dupliqué (id {mid}). Ouvre-le pour ajuster.', 'success')
+    flash(f'Mapping duplicated (id {mid}). Open it to adjust.', 'success')
     return redirect(url_for('admin.mapping_editor', device=new_device_id))
 
 
@@ -1088,7 +1088,7 @@ def mapping_editor():
     if device_id and from_id:
         xml = _read_binds_xml(from_id)
         if xml is None:
-            draft_note = f'Fichier .binds introuvable pour "{from_id}"'
+            draft_note = f'.binds file not found for "{from_id}"'
         elif existing is None:
             # Scaffold a brand-new draft mapping from the .binds
             try:
@@ -1096,10 +1096,10 @@ def mapping_editor():
                 existing = {'device_id': device_id, 'device_name': '',
                             'mapping_json': json.dumps(draft),
                             'image_width': draft['width'], 'image_height': draft['height']}
-                draft_note = (f'Draft scaffolded depuis "{from_id}": '
-                              f'{len(draft["boxes"])} boxes (non sauvegardé)')
+                draft_note = (f'Draft scaffolded from "{from_id}": '
+                              f'{len(draft["boxes"])} boxes (not saved yet)')
             except Exception as e:
-                draft_note = f'Scaffold impossible: {e}'
+                draft_note = f'Cannot scaffold: {e}'
         else:
             # Enrichment: surface inputs used in this .binds but absent from the mapping
             try:
@@ -1114,12 +1114,12 @@ def mapping_editor():
                                   for k in missing]}]
                     existing = dict(existing)
                     existing['mapping_json'] = json.dumps(m)
-                    draft_note = (f'{len(missing)} inputs de "{from_id}" absents du mapping, '
-                                  f'ajoutés en box UNASSIGNED (non sauvegardé)')
+                    draft_note = (f'{len(missing)} inputs from "{from_id}" missing from the mapping, '
+                                  f'added as an UNASSIGNED box (not saved yet)')
                 else:
-                    draft_note = f'Rien à enrichir: "{from_id}" est déjà couvert par le mapping'
+                    draft_note = f'Nothing to enrich: "{from_id}" is already covered by the mapping'
             except Exception as e:
-                draft_note = f'Enrichissement impossible: {e}'
+                draft_note = f'Cannot enrich: {e}'
 
     existing_json = json.dumps(existing) if existing else 'null'
     return render_template('admin/mapping_editor.html', existing_json=existing_json,

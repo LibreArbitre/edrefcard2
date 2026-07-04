@@ -5,9 +5,9 @@
 {% block content %}
 <div class="page-header">
     <h1>🎛️ Controllers</h1>
-    <p>Vocabulaire : un <strong>device</strong> = un hardware ID vu dans un .binds ; un <strong>controller</strong> = la carte rendue.
-       Deux moteurs : <span class="badge badge-success">data-driven</span> (table éditable, photo propre + boxes)
-       et <span class="badge badge-muted">legacy</span> (artwork baké + coordonnées en dur dans bindingsData.py).</p>
+    <p>Vocabulary: a <strong>device</strong> = a hardware ID seen in a .binds; a <strong>controller</strong> = the rendered card.
+       Two engines: <span class="badge badge-success">data-driven</span> (editable table, clean photo + boxes)
+       and <span class="badge badge-muted">legacy</span> (artwork + coordinates baked into bindingsData.py).</p>
 </div>
 
 <div class="card">
@@ -35,20 +35,20 @@
                 <td>
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
-                           href="{{ url_for('admin.mapping_editor', device=u.device_id, **({'from': u.last_run_id} if u.last_run_id else {})) }}">Scaffolder</a>
+                           href="{{ url_for('admin.mapping_editor', device=u.device_id, **({'from': u.last_run_id} if u.last_run_id else {})) }}">Scaffold</a>
                         {% if mappings %}
                         <form method="post" action="{{ url_for('admin.controllers_attach') }}" style="display:flex;gap:0.25rem">
                             <input type="hidden" name="device_id" value="{{ u.device_id }}">
                             <select name="mapping_id" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem">
                                 {% for m in mappings %}<option value="{{ m.id }}">{{ m.device_name }}</option>{% endfor %}
                             </select>
-                            <button class="btn btn-outline btn-sm" type="submit">Rattacher</button>
+                            <button class="btn btn-outline btn-sm" type="submit">Attach</button>
                         </form>
                         {% endif %}
                         <form method="post" action="{{ url_for('admin.controllers_dismiss') }}"
-                              onsubmit="return confirm('Ignorer {{ u.device_id }} ?')">
+                              onsubmit="return confirm('Dismiss {{ u.device_id }}?')">
                             <input type="hidden" name="device_id" value="{{ u.device_id }}">
-                            <button class="btn btn-danger btn-sm" type="submit">Ignorer</button>
+                            <button class="btn btn-danger btn-sm" type="submit">Dismiss</button>
                         </form>
                     </div>
                 </td>
@@ -64,7 +64,7 @@
 <div class="card">
     <div class="card-header">
         <h2>Mappings ({{ mappings|length }})</h2>
-        <a class="btn btn-primary btn-sm" href="{{ url_for('admin.mapping_editor') }}">+ Nouveau (éditeur)</a>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('admin.mapping_editor') }}">+ New (editor)</a>
     </div>
     {% if mappings %}
     <table>
@@ -89,14 +89,14 @@
                 <td>
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
-                           href="{{ url_for('admin.mapping_editor', device=m.device_id) }}">Ouvrir</a>
+                           href="{{ url_for('admin.mapping_editor', device=m.device_id) }}">Open</a>
                         <form method="post" action="{{ url_for('admin.controllers_duplicate') }}" style="display:flex;gap:0.25rem;align-items:center">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">
-                            <input type="text" name="new_device_id" placeholder="Nouveau Device ID"
+                            <input type="text" name="new_device_id" placeholder="New device ID"
                                    style="width:150px;padding:0.25rem 0.5rem;font-size:0.8rem" required>
-                            <label style="font-size:0.75rem;white-space:nowrap" title="Variante L/R : photo retournée + coordonnées en miroir automatiques">
-                                <input type="checkbox" name="mirror" value="1"> miroir</label>
-                            <button class="btn btn-outline btn-sm" type="submit">Dupliquer</button>
+                            <label style="font-size:0.75rem;white-space:nowrap" title="L/R variant: photo flipped + coordinates mirrored automatically">
+                                <input type="checkbox" name="mirror" value="1"> mirror</label>
+                            <button class="btn btn-outline btn-sm" type="submit">Duplicate</button>
                         </form>
                     </div>
                 </td>
@@ -112,11 +112,11 @@
 <div class="card">
     <div class="card-header">
         <h2>Legacy controllers ({{ legacy|length }})</h2>
-        <input type="search" id="legacyfilter" placeholder="Filtrer..." style="width:220px">
+        <input type="search" id="legacyfilter" placeholder="Filter..." style="width:220px">
     </div>
     <p style="color:var(--text-secondary);font-size:0.85rem;margin-top:0">
-        Artwork et coordonnées bakés dans <code>bindingsData.py</code> : non éditables ici.
-        Pour migrer l'un d'eux en data-driven, crée un mapping pour ses device IDs dans l'éditeur.
+        Artwork and coordinates baked into <code>bindingsData.py</code>: not editable here.
+        To migrate one to data-driven, create a mapping for its device IDs in the editor.
     </p>
     <table id="legacytable">
         <thead>
@@ -135,7 +135,7 @@
                 <td>{% for did in l.device_ids %}<code>{{ did }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
                 <td>
                     <span class="badge badge-muted">legacy</span>
-                    {% if l.dd_overlap %}<span class="badge badge-success" title="Un mapping data-driven couvre aussi un de ses device IDs">+ data-driven</span>{% endif %}
+                    {% if l.dd_overlap %}<span class="badge badge-success" title="A data-driven mapping also covers one of its device IDs">+ data-driven</span>{% endif %}
                 </td>
             </tr>
             {% endfor %}

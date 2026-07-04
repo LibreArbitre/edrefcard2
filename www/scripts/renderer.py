@@ -53,19 +53,29 @@ def _init_styles():
         _styles_initialized = True
 
 
-def writeUrlToDrawing(config, drawing, public):
+# Templates whose default top-left URL spot is occupied by artwork and need the URL
+# elsewhere. The mirrored left-handed TCA sidestick has a wide central box that sits
+# under the default position, so the URL goes to the clear bottom-left instead.
+_URL_POSITION_OVERRIDES = {
+    'tca-left': (30, 2110),
+}
+
+
+def writeUrlToDrawing(config, drawing, public, source=None):
     """Write the reference card URL to the image.
-    
+
     Args:
         config: Config object
         drawing: Wand Drawing context
         public: Whether this is a public reference card
+        source: Template name, used to look up a per-template URL position override
     """
     url = config.refcardURL() if public else Config.webRoot()
+    x, y = _URL_POSITION_OVERRIDES.get(source, (23, 252))
     drawing.push()
     drawing.font = getFontPath('SemiBold', 'Normal')
     drawing.font_size = 36
-    drawing.text(x=23, y=252, body=url)
+    drawing.text(x=x, y=y, body=url)
     drawing.pop()
 
 
@@ -108,7 +118,7 @@ def createKeyboardImage(physicalKeys, modifiers, source, imageDevices,
             context.fill_color = Color('Black')
 
             # Add URL to title
-            writeUrlToDrawing(config, context, public)
+            writeUrlToDrawing(config, context, public, source)
 
             # Organize outputs by group
             outputs = {group: {} for group in displayGroups}
@@ -924,7 +934,7 @@ def createHOTASImage(physicalKeys, modifiers, source, imageDevices, biggestFontS
             context.fill_opacity = 1
 
             # Add URL to title
-            writeUrlToDrawing(config, context, public)
+            writeUrlToDrawing(config, context, public, source)
 
             for physicalKeySpec, physicalKey in physicalKeys.items():
                 itemDevice = physicalKey.get('Device')

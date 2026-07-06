@@ -162,6 +162,32 @@
     </table>
 </div>
 
+<div class="card">
+    <div class="card-header">
+        <h2>Recent activity</h2>
+    </div>
+    {% if audit %}
+    <table>
+        <thead>
+            <tr><th>When</th><th>Actor</th><th>Action</th><th>Device</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+            {% for a in audit %}
+            <tr>
+                <td style="white-space:nowrap">{{ a.created_at }}</td>
+                <td>{{ a.actor or '?' }}</td>
+                <td><span class="badge {{ 'badge-success' if a.action == 'publish' else ('badge-warning' if a.action in ('update', 'create', 'duplicate') else 'badge-muted') }}">{{ a.action }}</span></td>
+                <td>{% if a.device_id %}<code>{{ a.device_id }}</code>{% endif %}</td>
+                <td style="color:var(--text-secondary)">{{ a.detail or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-secondary)">No activity recorded yet.</p>
+    {% endif %}
+</div>
+
 <script>
 document.getElementById('legacyfilter').addEventListener('input', function () {
     const q = this.value.toLowerCase();

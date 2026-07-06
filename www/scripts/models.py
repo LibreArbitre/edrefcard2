@@ -133,8 +133,14 @@ class Config:
         return self.path().with_suffix(suffix)
         
     def exists(self):
-        """Check if this config already exists on disk."""
-        return self.path().exists()
+        """Check if this config already exists on disk.
+
+        The bare base path is never created (only suffixed files like
+        <id>.binds are), so probe the .binds file too: otherwise same-named
+        uploads silently reuse the run id, overwrite the previous config and
+        the browser serves stale cached card images.
+        """
+        return self.path().exists() or self.pathWithSuffix('.binds').exists()
         
     def makeDir(self):
         """Create the directory structure for this config."""

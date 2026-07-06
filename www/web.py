@@ -48,6 +48,9 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
         return created, handled
     index = {}
     for row in rows:
+        # Draft mappings (mapper work awaiting admin review) are not rendered
+        if row.get('status', 'published') != 'published':
+            continue
         try:
             m = json.loads(row['mapping_json'])
         except Exception:

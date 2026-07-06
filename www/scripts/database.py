@@ -114,6 +114,16 @@ def init_db(db_path):
         except Exception:
             pass  # Column already exists
 
+        # Draft/review workflow for controller mappings (mapper saves are
+        # drafts, hidden from public rendering until an admin publishes).
+        # Pre-existing mappings default to published.
+        for ddl in ("ALTER TABLE controller_mappings ADD COLUMN status TEXT NOT NULL DEFAULT 'published'",
+                    "ALTER TABLE controller_mappings ADD COLUMN updated_by TEXT"):
+            try:
+                conn.execute(ddl)
+            except Exception:
+                pass  # Column already exists
+
 
 @contextmanager
 def get_db():
@@ -411,7 +421,8 @@ def get_all_config_ids():
 # ============== Controller Mapping CRUD ==============
 
 def create_controller_mapping(device_id, device_name, template_name, image_filename,
-                               image_width, image_height, mapping_json):
+                               image_width, image_height, mapping_json,
+                               status='published', updated_by=None):
     """Create a new controller mapping.
     
     Args:
@@ -431,13 +442,15 @@ def create_controller_mapping(device_id, device_name, template_name, image_filen
     
     with get_db() as conn:
         cursor = conn.execute("""
-            INSERT INTO controller_mappings 
+            INSERT INTO controller_mappings
             (device_id, device_name, template_name, image_filename,
-             image_width, image_height, mapping_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             image_width, image_height, mapping_json, created_at, updated_at,
+             status, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (device_id, device_name, template_name, image_filename,
-              image_width, image_height, mapping_json, now, now))
-        
+              image_width, image_height, mapping_json, now, now,
+              status, updated_by))
+
         return cursor.lastrowid
 
 

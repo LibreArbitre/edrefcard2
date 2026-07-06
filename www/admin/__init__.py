@@ -955,7 +955,10 @@ def controllers():
             'device_ids': m.get('device_ids') or [r['device_id']],
             'image': m.get('image'), 'box_count': len(m.get('boxes') or []),
             'updated_at': r.get('updated_at'),
+            'status': r.get('status', 'published'),
+            'updated_by': r.get('updated_by'),
         })
+    _, role = current_user()
     unknown = [u for u in database.list_unknown_devices()
                if _find_mapping_for_device(u['device_id']) is None]
     # Legacy controllers: baked artwork + coords in bindingsData.py (read-only
@@ -971,7 +974,22 @@ def controllers():
             'dd_overlap': any(i in dd_ids for i in ids),
         })
     return render_template('admin/controllers.html', mappings=mappings,
-                           unknown=unknown, legacy=legacy)
+                           unknown=unknown, legacy=legacy, role=role)
+
+
+@admin_bp.route('/controllers/publish', methods=['POST'])
+@require_admin
+def controllers_publish():
+    """Publish or unpublish a mapping (draft = hidden from public rendering)."""
+    mapping_id = request.form.get('mapping_id')
+    state = request.form.get('state')
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not row or state not in ('published', 'draft'):
+        flash('Mapping and target state required.', 'error')
+        return redirect(url_for('admin.controllers'))
+    database.update_controller_mapping(row['id'], status=state)
+    flash(f'"{row["device_name"]}" is now {state}.', 'success')
+    return redirect(url_for('admin.controllers'))
 
 
 @admin_bp.route('/controllers/attach', methods=['POST'])
@@ -1050,9 +1068,12 @@ def controllers_duplicate():
         m['image'] = template_name
         suffix = '(mirror)'
     m['title'] = f"{m.get('title') or row['device_name']} {suffix}"
+    user_name, _ = current_user()
+    # Duplicates always need adjustment, so they start as drafts
     mid = database.create_controller_mapping(
         new_device_id, m['title'], template_name, f'{template_name}.jpg',
-        row['image_width'], row['image_height'], json.dumps(m))
+        row['image_width'], row['image_height'], json.dumps(m),
+        status='draft', updated_by=user_name)
     database.dismiss_unknown_device(new_device_id)
     flash(f'Mapping duplicated (id {mid}). Open it to adjust.', 'success')
     return redirect(url_for('admin.mapping_editor', device=new_device_id))
@@ -1192,16 +1213,23 @@ def mapping_editor_save():
         return jsonify({'error': 'device_id and mapping.image are required'}), 400
     mapping_json = json.dumps(mapping)
     image_file = f"{mapping['image']}.jpg"
+    user_name, role = current_user()
     existing = database.get_controller_mapping_by_device_id(device_id)
     if existing:
+        # Mapper edits demote the mapping to draft (hidden from public
+        # rendering) until an admin reviews and re-publishes it.
+        status = existing.get('status', 'published') if role == 'admin' else 'draft'
         database.update_controller_mapping(existing['id'], device_name=device_name,
                                            template_name=mapping['image'],
-                                           image_filename=image_file, mapping_json=mapping_json)
-        return jsonify({'ok': True, 'id': existing['id'], 'updated': True})
+                                           image_filename=image_file, mapping_json=mapping_json,
+                                           status=status, updated_by=user_name)
+        return jsonify({'ok': True, 'id': existing['id'], 'updated': True, 'status': status})
     try:
         w, h = PILImage.open(str(Config.configsPath() / 'controllers' / image_file)).size
     except Exception:
         w, h = 0, 0
+    status = 'published' if role == 'admin' else 'draft'
     mid = database.create_controller_mapping(device_id, device_name, mapping['image'],
-                                             image_file, w, h, mapping_json)
-    return jsonify({'ok': True, 'id': mid, 'updated': False})
+                                             image_file, w, h, mapping_json,
+                                             status=status, updated_by=user_name)
+    return jsonify({'ok': True, 'id': mid, 'updated': False, 'status': status})

@@ -14,6 +14,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from scripts import database, parseBindings, slugify
 
 from scripts.models import Config, Errors
+from extensions import limiter
 from .auth import (require_admin, require_mapper, current_user,
                    login_session_user, logout_session_user)
 
@@ -842,6 +843,7 @@ def maintenance_toggle():
 # ============== Session auth (multi-user: admin + mappers) ==============
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("20 per hour", methods=['POST'])
 def login():
     """Session login form. Accepts DB users (admin/mapper roles) and the
     env-configured admin. HTTP Basic remains usable for scripts/tools."""

@@ -44,6 +44,10 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max upload
 app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 app.config['WWW_DIR'] = WWW_DIR
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+# Session cookie hardening (session auth for admin/mapper accounts)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('APP_URL', '').startswith('https')
 
 # Configure the bindings Config class for Flask
 Config.setDirRoot(WWW_DIR)

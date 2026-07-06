@@ -514,7 +514,8 @@ def update_controller_mapping(mapping_id, **kwargs):
     import datetime
     
     allowed_fields = {'device_name', 'template_name', 'image_filename',
-                      'image_width', 'image_height', 'mapping_json'}
+                      'image_width', 'image_height', 'mapping_json',
+                      'status', 'updated_by'}
     updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
     
     if not updates:

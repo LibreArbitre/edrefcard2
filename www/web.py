@@ -284,9 +284,18 @@ def generate():
         if device is None and device_key not in ignored_devices and device_key not in handled_dd:
             logError(f'{run_id}: found unsupported device {device_key} '
                      f'-> scaffold: /admin/mapping-editor?device={device_key.split("::")[0]}&from={run_id}\n')
-            # Feed the admin triage queue (/admin/controllers)
+            # Feed the admin triage queue (/admin/controllers); ping Discord
+            # only on the FIRST sighting of a device.
             try:
-                database.record_unknown_device(device_key.split('::')[0], run_id)
+                if database.record_unknown_device(device_key.split('::')[0], run_id):
+                    try:
+                        from admin.backup import DiscordNotifier
+                        DiscordNotifier.from_settings().send_notification(
+                            'New unknown controller',
+                            f'Device {device_key.split("::")[0]} seen for the first time '
+                            f'(config "{run_id}"). Triage it on /admin/controllers.')
+                    except Exception:
+                        pass
             except Exception as e:
                 logError(f'{run_id}: cannot record unknown device sighting: {e}\n')
             if errors.unhandledDevicesWarnings == '':

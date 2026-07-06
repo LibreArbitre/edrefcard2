@@ -1212,6 +1212,15 @@ def mapping_editor_preview():
     return jsonify({'url': url_for('web.serve_config', path=f"dd/ddpreview-{mapping['image']}.jpg")})
 
 
+def _notify_discord_mapping(title, message, fields=None):
+    """Ping the (backup) Discord webhook about mapper activity. Never raises."""
+    try:
+        from .backup import DiscordNotifier
+        DiscordNotifier.from_settings().send_notification(title, message, fields=fields)
+    except Exception:
+        pass
+
+
 @admin_bp.route('/mapping-editor/save', methods=['POST'])
 @require_mapper
 def mapping_editor_save():
@@ -1223,6 +1232,7 @@ def mapping_editor_save():
     mapping = data.get('mapping') or {}
     device_id = (data.get('device_id') or '').strip()
     device_name = (data.get('device_name') or mapping.get('title') or '').strip()
+    base_updated_at = data.get('base_updated_at')
     if not device_id or not mapping.get('image'):
         return jsonify({'error': 'device_id and mapping.image are required'}), 400
     mapping_json = json.dumps(mapping)
@@ -1230,6 +1240,15 @@ def mapping_editor_save():
     user_name, role = current_user()
     existing = database.get_controller_mapping_by_device_id(device_id)
     if existing:
+        # Optimistic concurrency: reject the save if someone else saved since
+        # this editor session loaded the mapping (last-write-wins is silent
+        # data loss with several mappers around).
+        if str(existing.get('updated_at') or '') != str(base_updated_at or ''):
+            who = existing.get('updated_by') or 'someone else'
+            return jsonify({'error': f'Conflict: "{who}" saved this mapping at '
+                                     f'{existing.get("updated_at")} while you were editing. '
+                                     f'Copy your mapping_json somewhere safe, reload the page, '
+                                     f'then merge your changes.'}), 409
         # Mapper edits demote the mapping to draft (hidden from public
         # rendering) until an admin reviews and re-publishes it.
         status = existing.get('status', 'published') if role == 'admin' else 'draft'
@@ -1239,7 +1258,13 @@ def mapping_editor_save():
                                            status=status, updated_by=user_name)
         database.log_mapping_action('update', user_name, existing['id'], device_id,
                                     f"{len(mapping.get('boxes') or [])} boxes, status {status}")
-        return jsonify({'ok': True, 'id': existing['id'], 'updated': True, 'status': status})
+        if role != 'admin':
+            _notify_discord_mapping('Mapping updated (draft)',
+                                    f'{user_name} updated "{device_name}" ({device_id}), '
+                                    f'{len(mapping.get("boxes") or [])} boxes. Awaiting review on /admin/controllers.')
+        fresh = database.get_controller_mapping(existing['id'])
+        return jsonify({'ok': True, 'id': existing['id'], 'updated': True, 'status': status,
+                        'updated_at': str(fresh.get('updated_at') or '')})
     try:
         w, h = PILImage.open(str(Config.configsPath() / 'controllers' / image_file)).size
     except Exception:
@@ -1250,4 +1275,10 @@ def mapping_editor_save():
                                              status=status, updated_by=user_name)
     database.log_mapping_action('create', user_name, mid, device_id,
                                 f"{len(mapping.get('boxes') or [])} boxes, status {status}")
-    return jsonify({'ok': True, 'id': mid, 'updated': False, 'status': status})
+    if role != 'admin':
+        _notify_discord_mapping('New mapping created (draft)',
+                                f'{user_name} created "{device_name}" ({device_id}), '
+                                f'{len(mapping.get("boxes") or [])} boxes. Awaiting review on /admin/controllers.')
+    fresh = database.get_controller_mapping(mid)
+    return jsonify({'ok': True, 'id': mid, 'updated': False, 'status': status,
+                    'updated_at': str(fresh.get('updated_at') or '')})

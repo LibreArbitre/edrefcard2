@@ -566,8 +566,14 @@ def get_all_controller_mappings():
 
 
 def record_unknown_device(device_id, run_id):
-    """Upsert a sighting of an unmapped controller (admin triage queue)."""
+    """Upsert a sighting of an unmapped controller (admin triage queue).
+
+    Returns True when this is the FIRST sighting of the device (callers can
+    notify on new hardware without spamming on every upload)."""
     with get_db() as conn:
+        known = conn.execute(
+            "SELECT 1 FROM unknown_device_sightings WHERE device_id = ?",
+            (device_id,)).fetchone()
         conn.execute("""
             INSERT INTO unknown_device_sightings (device_id, last_run_id)
             VALUES (?, ?)
@@ -576,6 +582,7 @@ def record_unknown_device(device_id, run_id):
                 last_run_id = excluded.last_run_id,
                 last_seen = CURRENT_TIMESTAMP
         """, (device_id, run_id))
+        return known is None
 
 
 def list_unknown_devices():

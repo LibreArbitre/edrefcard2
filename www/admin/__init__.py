@@ -974,7 +974,8 @@ def controllers():
             'dd_overlap': any(i in dd_ids for i in ids),
         })
     return render_template('admin/controllers.html', mappings=mappings,
-                           unknown=unknown, legacy=legacy, role=role)
+                           unknown=unknown, legacy=legacy, role=role,
+                           audit=database.list_mapping_audit(25))
 
 
 @admin_bp.route('/controllers/publish', methods=['POST'])
@@ -988,6 +989,9 @@ def controllers_publish():
         flash('Mapping and target state required.', 'error')
         return redirect(url_for('admin.controllers'))
     database.update_controller_mapping(row['id'], status=state)
+    user_name, _ = current_user()
+    database.log_mapping_action('publish' if state == 'published' else 'unpublish',
+                                user_name, row['id'], row['device_id'])
     flash(f'"{row["device_name"]}" is now {state}.', 'success')
     return redirect(url_for('admin.controllers'))
 
@@ -1010,6 +1014,9 @@ def controllers_attach():
     m['device_ids'] = ids
     database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
     database.dismiss_unknown_device(device_id)
+    user_name, _ = current_user()
+    database.log_mapping_action('attach', user_name, row['id'], device_id,
+                                f'to "{row["device_name"]}"')
     flash(f'{device_id} attached to "{row["device_name"]}".', 'success')
     return redirect(url_for('admin.controllers'))
 
@@ -1021,6 +1028,8 @@ def controllers_dismiss():
     device_id = (request.form.get('device_id') or '').strip()
     if device_id:
         database.dismiss_unknown_device(device_id)
+        user_name, _ = current_user()
+        database.log_mapping_action('dismiss', user_name, None, device_id)
         flash(f'{device_id} dismissed.', 'success')
     return redirect(url_for('admin.controllers'))
 
@@ -1074,6 +1083,8 @@ def controllers_duplicate():
         new_device_id, m['title'], template_name, f'{template_name}.jpg',
         row['image_width'], row['image_height'], json.dumps(m),
         status='draft', updated_by=user_name)
+    database.log_mapping_action('duplicate', user_name, mid, new_device_id,
+                                f'from "{row["device_name"]}"' + (' (mirror)' if suffix == '(mirror)' else ''))
     database.dismiss_unknown_device(new_device_id)
     flash(f'Mapping duplicated (id {mid}). Open it to adjust.', 'success')
     return redirect(url_for('admin.mapping_editor', device=new_device_id))
@@ -1168,6 +1179,9 @@ def mapping_editor_upload():
     except Exception as e:
         return jsonify({'error': f'Bad image: {e}'}), 400
     img.save(str(cdir / f'{name}.jpg'), quality=92)
+    user_name, _ = current_user()
+    database.log_mapping_action('upload-image', user_name, None, None,
+                                f'{name}.jpg ({img.width}x{img.height})')
     return jsonify({'name': name, 'width': img.width, 'height': img.height,
                     'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
 
@@ -1223,6 +1237,8 @@ def mapping_editor_save():
                                            template_name=mapping['image'],
                                            image_filename=image_file, mapping_json=mapping_json,
                                            status=status, updated_by=user_name)
+        database.log_mapping_action('update', user_name, existing['id'], device_id,
+                                    f"{len(mapping.get('boxes') or [])} boxes, status {status}")
         return jsonify({'ok': True, 'id': existing['id'], 'updated': True, 'status': status})
     try:
         w, h = PILImage.open(str(Config.configsPath() / 'controllers' / image_file)).size
@@ -1232,4 +1248,6 @@ def mapping_editor_save():
     mid = database.create_controller_mapping(device_id, device_name, mapping['image'],
                                              image_file, w, h, mapping_json,
                                              status=status, updated_by=user_name)
+    database.log_mapping_action('create', user_name, mid, device_id,
+                                f"{len(mapping.get('boxes') or [])} boxes, status {status}")
     return jsonify({'ok': True, 'id': mid, 'updated': False, 'status': status})

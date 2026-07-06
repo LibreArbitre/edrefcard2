@@ -88,6 +88,17 @@ def init_db(db_path):
                 last_login TIMESTAMP
             );
 
+            -- Audit trail of controller-mapping actions (who did what when)
+            CREATE TABLE IF NOT EXISTS mapping_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mapping_id INTEGER,
+                device_id TEXT,
+                action TEXT NOT NULL,
+                actor TEXT,
+                detail TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             -- Unknown controllers seen at generation time (admin triage queue)
             CREATE TABLE IF NOT EXISTS unknown_device_sightings (
                 device_id TEXT PRIMARY KEY,
@@ -582,6 +593,29 @@ def dismiss_unknown_device(device_id):
     with get_db() as conn:
         conn.execute("DELETE FROM unknown_device_sightings WHERE device_id = ?",
                      (device_id,))
+
+
+# ---- controller-mapping audit trail ----
+
+def log_mapping_action(action, actor, mapping_id=None, device_id=None, detail=None):
+    """Append an entry to the mapping audit trail. Never raises."""
+    try:
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO mapping_audit_log (mapping_id, device_id, action, actor, detail)
+                VALUES (?, ?, ?, ?, ?)
+            """, (mapping_id, device_id, action, actor, detail))
+    except Exception:
+        pass
+
+
+def list_mapping_audit(limit=30):
+    """Return the most recent mapping audit entries."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT * FROM mapping_audit_log ORDER BY id DESC LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ---- admin-panel users (session auth) ----

@@ -456,7 +456,8 @@ $("#btnsave").addEventListener('click',async()=>{
   if(!state.image){alert("No image.");return;}
   $("#status").textContent="Saving…";
   const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping()})});
-  const j=await r.json(); $("#status").textContent=j.ok?("Saved (id "+j.id+(j.updated?", updated":"")+")"):("Error: "+(j.error||'?'));
+  const j=await r.json();
+  $("#status").textContent=j.ok?("Saved (id "+j.id+(j.updated?", updated":"")+(j.status==='draft'?", DRAFT - an admin must publish it":"")+")"):("Error: "+(j.error||'?'));
   if(j.ok){ dirty=false; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
 });
 

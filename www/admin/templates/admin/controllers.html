@@ -74,6 +74,7 @@
                 <th>Device IDs</th>
                 <th>Image</th>
                 <th>Boxes</th>
+                <th>Status</th>
                 <th>Updated</th>
                 <th>Actions</th>
             </tr>
@@ -85,11 +86,29 @@
                 <td>{% for did in m.device_ids %}<code>{{ did }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
                 <td>{{ m.image or '?' }}</td>
                 <td>{{ m.box_count }}</td>
-                <td>{{ m.updated_at }}</td>
+                <td>
+                    <span class="badge {{ 'badge-success' if m.status == 'published' else 'badge-warning' }}"
+                          title="Drafts are hidden from public rendering until published">{{ m.status }}</span>
+                </td>
+                <td>{{ m.updated_at }}{% if m.updated_by %}<br><span style="color:var(--text-muted);font-size:0.8rem">by {{ m.updated_by }}</span>{% endif %}</td>
                 <td>
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
                            href="{{ url_for('admin.mapping_editor', device=m.device_id) }}">Open</a>
+                        {% if role == 'admin' %}
+                        <form method="post" action="{{ url_for('admin.controllers_publish') }}">
+                            <input type="hidden" name="mapping_id" value="{{ m.id }}">
+                            {% if m.status == 'published' %}
+                            <input type="hidden" name="state" value="draft">
+                            <button class="btn btn-outline btn-sm" type="submit"
+                                    title="Hide from public rendering">Unpublish</button>
+                            {% else %}
+                            <input type="hidden" name="state" value="published">
+                            <button class="btn btn-primary btn-sm" type="submit"
+                                    title="Make it live for public rendering">Publish</button>
+                            {% endif %}
+                        </form>
+                        {% endif %}
                         <form method="post" action="{{ url_for('admin.controllers_duplicate') }}" style="display:flex;gap:0.25rem;align-items:center">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">
                             <input type="text" name="new_device_id" placeholder="New device ID"

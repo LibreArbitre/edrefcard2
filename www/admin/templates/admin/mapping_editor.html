@@ -138,6 +138,7 @@ const wrap = $("#stagewrap"), lines = $("#lines");
 // ---- ergonomics state ----
 let zoom = null;                 // null = fit-to-window
 let spaceDown = false, dirty = false, lastAction = '';
+let baseUpdatedAt = null;        // optimistic-concurrency token for Save
 const undoStack = [], redoStack = [];
 const LS_KEY = 'mapedit:' + (new URLSearchParams(location.search).get('device') || 'new');
 
@@ -184,6 +185,7 @@ function loadExisting(){
   if(!EXISTING) return;
   try{
     const m = JSON.parse(EXISTING.mapping_json);
+    baseUpdatedAt = EXISTING.updated_at || null;
     state = Object.assign({title:"",image:null,width:0,height:0,boxes:[]}, m);
     state.width = state.width || EXISTING.image_width || 0;
     state.height = state.height || EXISTING.image_height || 0;
@@ -455,10 +457,11 @@ $("#btnsave").addEventListener('click',async()=>{
   if(!did){alert("Enter a Device ID.");return;}
   if(!state.image){alert("No image.");return;}
   $("#status").textContent="Saving…";
-  const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping()})});
+  const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping(),base_updated_at:baseUpdatedAt})});
   const j=await r.json();
+  if(r.status===409){ alert(j.error||'Conflict: this mapping was saved by someone else. Reload the page.'); $("#status").textContent="CONFLICT - not saved."; return; }
   $("#status").textContent=j.ok?("Saved (id "+j.id+(j.updated?", updated":"")+(j.status==='draft'?", DRAFT - an admin must publish it":"")+")"):("Error: "+(j.error||'?'));
-  if(j.ok){ dirty=false; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
+  if(j.ok){ dirty=false; baseUpdatedAt=j.updated_at||baseUpdatedAt; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
 });
 
 // ---- zoom / pan / keyboard / draft restore ----

@@ -62,6 +62,7 @@
     <option value="hat5">Hat 4-way + push</option>
     <option value="pov">POV</option>
     <option value="trigger">2-stage trigger</option>
+    <option value="stick">Stick (X+Y)</option>
     <option value="axis">Axis</option>
   </select>
   <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Next Joy_N (auto-incremented)">
@@ -294,6 +295,7 @@ function stampAt(kind,px,py){
   else if(kind==='hat5'){ label='HAT '+n+'-'+(n+4); rows=['up','right','down','left'].map((s,i)=>mk(s,String(n+i),'Joy_'+(n+i))); rows.push(mk('press',String(n+4),'Joy_'+(n+4))); n+=5; }
   else if(kind==='pov'){ label='POV'+p; rows=['Up','Right','Down','Left'].map(d=>mk(d.toLowerCase(),null,'Joy_POV'+p+d)); p+=1; }
   else if(kind==='trigger'){ label='TRIGGER'; rows=[mk('stage1',String(n),'Joy_'+n),mk('stage2',String(n+1),'Joy_'+(n+1))]; n+=2; }
+  else if(kind==='stick'){ label='STICK'; rows=[{symbol:null,number:'X',joy:'Joy_XAxis',type:'Analogue'},{symbol:null,number:'Y',joy:'Joy_YAxis',type:'Analogue'}]; }
   else if(kind==='axis'){ label='AXIS'; rows=[{symbol:null,number:null,joy:'',type:'Analogue'}]; }
   else return;
   const k=(state.width||4400)/4400;

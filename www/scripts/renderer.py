@@ -1318,14 +1318,19 @@ def _drawControlSymbol(context, x, y_center, symbol):
 
 
 def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Group'):
-    """Draw one box: leader line, header label, frame, per-row symbol + number + binding text."""
+    """Draw one box: leader line, header label, frame, per-row symbol + number + binding text.
+
+    Boxes with no_chrome=True (imported from a manufacturer AcroForm sheet
+    whose artwork already contains frames, badges and leader lines) only get
+    their row content written, no chrome drawn on top."""
     x, y = box['box_xy']
     w, h = box['box_wh']
     rows = box.get('rows', [])
-    header_h = 40 if box.get('label') else 0
+    chrome = not box.get('no_chrome')
+    header_h = 40 if (box.get('label') and chrome) else 0
 
     # Leader line (orthogonal elbow) from the box side facing the button to the button point
-    btn = box.get('button_xy')
+    btn = box.get('button_xy') if chrome else None
     if btn:
         bx, by = btn
         context.push()
@@ -1354,12 +1359,13 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
         context.pop()
 
     # Outer frame
-    context.push()
-    context.stroke_color = Color('Black')
-    context.stroke_width = 2
-    context.fill_color = Color('transparent')
-    context.rectangle(left=x, top=y, width=w, height=h)
-    context.pop()
+    if chrome:
+        context.push()
+        context.stroke_color = Color('Black')
+        context.stroke_width = 2
+        context.fill_color = Color('transparent')
+        context.rectangle(left=x, top=y, width=w, height=h)
+        context.pop()
 
     # Per-row symbol + number gutters (+ light separators)
     rows_top = y + header_h
@@ -1369,7 +1375,7 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     for i, row in enumerate(rows):
         ry = rows_top + i * row_h
         row_cy = ry + row_h / 2
-        if i > 0:
+        if i > 0 and chrome:
             context.push()
             context.stroke_color = Color('#dddddd')
             context.stroke_width = 1

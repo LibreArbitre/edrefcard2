@@ -602,6 +602,22 @@ def dismiss_unknown_device(device_id):
                      (device_id,))
 
 
+def count_configs_for_device_ids(device_ids):
+    """Count distinct configurations using any of these hardware IDs.
+
+    config_devices.device_key is '<ID>::<index>'; data-driven devices have no
+    display name there, so counting by key prefix is the reliable route.
+    """
+    if not device_ids:
+        return 0
+    with get_db() as conn:
+        clauses = " OR ".join("device_key LIKE ?" for _ in device_ids)
+        row = conn.execute(
+            f"SELECT COUNT(DISTINCT config_id) AS n FROM config_devices WHERE {clauses}",
+            [f"{did}::%" for did in device_ids]).fetchone()
+        return row['n'] if row else 0
+
+
 # ---- controller-mapping audit trail ----
 
 def log_mapping_action(action, actor, mapping_id=None, device_id=None, detail=None):

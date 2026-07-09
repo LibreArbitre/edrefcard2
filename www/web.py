@@ -648,8 +648,28 @@ def list_devices():
             'count': count,
             'handled_devices': supportedDevices[name]['HandledDevices'],
         })
-    
-    return render_template('devices.html', devices=devices)
+
+    # Community-mapped controllers (published data-driven mappings)
+    import json as _json
+    dd_devices = []
+    try:
+        for row in database.get_all_controller_mappings():
+            if row.get('status', 'published') != 'published':
+                continue
+            try:
+                ids = _json.loads(row['mapping_json']).get('device_ids') or [row['device_id']]
+            except Exception:
+                ids = [row['device_id']]
+            dd_devices.append({
+                'name': row['device_name'],
+                'handled_devices': ids,
+                'count': database.count_configs_for_device_ids(ids),
+            })
+        dd_devices.sort(key=lambda d: d['name'].lower())
+    except Exception as e:
+        logError(f'devices page: cannot load data-driven mappings: {e}\n')
+
+    return render_template('devices.html', devices=devices, dd_devices=dd_devices)
 
 @web_bp.route('/device/<device_name>')
 def show_device(device_name):

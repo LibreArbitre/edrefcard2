@@ -1201,6 +1201,40 @@ def mapping_editor_upload():
                     'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
 
 
+@admin_bp.route('/mapping-editor/import-pdf', methods=['POST'])
+@require_mapper
+def mapping_editor_import_pdf():
+    """Import a manufacturer AcroForm reference sheet (VIRPIL-style):
+    returns the rendered artwork image + every writing area as a
+    pre-positioned no_chrome box with its Joy mapping."""
+    from flask import jsonify
+    from scripts.pdf_import import extract_mapping_from_pdf
+    f = request.files.get('pdf')
+    if not f or not f.filename:
+        return jsonify({'error': 'No PDF provided'}), 400
+    pdf_bytes = f.read()
+    if len(pdf_bytes) > 20 * 1024 * 1024:
+        return jsonify({'error': 'PDF too large (20MB max)'}), 400
+    name = slugify(request.form.get('name') or f.filename.rsplit('.', 1)[0])
+    if not name:
+        return jsonify({'error': 'Invalid name'}), 400
+    try:
+        mapping, jpg = extract_mapping_from_pdf(pdf_bytes)
+    except Exception as e:
+        return jsonify({'error': f'Cannot parse this PDF: {e}'}), 400
+    cdir = Config.configsPath() / 'controllers'
+    cdir.mkdir(parents=True, exist_ok=True)
+    with open(str(cdir / f'{name}.jpg'), 'wb') as out:
+        out.write(jpg)
+    user_name, _ = current_user()
+    database.log_mapping_action('import-pdf', user_name, None, None,
+                                f'{f.filename} -> {name}.jpg, {len(mapping["boxes"])} boxes')
+    return jsonify({'name': name, 'width': mapping['width'], 'height': mapping['height'],
+                    'boxes': mapping['boxes'],
+                    'title': f.filename.rsplit('.', 1)[0],
+                    'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
+
+
 @admin_bp.route('/mapping-editor/preview', methods=['POST'])
 @require_mapper
 def mapping_editor_preview():

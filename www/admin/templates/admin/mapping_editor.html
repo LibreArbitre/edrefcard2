@@ -52,6 +52,8 @@
   <input type="text" id="imgname" placeholder="image name (slug)" title="Image name (slug)">
   <label style="font-size:.78rem;white-space:nowrap" title="Place the photo in the middle third of a wider white canvas, so boxes get side margins. Untick if your image is already a composed card."><input type="checkbox" id="pad" checked> side margins</label>
   <button id="btnupload" class="ghost">Upload image</button>
+  <input type="file" id="pdffile" accept="application/pdf" style="display:none">
+  <button id="btnpdf" class="ghost" title="Import a manufacturer fillable reference sheet (VIRPIL-style AcroForm PDF): artwork + every box pre-positioned with its Joy mapping">Import PDF</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
   <input type="text" id="title" placeholder="Title (e.g. VIRPIL AEROMAX R)">
   <input type="text" id="deviceid" placeholder="Device ID (e.g. 231D0F0F)">
@@ -446,6 +448,24 @@ $("#btnupload").addEventListener('click',async()=>{
   state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
   img.onload=()=>{applyZoom();renderStage();}; img.src=j.url+'?t='+Date.now();
   $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;
+});
+
+// Manufacturer AcroForm sheet import: artwork + pre-positioned no_chrome boxes
+$("#btnpdf").addEventListener('click',()=>$("#pdffile").click());
+$("#pdffile").addEventListener('change',async()=>{
+  const f=$("#pdffile").files[0]; if(!f) return;
+  const fd=new FormData(); fd.append('pdf',f); fd.append('name',$("#imgname").value||f.name);
+  $("#status").textContent="Importing PDF…";
+  const r=await fetch('/admin/mapping-editor/import-pdf',{method:'POST',body:fd});
+  const j=await r.json(); if(j.error){$("#status").textContent="Error: "+j.error;return;}
+  snapshot('importpdf');
+  state.image=j.name; state.width=j.width; state.height=j.height; state.boxes=j.boxes;
+  $("#imgname").value=j.name;
+  if(!$("#title").value) $("#title").value=j.title||'';
+  sel=-1;
+  img.onload=()=>{applyZoom();renderStage();renderPanel();}; img.src=j.url+'?t='+Date.now();
+  $("#status").textContent=`PDF imported: ${j.boxes.length} boxes pre-positioned (${j.width}x${j.height})`;
+  $("#pdffile").value='';
 });
 
 $("#btnpreview").addEventListener('click',async()=>{

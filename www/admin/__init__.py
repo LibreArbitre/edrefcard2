@@ -1100,6 +1100,13 @@ def _read_binds_xml(run_id):
         return None
 
 
+@admin_bp.route('/help')
+@require_mapper
+def mapper_help():
+    """Onboarding guide for mappers (workflow, stamps, rules)."""
+    return render_template('admin/help.html')
+
+
 @admin_bp.route('/mapping-editor')
 @require_mapper
 def mapping_editor():
@@ -1178,6 +1185,14 @@ def mapping_editor_upload():
         img = PILImage.open(f.stream).convert('RGB')
     except Exception as e:
         return jsonify({'error': f'Bad image: {e}'}), 400
+    if request.form.get('pad'):
+        # Card canvas helper: place the photo in the middle third of a wider
+        # white canvas so boxes get side margins (what was hand-composed for
+        # the AEROMAX card). Skip if the photo is already wide (ratio > 2).
+        if img.width < img.height * 2:
+            canvas = PILImage.new('RGB', (img.width * 3, img.height), 'white')
+            canvas.paste(img, (img.width, 0))
+            img = canvas
     img.save(str(cdir / f'{name}.jpg'), quality=92)
     user_name, _ = current_user()
     database.log_mapping_action('upload-image', user_name, None, None,

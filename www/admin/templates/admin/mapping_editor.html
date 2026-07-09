@@ -50,6 +50,7 @@
   <h1>Mapping editor</h1>
   <input type="file" id="file" accept="image/*">
   <input type="text" id="imgname" placeholder="image name (slug)" title="Image name (slug)">
+  <label style="font-size:.78rem;white-space:nowrap" title="Place the photo in the middle third of a wider white canvas, so boxes get side margins. Untick if your image is already a composed card."><input type="checkbox" id="pad" checked> side margins</label>
   <button id="btnupload" class="ghost">Upload image</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
   <input type="text" id="title" placeholder="Title (e.g. VIRPIL AEROMAX R)">
@@ -87,6 +88,7 @@
     <h2>Boxes</h2>
     <div class="hint" id="hint">
       <span style="float:right;white-space:nowrap">
+        <a href="/admin/help" title="Full mapper guide">&#128214; Guide</a> &nbsp;|&nbsp;
         <a href="#" data-lang="en">EN</a> &middot; <a href="#" data-lang="fr">FR</a> &middot; <a href="#" data-lang="es">ES</a>
       </span>
       <span id="hint_en">1) Upload a clean photo. 2) + Box, drag/resize it. 3) Add rows (symbol, number, Joy). 4) "Set btn" then click the physical button on the photo. 5) Preview / Save.<br>
@@ -426,6 +428,7 @@ $("#btnaddbox").addEventListener('click',()=>{
 $("#btnupload").addEventListener('click',async()=>{
   const f=$("#file").files[0]; if(!f){alert("Pick an image file.");return;}
   const fd=new FormData(); fd.append('image',f); fd.append('name',$("#imgname").value||f.name);
+  if($("#pad").checked) fd.append('pad','1');
   $("#status").textContent="Upload…";
   const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
   const j=await r.json(); if(j.error){$("#status").textContent="Error: "+j.error;return;}

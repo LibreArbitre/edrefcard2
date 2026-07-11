@@ -103,6 +103,59 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
     return created, handled
 
 
+def generate_legacy_images(physical_keys, modifiers, devices, config, public,
+                           styling, misconfiguration_warnings):
+    """Render the legacy template-based cards for every supported device
+    present in the parsed bindings.
+
+    Shared by web.generate, web.show_binds and the API (was duplicated 3x).
+    Returns (created_images, unsupported_devices): created_images entries are
+    '<DeviceKey>::<index>', unsupported_devices lists devices whose template
+    image is missing on disk.
+    """
+    created_images = []
+    unsupported_devices = []
+    already_handled_devices = []
+
+    for supported_device_key, supported_device in supportedDevices.items():
+        if supported_device_key == 'Keyboard':
+            continue
+        for device_index in range(4):
+            handled = False
+            device_key = None
+            for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
+                if handled_device.find('::') > -1:
+                    if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
+                        handled = True
+                        device_key = handled_device
+                        break
+                else:
+                    if devices.get(f'{handled_device}::{device_index}') is not None:
+                        handled = True
+                        device_key = f'{handled_device}::{device_index}'
+                        break
+
+            if not handled or device_key in already_handled_devices:
+                continue
+
+            try:
+                createHOTASImage(
+                    physical_keys, modifiers,
+                    supported_device['Template'],
+                    supported_device['HandledDevices'],
+                    40, config, public, styling, device_index,
+                    misconfiguration_warnings
+                )
+                created_images.append(f'{supported_device_key}::{device_index}')
+                for handled_device in supported_device['HandledDevices']:
+                    already_handled_devices.append(f'{handled_device}::{device_index}')
+            except FileNotFoundError as e:
+                logError(f"Template missing: {e}\n")
+                unsupported_devices.append(supported_device_key)
+
+    return created_images, unsupported_devices
+
+
 @web_bp.route('/')
 def index():
     """Render the home page."""
@@ -215,52 +268,18 @@ def generate():
     list_publicly = request.form.get('public') == 'on'
     data_driven_images = []
     handled_dd = set()
+    created_images = []
+    unsupported_devices = []
+    keyboard_layout_image = False
+    devices = {}
 
     try:
         (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
-        
-        already_handled_devices = []
-        created_images = []
-        keyboard_layout_image = False
 
-        for supported_device_key, supported_device in supportedDevices.items():
-            if supported_device_key == 'Keyboard':
-                continue
-            
-            for device_index in [0, 1]:
-                handled = False
-                device_key = None
-                for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                    if handled_device.find('::') > -1:
-                        if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                            handled = True
-                            device_key = handled_device
-                            break
-                    else:
-                        if devices.get(f'{handled_device}::{device_index}') is not None:
-                            handled = True
-                            device_key = f'{handled_device}::{device_index}'
-                            break
-                
-                if handled:
-                    has_new_bindings = False
-                    for _ in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                        if device_key not in already_handled_devices:
-                            has_new_bindings = True
-                            break
-                    
-                    if has_new_bindings:
-                        createHOTASImage(
-                            physical_keys, modifiers, 
-                            supported_device['Template'], 
-                            supported_device['HandledDevices'], 
-                            40, config, public, styling, device_index, 
-                            errors.misconfigurationWarnings
-                        )
-                        created_images.append(f'{supported_device_key}::{device_index}')
-                        for handled_device in supported_device['HandledDevices']:
-                            already_handled_devices.append(f'{handled_device}::{device_index}')
-        
+        created_images, unsupported_devices = generate_legacy_images(
+            physical_keys, modifiers, devices, config, public, styling,
+            errors.misconfigurationWarnings)
+
         if devices.get('Keyboard::0') is not None:
             layout = _VISUAL_KEYBOARD_LAYOUTS.get(keyboard_display)
             if layout:
@@ -354,6 +373,7 @@ def generate():
                            unlisted=not list_publicly,
                            refcard_url=refcard_url_dynamic,
                            binds_url=binds_url_dynamic,
+                           unsupported_devices=unsupported_devices,
                            supported_devices=supportedDevices)
 
 @web_bp.route('/stats')
@@ -519,53 +539,11 @@ def show_binds(run_id):
             # Ensure directory exists for image regeneration
             config.makeDir()
             (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
-            
-            already_handled_devices = []
-            
-            for supported_device_key, supported_device in supportedDevices.items():
-                if supported_device_key == 'Keyboard':
-                    continue
-                for device_index in range(4):
 
-                    handled = False
-                    device_key = None
-                    for handled_device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                        if handled_device.find('::') > -1:
-                            if device_index == int(handled_device.split('::')[1]) and devices.get(handled_device) is not None:
-                                handled = True
-                                device_key = handled_device
-                                break
-                        else:
-                            if devices.get(f'{handled_device}::{device_index}') is not None:
-                                handled = True
-                                device_key = f'{handled_device}::{device_index}'
-                                break
-                    
-                    if handled:
-                        has_new_bindings = False
-                        for _device in supported_device.get('KeyDevices', supported_device.get('HandledDevices')):
-                            if device_key not in already_handled_devices:
-                                has_new_bindings = True
-                                break
-                        
-                        if has_new_bindings:
-                            try:
-                                createHOTASImage(
-                                    physical_keys, modifiers,
-                                    supported_device['Template'],
-                                    supported_device['HandledDevices'],
-                                    40, config, True, styling, device_index,
-                                    errors.misconfigurationWarnings
-                                )
-                                created_images.append(f'{supported_device_key}::{device_index}')
-                                for handled_device in supported_device['HandledDevices']:
-                                    already_handled_devices.append(f'{handled_device}::{device_index}')
-                            except FileNotFoundError as e:
-                                logError(f"Template missing: {e}\n")
-                                unsupported_devices.append(supported_device_key)
+            created_images, unsupported_devices = generate_legacy_images(
+                physical_keys, modifiers, devices, config, True, styling,
+                errors.misconfigurationWarnings)
 
-
-            
             if devices.get('Keyboard::0') is not None:
                 keyboard_display = db_config.get('keyboard_display', 'text') if db_config else 'text'
                 layout = _VISUAL_KEYBOARD_LAYOUTS.get(keyboard_display)

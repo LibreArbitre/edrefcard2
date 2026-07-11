@@ -36,6 +36,13 @@
         </div>
         {% endif %}
 
+        {% if unlisted %}
+        <div class="alert alert-info">
+            🔒 <strong>Unlisted card</strong>: it will not appear in the public catalogue.
+            Only people with the link can view it, so keep the URL below if you want to find it again.
+        </div>
+        {% endif %}
+
         {% if unsupported_devices %}
         <div class="alert alert-warning">
             <p><strong>Unsupported Controller(s) Detected:</strong></p>

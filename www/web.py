@@ -203,6 +203,10 @@ def generate():
 
     
     public = True
+    # Public-catalogue opt-out: the card stays reachable by its link, it just
+    # never appears in /list (second report of the misleading old "Publish"
+    # label, after Brammmers: BiscuitMx, forum post 10852xxx)
+    list_publicly = request.form.get('public') == 'on'
     data_driven_images = []
     handled_dd = set()
 
@@ -318,7 +322,8 @@ def generate():
             keyboard_display=keyboard_display,
             unhandled_warnings=errors.unhandledDevicesWarnings,
             device_warnings=errors.deviceWarnings,
-            misc_warnings=errors.misconfigurationWarnings
+            misc_warnings=errors.misconfigurationWarnings,
+            is_public=list_publicly
         )
     except Exception as e:
         logError(f"Database insertion error for {run_id}: {e}")
@@ -339,6 +344,7 @@ def generate():
                            keyboard_layout_image=keyboard_layout_image,
                            device_for_block_image=None,
                            public=public,
+                           unlisted=not list_publicly,
                            refcard_url=refcard_url_dynamic,
                            binds_url=binds_url_dynamic,
                            supported_devices=supportedDevices)

@@ -156,7 +156,8 @@ def get_db():
 
 def create_configuration(config_id, description='', styling='None', display_groups=None,
                          devices=None, keyboard_display='text', unhandled_warnings='',
-                         device_warnings='', misc_warnings='', created_at=None):
+                         device_warnings='', misc_warnings='', created_at=None,
+                         is_public=True):
     """Create a new configuration in the database.
     
     Args:
@@ -175,12 +176,14 @@ def create_configuration(config_id, description='', styling='None', display_grou
     
     with get_db() as conn:
         conn.execute("""
-            INSERT OR REPLACE INTO configurations 
+            INSERT OR REPLACE INTO configurations
             (id, description, styling, keyboard_display, created_at,
-             unhandled_devices_warnings, device_warnings, misconfiguration_warnings)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (config_id, description, styling, keyboard_display, created_at, 
-              unhandled_warnings, device_warnings, misc_warnings))
+             unhandled_devices_warnings, device_warnings, misconfiguration_warnings,
+             is_public)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (config_id, description, styling, keyboard_display, created_at,
+              unhandled_warnings, device_warnings, misc_warnings,
+              1 if is_public else 0))
         
         # Insert display groups
         if display_groups:

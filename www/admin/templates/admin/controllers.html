@@ -95,6 +95,9 @@
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
                            href="{{ url_for('admin.mapping_editor', device=m.device_id) }}">Open</a>
+                        <a class="btn btn-outline btn-sm"
+                           href="{{ url_for('admin.controllers_history', mapping_id=m.id) }}"
+                           title="Saved versions of this mapping (rollback)">History</a>
                         {% if role == 'admin' %}
                         <form method="post" action="{{ url_for('admin.controllers_publish') }}">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">
@@ -117,6 +120,14 @@
                                 <input type="checkbox" name="mirror" value="1"> mirror</label>
                             <button class="btn btn-outline btn-sm" type="submit">Duplicate</button>
                         </form>
+                        {% if role == 'admin' %}
+                        <form method="post" action="{{ url_for('admin.controllers_delete') }}"
+                              onsubmit="return confirm('Delete mapping &quot;{{ m.device_name }}&quot;? Its version history is kept.')">
+                            <input type="hidden" name="mapping_id" value="{{ m.id }}">
+                            <button class="btn btn-outline btn-sm" type="submit"
+                                    style="color:var(--danger,#c0392b)" title="Delete this mapping (admin)">Delete</button>
+                        </form>
+                        {% endif %}
                     </div>
                 </td>
             </tr>

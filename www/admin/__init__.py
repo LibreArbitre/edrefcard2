@@ -1079,6 +1079,78 @@ def controllers_duplicate():
     return redirect(url_for('admin.mapping_editor', device=new_device_id))
 
 
+@admin_bp.route('/controllers/delete', methods=['POST'])
+@require_admin
+def controllers_delete():
+    """Delete a mapping. Its version history is kept on purpose: with the
+    audit log it makes an accidental delete recoverable (manual restore)."""
+    mapping_id = request.form.get('mapping_id')
+    row = database.get_controller_mapping(mapping_id) if mapping_id else None
+    if not row:
+        flash('Mapping not found.', 'error')
+        return redirect(url_for('admin.controllers'))
+    database.delete_controller_mapping(row['id'])
+    user_name, _ = current_user()
+    database.log_mapping_action('delete', user_name, row['id'], row['device_id'],
+                                f'"{row["device_name"]}"')
+    flash(f'Mapping "{row["device_name"]}" deleted (its version history is kept).', 'success')
+    return redirect(url_for('admin.controllers'))
+
+
+@admin_bp.route('/controllers/history/<int:mapping_id>')
+@require_mapper
+def controllers_history(mapping_id):
+    """Version history of a mapping (rollback safety net)."""
+    row = database.get_controller_mapping(mapping_id)
+    if not row:
+        abort(404)
+    _, role = current_user()
+    return render_template('admin/mapping_history.html', mapping=row,
+                           versions=database.list_mapping_versions(mapping_id),
+                           role=role)
+
+
+@admin_bp.route('/controllers/history/<int:mapping_id>/version/<int:version_id>.json')
+@require_mapper
+def controllers_history_json(mapping_id, version_id):
+    """Raw mapping_json of one version (inspection / manual merge)."""
+    from flask import Response
+    v = database.get_mapping_version(version_id)
+    if not v or v['mapping_id'] != mapping_id:
+        abort(404)
+    return Response(v['mapping_json'], mimetype='application/json')
+
+
+@admin_bp.route('/controllers/rollback', methods=['POST'])
+@require_admin
+def controllers_rollback():
+    """Restore a mapping to a previous version (recorded as a new version)."""
+    import json
+    version_id = request.form.get('version_id')
+    v = database.get_mapping_version(version_id) if version_id else None
+    row = database.get_controller_mapping(v['mapping_id']) if v else None
+    if not v or not row:
+        flash('Version not found.', 'error')
+        return redirect(url_for('admin.controllers'))
+    try:
+        m = json.loads(v['mapping_json'])
+    except Exception:
+        flash('This version holds invalid JSON, not restored.', 'error')
+        return redirect(url_for('admin.controllers_history', mapping_id=row['id']))
+    user_name, _ = current_user()
+    device_name = v.get('device_name') or row['device_name']
+    database.update_controller_mapping(
+        row['id'], device_name=device_name,
+        template_name=m.get('image') or row['template_name'],
+        image_filename=f"{m.get('image') or row['template_name']}.jpg",
+        mapping_json=v['mapping_json'], updated_by=user_name)
+    database.save_mapping_version(row['id'], device_name, v['mapping_json'], user_name)
+    database.log_mapping_action('rollback', user_name, row['id'], row['device_id'],
+                                f"to version {v['id']} of {v.get('saved_at')}")
+    flash(f'"{device_name}" restored to version {v["id"]} ({v.get("saved_at")}).', 'success')
+    return redirect(url_for('admin.controllers_history', mapping_id=row['id']))
+
+
 def _read_binds_xml(run_id):
     """Return the raw .binds XML of an uploaded config, or None."""
     try:
@@ -1290,10 +1362,23 @@ def mapping_editor_save():
         # Mapper edits demote the mapping to draft (hidden from public
         # rendering) until an admin reviews and re-publishes it.
         status = existing.get('status', 'published') if role == 'admin' else 'draft'
+        # Version history: backfill the pre-edit state on first save (legacy
+        # mappings created before versioning), then record the new state.
+        try:
+            if not database.list_mapping_versions(existing['id']):
+                database.save_mapping_version(existing['id'], existing.get('device_name'),
+                                              existing['mapping_json'],
+                                              existing.get('updated_by'))
+        except Exception:
+            pass
         database.update_controller_mapping(existing['id'], device_name=device_name,
                                            template_name=mapping['image'],
                                            image_filename=image_file, mapping_json=mapping_json,
                                            status=status, updated_by=user_name)
+        try:
+            database.save_mapping_version(existing['id'], device_name, mapping_json, user_name)
+        except Exception:
+            pass
         database.log_mapping_action('update', user_name, existing['id'], device_id,
                                     f"{len(mapping.get('boxes') or [])} boxes, status {status}")
         if role != 'admin':
@@ -1311,6 +1396,10 @@ def mapping_editor_save():
     mid = database.create_controller_mapping(device_id, device_name, mapping['image'],
                                              image_file, w, h, mapping_json,
                                              status=status, updated_by=user_name)
+    try:
+        database.save_mapping_version(mid, device_name, mapping_json, user_name)
+    except Exception:
+        pass
     database.log_mapping_action('create', user_name, mid, device_id,
                                 f"{len(mapping.get('boxes') or [])} boxes, status {status}")
     if role != 'admin':

@@ -99,6 +99,17 @@ def init_db(db_path):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- Saved revisions of controller mappings (rollback safety net for
+            -- autonomous mapper work; pruned to the most recent per mapping)
+            CREATE TABLE IF NOT EXISTS controller_mapping_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mapping_id INTEGER NOT NULL,
+                device_name TEXT,
+                mapping_json TEXT NOT NULL,
+                saved_by TEXT,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
             -- Unknown controllers seen at generation time (admin triage queue)
             CREATE TABLE IF NOT EXISTS unknown_device_sightings (
                 device_id TEXT PRIMARY KEY,
@@ -113,6 +124,7 @@ def init_db(db_path):
             CREATE INDEX IF NOT EXISTS idx_config_public ON configurations(is_public);
             CREATE INDEX IF NOT EXISTS idx_config_devices_config ON config_devices(config_id);
             CREATE INDEX IF NOT EXISTS idx_controller_mappings_device ON controller_mappings(device_id);
+            CREATE INDEX IF NOT EXISTS idx_mapping_versions_mapping ON controller_mapping_versions(mapping_id);
         """)
         
         # Initialize backup-related tables
@@ -555,6 +567,46 @@ def delete_controller_mapping(mapping_id):
     """
     with get_db() as conn:
         conn.execute("DELETE FROM controller_mappings WHERE id = ?", (mapping_id,))
+
+
+def save_mapping_version(mapping_id, device_name, mapping_json, saved_by=None,
+                         keep=20):
+    """Record a mapping revision (called on every editor save/rollback),
+    pruning history beyond the `keep` most recent entries."""
+    with get_db() as conn:
+        conn.execute("""
+            INSERT INTO controller_mapping_versions
+            (mapping_id, device_name, mapping_json, saved_by)
+            VALUES (?, ?, ?, ?)
+        """, (mapping_id, device_name, mapping_json, saved_by))
+        conn.execute("""
+            DELETE FROM controller_mapping_versions
+            WHERE mapping_id = ? AND id NOT IN (
+                SELECT id FROM controller_mapping_versions
+                WHERE mapping_id = ? ORDER BY id DESC LIMIT ?
+            )
+        """, (mapping_id, mapping_id, keep))
+
+
+def list_mapping_versions(mapping_id):
+    """Version history of one mapping, newest first (no mapping_json payload)."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, mapping_id, device_name, saved_by, saved_at,
+                   length(mapping_json) AS json_size
+            FROM controller_mapping_versions
+            WHERE mapping_id = ? ORDER BY id DESC
+        """, (mapping_id,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_mapping_version(version_id):
+    """One full version row (with mapping_json) or None."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM controller_mapping_versions WHERE id = ?",
+            (version_id,)).fetchone()
+        return dict(row) if row else None
 
 
 def get_all_controller_mappings():

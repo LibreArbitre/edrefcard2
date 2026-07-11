@@ -181,6 +181,11 @@ def generate_api():
 
         # 4. Save Metadata to SQLite database (no longer using .replay pickle files)
         
+        # Public-catalogue opt-out: pass public=false/0/off/no to keep the
+        # card unlisted (reachable by link only). Defaults to listed.
+        list_publicly = str(request.form.get('public', 'on')).strip().lower() \
+            not in ('off', 'false', '0', 'no')
+
         database.create_configuration(
             config_id=run_id,
             description=description,
@@ -189,7 +194,8 @@ def generate_api():
             devices=devices,
             unhandled_warnings=errors.unhandledDevicesWarnings,
             device_warnings=errors.deviceWarnings,
-            misc_warnings=errors.misconfigurationWarnings
+            misc_warnings=errors.misconfigurationWarnings,
+            is_public=list_publicly
         )
         
         # 5. Response

@@ -30,6 +30,12 @@ _STATIC_ASSET_EXTS = frozenset({'.css', '.js', '.ico', '.png', '.jpg', '.jpeg', 
 # Extensions servable from the configs directory (generated artifacts only, never the DB/logs).
 _CONFIG_SERVABLE_EXTS = frozenset({'.jpg', '.jpeg', '.binds'})
 
+# keyboard_display form value -> visual layout name in keyboardLayouts
+_VISUAL_KEYBOARD_LAYOUTS = {
+    'visual-ansi': 'ANSI 104',
+    'visual-iso-azerty': 'ISO 105 AZERTY',
+}
+
 # Route handlers
 
 
@@ -256,9 +262,10 @@ def generate():
                             already_handled_devices.append(f'{handled_device}::{device_index}')
         
         if devices.get('Keyboard::0') is not None:
-            if keyboard_display == 'visual-ansi':
+            layout = _VISUAL_KEYBOARD_LAYOUTS.get(keyboard_display)
+            if layout:
                 result = createKeyboardLayoutImage(
-                    physical_keys, modifiers, 'ANSI 104', config, styling
+                    physical_keys, modifiers, layout, config, styling
                 )
                 if result is True:
                     keyboard_layout_image = True
@@ -561,9 +568,10 @@ def show_binds(run_id):
             
             if devices.get('Keyboard::0') is not None:
                 keyboard_display = db_config.get('keyboard_display', 'text') if db_config else 'text'
-                if keyboard_display == 'visual-ansi':
+                layout = _VISUAL_KEYBOARD_LAYOUTS.get(keyboard_display)
+                if layout:
                     result = createKeyboardLayoutImage(
-                        physical_keys, modifiers, 'ANSI 104', config, styling
+                        physical_keys, modifiers, layout, config, styling
                     )
                     if result is True:
                         keyboard_layout_image = True

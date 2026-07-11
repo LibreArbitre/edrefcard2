@@ -679,6 +679,11 @@ def show_device(device_name):
     except KeyError:
         return render_template('error.html',
                                error_message=f'<h1>{device_name} is not a supported controller.</h1>')
+    except Exception as e:
+        # e.g. missing/corrupt template image: 500s leaked here before
+        logError(f'show_device {device_name}: {e}\n')
+        return render_template('error.html',
+                               error_message=f'<h1>{device_name} does not have a visual layout yet.</h1>')
     
     return render_template('refcard.html',
                            run_id='',

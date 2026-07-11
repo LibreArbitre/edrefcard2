@@ -7,8 +7,6 @@ and form data.
 """
 
 import html
-import datetime
-import pickle
 from collections import OrderedDict
 
 from lxml import etree
@@ -127,32 +125,6 @@ def determineMode(form):
     return mode
 
 
-def saveReplayInfo(config, description, styling, displayGroups, devices, errors):
-    """Save configuration info for later replay.
-    
-    Args:
-        config: Config object
-        description: User-provided description
-        styling: Styling mode ('None', 'Group', 'Category', 'Modifier')
-        displayGroups: List of groups to display
-        devices: Dictionary of devices found
-        errors: Errors object with any warnings
-    """
-    replayInfo = {
-        'displayGroups': displayGroups,
-        'misconfigurationWarnings': errors.misconfigurationWarnings,
-        'unhandledDevicesWarnings': errors.unhandledDevicesWarnings,
-        'deviceWarnings': errors.deviceWarnings,
-        'styling': styling,
-        'description': description,
-        'timestamp': datetime.datetime.now(datetime.UTC),
-        'devices': devices,
-    }
-    replayPath = config.pathWithSuffix('.replay')
-    with replayPath.open('wb') as pickleFile:
-        pickle.dump(replayInfo, pickleFile)
-
-
 def parseLocalFile(filePath, groupStyles):
     """Parse a bindings file from the local filesystem.
     
@@ -262,10 +234,10 @@ def parseBindings(runId, xml, displayGroups, errors):
 
         # Use a fake modifier for hold button actions
         if hasHoldModifier:
-            fakeentry = '<Modifier Device="%s" DeviceIndex="%s" Key="HOLD" />' % (
-                device, deviceIndex
-            )
-            xmlBinding.append(etree.XML(fakeentry))
+            xmlBinding.append(etree.Element(
+                'Modifier',
+                Device=str(device), DeviceIndex=str(deviceIndex), Key='HOLD'
+            ))
             
         modifiersInfo = sorted(xmlBinding.findall('Modifier'), key=modifierSortKey)
         modifiersKey = 'Unmodified'

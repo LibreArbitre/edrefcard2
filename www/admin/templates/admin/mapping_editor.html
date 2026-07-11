@@ -257,9 +257,12 @@ function renderStage(){
     const d=document.createElement('div'); d.className='box'+(selSet.has(i)?' sel':'');
     d.style.left=(b.box_xy[0]*scale)+'px'; d.style.top=(b.box_xy[1]*scale)+'px';
     d.style.width=(b.box_wh[0]*scale)+'px'; d.style.height=(b.box_wh[1]*scale)+'px';
-    const rowsHtml=(b.rows||[]).map(r=>
-      `<div class="mrow" style="font-size:${fs}px;height:${rowH}px;line-height:${rowH}px">`+
-      `${GLYPH[r.symbol]||''} ${esc(r.number)} <b>${esc(r.joy)}</b></div>`).join('');
+    const rowsHtml=(b.rows||[]).map(r=>{
+      // The final card prints the number, not the Joy key: only show the
+      // Joy when it adds information (POV/axes, or number/Joy mismatch)
+      const joyDup=r.joy && r.number!=null && r.joy===('Joy_'+r.number);
+      return `<div class="mrow" style="font-size:${fs}px;height:${rowH}px;line-height:${rowH}px">`+
+      `${GLYPH[r.symbol]||''} ${esc(r.number)}${joyDup?'':' <b>'+esc(r.joy)+'</b>'}</div>`;}).join('');
     d.innerHTML='<span class="lbl">'+esc(b.label||'box '+(i+1))+'</span>'+
       `<div style="height:${Math.max(2,40*k*scale)}px;pointer-events:none"></div>`+rowsHtml+
       '<span class="rsz"></span>';
@@ -501,6 +504,11 @@ function renderPanel(){
     c.appendChild(card);
   });
   bindPanel();
+  // Selecting a single box on the photo brings its card into view, so the
+  // rows to edit are right there (multi-select would fight the scrollbar)
+  if(selSet.size===1 && sel>=0 && c.children[sel]){
+    c.children[sel].scrollIntoView({block:'nearest'});
+  }
 }
 
 function bindPanel(){

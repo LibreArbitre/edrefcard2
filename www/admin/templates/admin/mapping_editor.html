@@ -23,7 +23,9 @@
   #stage{position:relative;display:inline-block;border:1px solid var(--line);background:#fafafa}
   #stage img{display:block;user-select:none;-webkit-user-drag:none}
   #lines{position:absolute;left:0;top:0;pointer-events:none}
-  .box{position:absolute;border:2px solid #1c1b1a;background:rgba(255,255,255,.55);cursor:move;font-size:11px}
+  .box{position:absolute;border:2px solid #1c1b1a;background:rgba(255,255,255,.55);cursor:move;font-size:11px;overflow:hidden}
+  .box .mrow{padding:0 3px;white-space:nowrap;overflow:hidden;border-top:1px solid rgba(0,0,0,.15);color:#1c1b1a;pointer-events:none}
+  .box .mrow b{color:var(--accent)}
   .box.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(150,35,30,.25)}
   .box .lbl{position:absolute;top:-18px;left:0;background:#cfcfcf;color:#000;padding:0 5px;font-weight:700;white-space:nowrap}
   .box .rsz{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--accent);border-radius:50%;cursor:nwse-resize}
@@ -72,6 +74,7 @@
   <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Next Joy_N (auto-incremented)">
   <input type="number" id="stamppov" value="1" min="1" style="width:44px" title="Next POV">
   <button id="btnarrange" class="ghost" title="Auto-arrange boxes into 2 columns sorted by button position (no leader-line crossings)">Arrange</button>
+  <label style="font-size:.78rem;white-space:nowrap" title="While dragging: snap to a 20px grid and to neighbour box edges (blue dashed guides)"><input type="checkbox" id="snap" checked> snap</label>
   <span id="aligntools" hidden>
     <button id="alleft" class="ghost" title="Align left edges">&#8676;</button>
     <button id="alright" class="ghost" title="Align right edges">&#8677;</button>
@@ -245,11 +248,21 @@ function renderStage(){
   computeScale();
   // remove existing overlays
   stage.querySelectorAll('.box,.marker').forEach(n=>n.remove());
+  // Live content preview: the same header/rows the renderer will draw,
+  // approximated in HTML (row grid = 72 image px, header = 40)
+  const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const GLYPH={press:'●',up:'▲',right:'▶',down:'▼',left:'◀',stage1:'◔',stage2:'◕',push:'⊙',pull:'↺'};
+  const k=(state.width||4400)/4400, rowH=Math.max(4,72*k*scale), fs=Math.max(6,Math.min(14,Math.round(rowH*0.55)));
   state.boxes.forEach((b,i)=>{
     const d=document.createElement('div'); d.className='box'+(selSet.has(i)?' sel':'');
     d.style.left=(b.box_xy[0]*scale)+'px'; d.style.top=(b.box_xy[1]*scale)+'px';
     d.style.width=(b.box_wh[0]*scale)+'px'; d.style.height=(b.box_wh[1]*scale)+'px';
-    d.innerHTML='<span class="lbl">'+(b.label||'box '+(i+1))+'</span><span class="rsz"></span>';
+    const rowsHtml=(b.rows||[]).map(r=>
+      `<div class="mrow" style="font-size:${fs}px;height:${rowH}px;line-height:${rowH}px">`+
+      `${GLYPH[r.symbol]||''} ${esc(r.number)} <b>${esc(r.joy)}</b></div>`).join('');
+    d.innerHTML='<span class="lbl">'+esc(b.label||'box '+(i+1))+'</span>'+
+      `<div style="height:${Math.max(2,40*k*scale)}px;pointer-events:none"></div>`+rowsHtml+
+      '<span class="rsz"></span>';
     d.addEventListener('mousedown',e=>startDrag(e,i,d));
     d.querySelector('.rsz').addEventListener('mousedown',e=>{e.stopPropagation();startResize(e,i,d);});
     stage.appendChild(d);
@@ -276,9 +289,46 @@ function renderStage(){
       if(ax === bx && ay === by) return;  // button inside the box
       ctx.beginPath(); ctx.moveTo(ax * scale, ay * scale); ctx.lineTo(bx * scale, by * scale); ctx.stroke();
     });
+    if(guides.length){
+      ctx.save(); ctx.strokeStyle='#2b6cb0'; ctx.setLineDash([6,4]); ctx.lineWidth=1;
+      guides.forEach(g=>{
+        ctx.beginPath();
+        if(g.x!==undefined){ ctx.moveTo(g.x*scale,0); ctx.lineTo(g.x*scale,lines.height); }
+        else { ctx.moveTo(0,g.y*scale); ctx.lineTo(lines.width,g.y*scale); }
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
   }
   $("#json").value = JSON.stringify(mapping(),null,1);
   autosave();
+}
+
+// Snap the dragged box to a 20px grid and to neighbour box edges; fills
+// `guides` (blue dashed lines drawn by renderStage) with the matched edges.
+let guides = [];
+function snapPos(i, x, y){
+  guides = [];
+  if(!$("#snap").checked) return [Math.max(0,Math.round(x)), Math.max(0,Math.round(y))];
+  const w=state.boxes[i].box_wh[0], h=state.boxes[i].box_wh[1];
+  const tol = 8/(scale||1);
+  let bx=null, by=null;
+  state.boxes.forEach((o,j)=>{
+    if(j===i || selSet.has(j)) return;
+    [o.box_xy[0], o.box_xy[0]+o.box_wh[0]].forEach(ex=>{
+      [{d:Math.abs(x-ex), nx:ex}, {d:Math.abs(x+w-ex), nx:ex-w}].forEach(c=>{
+        if(c.d<=tol && (!bx || c.d<bx.d)) bx={d:c.d, pos:c.nx, g:ex};
+      });
+    });
+    [o.box_xy[1], o.box_xy[1]+o.box_wh[1]].forEach(ey=>{
+      [{d:Math.abs(y-ey), ny:ey}, {d:Math.abs(y+h-ey), ny:ey-h}].forEach(c=>{
+        if(c.d<=tol && (!by || c.d<by.d)) by={d:c.d, pos:c.ny, g:ey};
+      });
+    });
+  });
+  if(bx){ x=bx.pos; guides.push({x:bx.g}); } else { x=Math.round(x/20)*20; }
+  if(by){ y=by.pos; guides.push({y:by.g}); } else { y=Math.round(y/20)*20; }
+  return [Math.max(0,Math.round(x)), Math.max(0,Math.round(y))];
 }
 
 function startDrag(e,i,d){
@@ -287,18 +337,22 @@ function startDrag(e,i,d){
   if(e.shiftKey){ toggleSel(i); renderPanel(); renderStage(); return; }  // Shift+click = add/remove from selection
   if(!selSet.has(i)) selectOnly(i);
   snapshot('drag'); renderPanel(); renderStage();
-  // drag every selected box together, keeping their relative offsets
+  // drag every selected box together, keeping their relative offsets;
+  // snapping is computed on the grabbed box and applied to the whole group
   const idxs=[...selSet];
   const starts=idxs.map(k=>state.boxes[k].box_xy.slice());
+  const pq=idxs.indexOf(i);
   const sx=e.clientX, sy=e.clientY;
   function mv(ev){
     const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
+    const [nx,ny]=snapPos(i, starts[pq][0]+dx, starts[pq][1]+dy);
+    const adx=nx-starts[pq][0], ady=ny-starts[pq][1];
     idxs.forEach((k,q)=>{
-      state.boxes[k].box_xy=[Math.max(0,Math.round(starts[q][0]+dx)),Math.max(0,Math.round(starts[q][1]+dy))];
+      state.boxes[k].box_xy=[Math.max(0,Math.round(starts[q][0]+adx)),Math.max(0,Math.round(starts[q][1]+ady))];
     });
     renderStage();
   }
-  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+  function up(){ guides=[]; renderStage(); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 }
 

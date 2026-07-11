@@ -398,10 +398,6 @@
                 class="nav-item {% if request.endpoint == 'admin.list_configs' %}active{% endif %}">
                 <span>📋</span> Configurations
             </a>
-            <a href="{{ url_for('admin.list_devices') }}"
-                class="nav-item {% if request.endpoint == 'admin.list_devices' %}active{% endif %}">
-                <span>🎮</span> Devices
-            </a>
             <a href="{{ url_for('admin.batch_import') }}"
                 class="nav-item {% if request.endpoint == 'admin.batch_import' %}active{% endif %}">
                 <span>📤</span> Batch Import

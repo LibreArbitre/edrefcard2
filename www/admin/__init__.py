@@ -5,7 +5,6 @@ EDRefCard Admin Blueprint
 Flask Blueprint for administration functionality.
 """
 
-import sys
 import re
 import shutil
 from pathlib import Path
@@ -182,19 +181,6 @@ def toggle_public(config_id):
     return redirect(url_for('admin.list_configs'))
 
 
-@admin_bp.route('/devices')
-@require_admin
-def list_devices():
-    """List all supported devices."""
-    from scripts.bindingsData import supportedDevices
-    
-    # Sort devices by name
-    devices = sorted(supportedDevices.items(), key=lambda x: x[0])
-    
-    return render_template('admin/devices.html', devices=devices)
-
-
-
 @admin_bp.route('/stats')
 @require_admin
 def stats():
@@ -230,14 +216,18 @@ def debug_info():
     www_dir = Path(__file__).parent.parent
     configs_path = Config.configsPath()
     
-    # Directory listing
+    # Directory listing - subdir restricted to the 2-char run-id prefix
+    # folders (rejects path traversal like ../../)
     config_files = []
     subdir = request.args.get('subdir')
-    
+    if subdir and not re.fullmatch(r'[A-Za-z0-9]{1,2}', subdir):
+        config_files.append(f"Invalid subdir {subdir!r}: expected 1-2 alphanumeric characters")
+        subdir = None
+
     list_path = configs_path
     if subdir:
         list_path = configs_path / subdir
-        
+
     if list_path.exists():
         try:
             # List top level standard dirs or files
@@ -268,7 +258,6 @@ def debug_info():
                            wand_path=wand_path,
                            wand_error=wand_error,
                            config_files=config_files,
-                           sys_path=sys.path,
                            recent_errors=RECENT_ERRORS,
                            persistent_logs=persistent_logs,
                            subdir=subdir)

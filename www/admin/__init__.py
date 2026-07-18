@@ -918,9 +918,11 @@ def _find_mapping_for_device(device_id):
     row = database.get_controller_mapping_by_device_id(device_id)
     if row:
         return row
+    did_u = (device_id or '').upper()
     for r in database.get_all_controller_mappings():
         try:
-            if device_id in (json.loads(r['mapping_json']).get('device_ids') or []):
+            ids = json.loads(r['mapping_json']).get('device_ids') or []
+            if did_u in [str(x).upper() for x in ids]:
                 return r
         except Exception:
             continue
@@ -990,7 +992,7 @@ def controllers_publish():
 def controllers_attach():
     """Attach an unknown hardware ID to an existing mapping (variant IDs)."""
     import json
-    device_id = (request.form.get('device_id') or '').strip()
+    device_id = (request.form.get('device_id') or '').strip().upper()
     mapping_id = request.form.get('mapping_id')
     row = database.get_controller_mapping(mapping_id) if mapping_id else None
     if not device_id or not row:
@@ -998,7 +1000,7 @@ def controllers_attach():
         return redirect(url_for('admin.controllers'))
     m = json.loads(row['mapping_json'])
     ids = m.get('device_ids') or [row['device_id']]
-    if device_id not in ids:
+    if device_id not in [str(x).upper() for x in ids]:
         ids.append(device_id)
     m['device_ids'] = ids
     database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
@@ -1029,7 +1031,7 @@ def controllers_duplicate():
     """Duplicate a mapping under a new device ID (L/R or extended variants)."""
     import json
     mapping_id = request.form.get('mapping_id')
-    new_device_id = (request.form.get('new_device_id') or '').strip()
+    new_device_id = (request.form.get('new_device_id') or '').strip().upper()
     row = database.get_controller_mapping(mapping_id) if mapping_id else None
     if not row or not new_device_id:
         flash('Source mapping and new device ID required.', 'error')
@@ -1340,11 +1342,15 @@ def mapping_editor_save():
     from PIL import Image as PILImage
     data = request.get_json(force=True) or {}
     mapping = data.get('mapping') or {}
-    device_id = (data.get('device_id') or '').strip()
+    # Canonicalise device IDs to uppercase: Elite .binds emit uppercase hex,
+    # so a lowercase-typed ID would never match at render time.
+    device_id = (data.get('device_id') or '').strip().upper()
     device_name = (data.get('device_name') or mapping.get('title') or '').strip()
     base_updated_at = data.get('base_updated_at')
     if not device_id or not mapping.get('image'):
         return jsonify({'error': 'device_id and mapping.image are required'}), 400
+    if isinstance(mapping.get('device_ids'), list):
+        mapping['device_ids'] = [str(x).strip().upper() for x in mapping['device_ids'] if str(x).strip()]
     mapping_json = json.dumps(mapping)
     image_file = f"{mapping['image']}.jpg"
     user_name, role = current_user()

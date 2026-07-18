@@ -499,18 +499,23 @@ def get_controller_mapping(mapping_id):
 
 def get_controller_mapping_by_device_id(device_id):
     """Get a controller mapping by device ID.
-    
+
+    Case-insensitive: Elite .binds emit device IDs in uppercase hex, but a
+    mapper may type them in any case in the editor. Matching on UPPER() keeps
+    a lowercase-entered mapping working (and out of the unknown-device queue).
+
     Args:
         device_id: Device ID (e.g., '231D0300')
-        
+
     Returns:
         Dictionary with mapping data or None
     """
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM controller_mappings WHERE device_id = ?", (device_id,)
+            "SELECT * FROM controller_mappings WHERE UPPER(device_id) = UPPER(?)",
+            (device_id,)
         ).fetchone()
-        
+
         return dict(row) if row else None
 
 

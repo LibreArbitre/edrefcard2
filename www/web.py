@@ -63,7 +63,9 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
             continue
         for did in (m.get('device_ids') or [row.get('device_id')]):
             if did:
-                index[did] = m
+                # Case-insensitive: .binds device IDs are uppercase, mappers
+                # may store them in any case (see get_controller_mapping_by_device_id)
+                index[str(did).upper()] = m
     if not index:
         return created, handled
     for device_key in list(devices.keys()):
@@ -75,7 +77,7 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
             idx = int(idx)
         except ValueError:
             continue
-        m = index.get(dev_id)
+        m = index.get(dev_id.upper())
         if not m:
             continue
         try:

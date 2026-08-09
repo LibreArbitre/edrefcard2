@@ -712,15 +712,7 @@ def generate_pdf(run_id, page_format='A4'):
     # Search for images
     search_pattern = f"{run_id}-*.jpg"
     all_files = list(config_dir.glob(search_pattern))
-    
-    # Debug: log what we're searching for
-    logError(f"PDF Gen Debug: Looking in {config_dir} for {search_pattern}")
-    logError(f"PDF Gen Debug: config_dir.exists()={config_dir.exists()}")
-    if config_dir.exists():
-        dir_contents = list(config_dir.iterdir())[:20]  # List first 20 files
-        logError(f"PDF Gen Debug: Directory contains {len(list(config_dir.iterdir()))} items, first 20: {[f.name for f in dir_contents]}")
-    logError(f"PDF Gen Debug: Found {len(all_files)} matching files: {[f.name for f in all_files]}")
-    
+
     keyboard_img = None
     device_images = []
     

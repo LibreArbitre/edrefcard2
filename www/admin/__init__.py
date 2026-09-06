@@ -947,6 +947,7 @@ def controllers():
             'image': m.get('image'), 'box_count': len(m.get('boxes') or []),
             'updated_at': r.get('updated_at'),
             'status': r.get('status', 'published'),
+            'has_draft': r.get('has_draft', False),
             'updated_by': r.get('updated_by'),
         })
     _, role = current_user()
@@ -979,8 +980,13 @@ def controllers_publish():
     if not row or state not in ('published', 'draft'):
         flash('Mapping and target state required.', 'error')
         return redirect(url_for('admin.controllers'))
-    database.update_controller_mapping(row['id'], status=state)
     user_name, _ = current_user()
+    try:
+        database.set_controller_publication(row['id'], state,
+                                            request.form.get('base_updated_at'), user_name)
+    except database.MappingConflict as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.controllers'))
     database.log_mapping_action('publish' if state == 'published' else 'unpublish',
                                 user_name, row['id'], row['device_id'])
     flash(f'"{row["device_name"]}" is now {state}.', 'success')
@@ -1003,12 +1009,17 @@ def controllers_attach():
     if device_id not in [str(x).upper() for x in ids]:
         ids.append(device_id)
     m['device_ids'] = ids
-    database.update_controller_mapping(row['id'], mapping_json=json.dumps(m))
-    database.dismiss_unknown_device(device_id)
     user_name, _ = current_user()
+    try:
+        database.save_controller_draft(row['device_id'], row['device_name'], m, user_name,
+                                       row['updated_at'], row['id'])
+    except database.MappingConflict as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.controllers'))
+    database.dismiss_unknown_device(device_id)
     database.log_mapping_action('attach', user_name, row['id'], device_id,
                                 f'to "{row["device_name"]}"')
-    flash(f'{device_id} attached to "{row["device_name"]}".', 'success')
+    flash(f'{device_id} attached to the draft of "{row["device_name"]}". Publish after review.', 'success')
     return redirect(url_for('admin.controllers'))
 
 
@@ -1055,7 +1066,8 @@ def controllers_duplicate():
         if src is None:
             flash(f'Source image "{template_name}.jpg" not found, cannot mirror.', 'error')
             return redirect(url_for('admin.controllers'))
-        template_name = f'{template_name}-mirror'
+        from uuid import uuid4
+        template_name = f'{template_name[:100]}-mirror-{uuid4().hex}'
         cdir.mkdir(parents=True, exist_ok=True)
         with PILImage.open(str(src)) as im:
             flipped = im.transpose(PILImage.FLIP_LEFT_RIGHT)
@@ -1141,15 +1153,18 @@ def controllers_rollback():
         return redirect(url_for('admin.controllers_history', mapping_id=row['id']))
     user_name, _ = current_user()
     device_name = v.get('device_name') or row['device_name']
-    database.update_controller_mapping(
-        row['id'], device_name=device_name,
-        template_name=m.get('image') or row['template_name'],
-        image_filename=f"{m.get('image') or row['template_name']}.jpg",
-        mapping_json=v['mapping_json'], updated_by=user_name)
-    database.save_mapping_version(row['id'], device_name, v['mapping_json'], user_name)
+    m.setdefault('image', row['template_name'])
+    m.setdefault('width', row['image_width'])
+    m.setdefault('height', row['image_height'])
+    try:
+        database.save_controller_draft(row['device_id'], device_name, m, user_name,
+                                       request.form.get('base_updated_at'), row['id'])
+    except database.MappingConflict as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('admin.controllers_history', mapping_id=row['id']))
     database.log_mapping_action('rollback', user_name, row['id'], row['device_id'],
                                 f"to version {v['id']} of {v.get('saved_at')}")
-    flash(f'"{device_name}" restored to version {v["id"]} ({v.get("saved_at")}).', 'success')
+    flash(f'"{device_name}" restored as a draft from version {v["id"]}. Publish after review.', 'success')
     return redirect(url_for('admin.controllers_history', mapping_id=row['id']))
 
 
@@ -1225,9 +1240,12 @@ def mapping_editor():
             except Exception as e:
                 draft_note = f'Cannot enrich: {e}'
 
+    if existing and '(not saved yet)' in draft_note:
+        existing = {**existing, '_unsaved_seed': True}
     existing_json = json.dumps(existing) if existing else 'null'
+    editor_user, _ = current_user()
     return render_template('admin/mapping_editor.html', existing_json=existing_json,
-                           draft_note=draft_note)
+                           draft_note=draft_note, editor_user=editor_user)
 
 
 @admin_bp.route('/mapping-editor/upload', methods=['POST'])
@@ -1242,6 +1260,8 @@ def mapping_editor_upload():
     name = slugify(request.form.get('name') or f.filename.rsplit('.', 1)[0])
     if not name:
         return jsonify({'error': 'Invalid name'}), 400
+    from uuid import uuid4
+    name = f'{name[:100]}-{uuid4().hex}'
     cdir = Config.configsPath() / 'controllers'
     cdir.mkdir(parents=True, exist_ok=True)
     try:
@@ -1281,6 +1301,8 @@ def mapping_editor_import_pdf():
     name = slugify(request.form.get('name') or f.filename.rsplit('.', 1)[0])
     if not name:
         return jsonify({'error': 'Invalid name'}), 400
+    from uuid import uuid4
+    name = f'{name[:100]}-{uuid4().hex}'
     try:
         mapping, jpg = extract_mapping_from_pdf(pdf_bytes)
     except Exception as e:
@@ -1336,82 +1358,34 @@ def _notify_discord_mapping(title, message, fields=None):
 @admin_bp.route('/mapping-editor/save', methods=['POST'])
 @require_mapper
 def mapping_editor_save():
-    """Persist a controller mapping to the controller_mappings table."""
-    import json
+    """Save a draft, preserving the public revision and existing hardware IDs."""
     from flask import jsonify
-    from PIL import Image as PILImage
+    from scripts.mapping_validation import validate_mapping
     data = request.get_json(force=True) or {}
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object.'}), 400
     mapping = data.get('mapping') or {}
-    # Canonicalise device IDs to uppercase: Elite .binds emit uppercase hex,
-    # so a lowercase-typed ID would never match at render time.
-    device_id = (data.get('device_id') or '').strip().upper()
-    device_name = (data.get('device_name') or mapping.get('title') or '').strip()
-    base_updated_at = data.get('base_updated_at')
-    if not device_id or not mapping.get('image'):
-        return jsonify({'error': 'device_id and mapping.image are required'}), 400
-    if isinstance(mapping.get('device_ids'), list):
-        mapping['device_ids'] = [str(x).strip().upper() for x in mapping['device_ids'] if str(x).strip()]
-    mapping_json = json.dumps(mapping)
-    image_file = f"{mapping['image']}.jpg"
+    try:
+        validate_mapping(mapping)
+        device_id = str(data.get('device_id') or '').strip().upper()
+        if not device_id:
+            raise ValueError('Enter a hardware ID before saving.')
+        device_name = str(data.get('device_name') or mapping.get('title') or '').strip()
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     user_name, role = current_user()
-    existing = database.get_controller_mapping_by_device_id(device_id)
-    if existing:
-        # Optimistic concurrency: reject the save if someone else saved since
-        # this editor session loaded the mapping (last-write-wins is silent
-        # data loss with several mappers around).
-        if str(existing.get('updated_at') or '') != str(base_updated_at or ''):
-            who = existing.get('updated_by') or 'someone else'
-            return jsonify({'error': f'Conflict: "{who}" saved this mapping at '
-                                     f'{existing.get("updated_at")} while you were editing. '
-                                     f'Copy your mapping_json somewhere safe, reload the page, '
-                                     f'then merge your changes.'}), 409
-        # Mapper edits demote the mapping to draft (hidden from public
-        # rendering) until an admin reviews and re-publishes it.
-        status = existing.get('status', 'published') if role == 'admin' else 'draft'
-        # Version history: backfill the pre-edit state on first save (legacy
-        # mappings created before versioning), then record the new state.
-        try:
-            if not database.list_mapping_versions(existing['id']):
-                database.save_mapping_version(existing['id'], existing.get('device_name'),
-                                              existing['mapping_json'],
-                                              existing.get('updated_by'))
-        except Exception:
-            pass
-        database.update_controller_mapping(existing['id'], device_name=device_name,
-                                           template_name=mapping['image'],
-                                           image_filename=image_file, mapping_json=mapping_json,
-                                           status=status, updated_by=user_name)
-        try:
-            database.save_mapping_version(existing['id'], device_name, mapping_json, user_name)
-        except Exception:
-            pass
-        database.log_mapping_action('update', user_name, existing['id'], device_id,
-                                    f"{len(mapping.get('boxes') or [])} boxes, status {status}")
-        if role != 'admin':
-            _notify_discord_mapping('Mapping updated (draft)',
-                                    f'{user_name} updated "{device_name}" ({device_id}), '
-                                    f'{len(mapping.get("boxes") or [])} boxes. Awaiting review on /admin/controllers.')
-        fresh = database.get_controller_mapping(existing['id'])
-        return jsonify({'ok': True, 'id': existing['id'], 'updated': True, 'status': status,
-                        'updated_at': str(fresh.get('updated_at') or '')})
     try:
-        w, h = PILImage.open(str(Config.configsPath() / 'controllers' / image_file)).size
-    except Exception:
-        w, h = 0, 0
-    status = 'published' if role == 'admin' else 'draft'
-    mid = database.create_controller_mapping(device_id, device_name, mapping['image'],
-                                             image_file, w, h, mapping_json,
-                                             status=status, updated_by=user_name)
-    try:
-        database.save_mapping_version(mid, device_name, mapping_json, user_name)
-    except Exception:
-        pass
-    database.log_mapping_action('create', user_name, mid, device_id,
-                                f"{len(mapping.get('boxes') or [])} boxes, status {status}")
+        fresh = database.save_controller_draft(device_id, device_name, mapping, user_name,
+                                               data.get('base_updated_at'), data.get('mapping_id'))
+    except database.MappingConflict as exc:
+        return jsonify({'error': str(exc)}), 409
+    database.log_mapping_action('save-draft', user_name, fresh['id'], device_id,
+                                f"{len(mapping['boxes'])} boxes; public revision unchanged")
     if role != 'admin':
-        _notify_discord_mapping('New mapping created (draft)',
-                                f'{user_name} created "{device_name}" ({device_id}), '
-                                f'{len(mapping.get("boxes") or [])} boxes. Awaiting review on /admin/controllers.')
-    fresh = database.get_controller_mapping(mid)
-    return jsonify({'ok': True, 'id': mid, 'updated': False, 'status': status,
-                    'updated_at': str(fresh.get('updated_at') or '')})
+        _notify_discord_mapping('Mapping draft saved',
+                                f'{user_name} saved "{device_name}" ({device_id}). Awaiting review on /admin/controllers.')
+    import json
+    return jsonify({'ok': True, 'id': fresh['id'], 'status': 'draft',
+                    'public_status': fresh['status'],
+                    'device_ids': json.loads(fresh['mapping_json'])['device_ids'],
+                    'updated_at': str(fresh['updated_at'])})

@@ -14,6 +14,7 @@
   input[type=text],input[type=number]{min-width:90px}
   button{cursor:pointer;background:#fff}
   button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+  button:disabled{opacity:.55;cursor:not-allowed}
   button.ghost{background:#fff}
   #status{color:var(--muted);font-size:.85rem;margin-left:auto}
   .wrap{display:flex;gap:14px;padding:14px;align-items:flex-start}
@@ -88,8 +89,8 @@
   <button id="btnundo" class="ghost" title="Undo (Ctrl+Z)">&#8630;</button>
   <button id="btnredo" class="ghost" title="Redo (Ctrl+Y)">&#8631;</button>
   <button id="btnpreview" class="ghost">Preview</button>
-  <button id="btnsave" class="primary">Save</button>
-  <span id="status"></span>
+  <button id="btnsave" class="primary" title="Save a draft without changing the public card">Save draft</button>
+  <span id="status" role="status" aria-live="polite"></span>
 </header>
 
 <div class="wrap">
@@ -98,6 +99,13 @@
   </div>
   <div id="panel">
     <h2>Boxes</h2>
+    <p class="small">Saving keeps the public revision unchanged. An admin publishes the saved draft from Controllers.</p>
+    <p class="small" id="hardwareids"></p>
+    <div id="recovery" class="hint" hidden>
+      <span id="recoverytext"></span>
+      <button id="btnrestore" type="button">Restore local draft</button>
+      <button id="btndiscardlocal" type="button">Discard local draft</button>
+    </div>
     <div class="hint" id="hint">
       <span style="float:right;white-space:nowrap">
         <a href="/admin/help" title="Full mapper guide">&#128214; Guide</a> &nbsp;|&nbsp;
@@ -143,7 +151,8 @@
 </div>
 
 <script>
-const EXISTING = {{ existing_json|safe }};
+const EXISTING = JSON.parse({{ existing_json|tojson }});
+const EDITOR_USER = {{ editor_user|default('mapper')|tojson }};
 const SYMS = ["","press","up","right","down","left","stage1","stage2","push","pull"];
 const TYPES = ["Digital","Analogue"];
 const GROUPS = ["General","Ship","SRV","UI","Camera","Fighter","Head look","Galaxy map","Scanners","Holo-Me","Multicrew","OnFoot","Settlement","Misc"];
@@ -170,19 +179,80 @@ const wrap = $("#stagewrap"), lines = $("#lines");
 let zoom = null;                 // null = fit-to-window
 let spaceDown = false, dirty = false, lastAction = '';
 let baseUpdatedAt = null;        // optimistic-concurrency token for Save
+let mappingId = EXISTING?.id || null;
+let savedDeviceId = EXISTING?.device_id || null;
 const undoStack = [], redoStack = [];
-const LS_KEY = 'mapedit:' + (new URLSearchParams(location.search).get('device') || 'new');
+const draftParams = new URLSearchParams(location.search);
+// Each new controller gets its own recovery slot, retained on reload.
+if(!draftParams.get('device') && !draftParams.get('draft')){
+  draftParams.set('draft', crypto.randomUUID());
+  history.replaceState(null, '', location.pathname+'?'+draftParams);
+}
+const LEGACY_LS_KEY = 'mapedit:' + (draftParams.get('device') || 'new');
+let LS_KEY = 'mapedit:v2:' + EDITOR_USER + ':' + (draftParams.get('device')?.toUpperCase() || draftParams.get('draft'));
+let pendingRecovery = null, ready = false, saveInFlight = false;
 
-function snapshot(action){
+function captureDocument(){
+  return JSON.stringify({state, title:$('#title').value, deviceid:$('#deviceid').value,
+                         imgname:$('#imgname').value});
+}
+function restoreDocument(value){
+  const doc = typeof value === 'string' ? JSON.parse(value) : value;
+  state = structuredClone(doc.state);
+  $('#title').value = doc.title || '';
+  $('#deviceid').value = doc.deviceid || '';
+  if(mappingId) $('#deviceid').value = savedDeviceId;
+  $('#imgname').value = doc.imgname || state.image || '';
+  clearSel(); setBtnFor = -1; lastAction = ''; dirty = true;
+  if(state.image) loadImage(state.image);
+  else { img.removeAttribute('src'); img.style.width=''; renderPanel(); renderStage(); }
+  autosave();
+}
+
+function snapshot(action, before){
   if(action === 'arrow' && lastAction === 'arrow') return;  // group arrow nudges
   lastAction = action || '';
-  undoStack.push(JSON.stringify(state.boxes));
+  undoStack.push(before || captureDocument());
   if(undoStack.length > 100) undoStack.shift();
   redoStack.length = 0;
   dirty = true;
 }
-function undo(){ if(!undoStack.length) return; redoStack.push(JSON.stringify(state.boxes)); state.boxes = JSON.parse(undoStack.pop()); clearSel(); lastAction = ''; renderPanel(); renderStage(); }
-function redo(){ if(!redoStack.length) return; undoStack.push(JSON.stringify(state.boxes)); state.boxes = JSON.parse(redoStack.pop()); clearSel(); lastAction = ''; renderPanel(); renderStage(); }
+function undo(){ if(!undoStack.length) return; redoStack.push(captureDocument()); restoreDocument(undoStack.pop()); }
+function redo(){ if(!redoStack.length) return; undoStack.push(captureDocument()); restoreDocument(redoStack.pop()); }
+
+function lockEditing(locked){
+  document.querySelectorAll('header input,header select,header button').forEach(el=>el.disabled=locked);
+  ['#stagewrap','#boxes','#scaffolder'].forEach(s=>$(s).inert=locked);
+  $('#btnjsonimp').disabled=locked;
+}
+function bindAsync(selector, action, event='click'){
+  $(selector).addEventListener(event, async e=>{
+    if(saveInFlight || pendingRecovery) return;
+    saveInFlight=true; lockEditing(true);
+    try{ await action(e); }
+    catch(error){
+      $('#status').textContent=error.name==='AbortError'
+        ? 'Request timed out. Your work is kept locally. Retry or download JSON.'
+        : (error.message || 'Request failed. Your work is kept locally. Retry or download JSON.');
+      flushDraft();
+    }finally{ saveInFlight=false;lockEditing(Boolean(pendingRecovery)); }
+  });
+}
+async function requestJSON(url, options){
+  const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),30000);
+  try{
+    const response=await fetch(url,{...options,signal:controller.signal});
+    if(response.redirected || response.status===401 || response.status===403)
+      throw new Error('Session expired or access denied. Keep this tab open, sign in in another tab, then retry.');
+    let data;
+    try{data=await response.json();}catch(e){throw new Error('The server returned an unexpected response. Your work is kept locally. Retry or download JSON.');}
+    if(!response.ok) throw new Error(data.error || 'The server could not complete the request. Retry or download JSON.');
+    return data;
+  }catch(error){
+    if(error instanceof TypeError) throw new Error('Network unavailable. Your work is kept locally. Retry or download JSON.');
+    throw error;
+  }finally{clearTimeout(timeout);}
+}
 
 function applyZoom(){
   if(!state.width || !img.src) return;
@@ -202,14 +272,24 @@ function setZoom(z, cx, cy){
 }
 
 let saveTimer = null;
+let storedRecoveryValue = null;
+function flushDraft(){
+  clearTimeout(saveTimer);
+  if(!ready || !dirty || pendingRecovery) return;
+  try{
+    const current=localStorage.getItem(LS_KEY);
+    if(current && current!==storedRecoveryValue){
+      $('#status').textContent='Another tab has a local draft for this controller. Save to the server or download JSON; its local draft has not been overwritten.';
+      return;
+    }
+    const value=JSON.stringify({version:2,ts:Date.now(),base_updated_at:baseUpdatedAt,
+      mapping_id:mappingId,document:JSON.parse(captureDocument())});
+    localStorage.setItem(LS_KEY,value);storedRecoveryValue=value;
+  }catch(e){ $('#status').textContent='Local recovery is unavailable. Save your draft or download JSON before leaving.'; }
+}
 function autosave(){
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try{
-      localStorage.setItem(LS_KEY, JSON.stringify({ts: Date.now(), title: $("#title").value,
-        deviceid: $("#deviceid").value, imgname: $("#imgname").value, state}));
-    }catch(e){}
-  }, 400);
+  if(ready && dirty && !pendingRecovery) saveTimer = setTimeout(flushDraft, 400);
 }
 
 function loadExisting(){
@@ -223,6 +303,7 @@ function loadExisting(){
     $("#title").value = state.title||EXISTING.device_name||"";
     $("#imgname").value = state.image||"";
     $("#deviceid").value = EXISTING.device_id||"";
+    $('#deviceid').readOnly = Boolean(mappingId);
     if(state.image){ loadImage(state.image); }
   }catch(e){ console.warn(e); }
 }
@@ -304,6 +385,7 @@ function renderStage(){
     }
   }
   $("#json").value = JSON.stringify(mapping(),null,1);
+  $('#hardwareids').textContent='Hardware IDs: '+(mapping().device_ids.join(', ') || 'not set');
   autosave();
 }
 
@@ -477,19 +559,20 @@ $("#alvspace").addEventListener('click',()=>alignSelected('vspace'));
 
 function renderPanel(){
   const c=$("#boxes"); c.innerHTML='';
+  const attr=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   state.boxes.forEach((b,i)=>{
     const card=document.createElement('div'); card.className='boxcard'+(selSet.has(i)?' sel':'');
     let rowsHtml='';
     (b.rows||[]).forEach((row,j)=>{
       rowsHtml+=`<div class="row">
         <select data-i="${i}" data-j="${j}" data-k="symbol">${SYMS.map(s=>`<option ${s===(row.symbol||'')?'selected':''}>${s}</option>`).join('')}</select>
-        <input type="text" data-i="${i}" data-j="${j}" data-k="number" value="${row.number??''}" placeholder="n°">
-        <input type="text" data-i="${i}" data-j="${j}" data-k="joy" value="${row.joy||''}" placeholder="Joy_1">
+        <input type="text" data-i="${i}" data-j="${j}" data-k="number" value="${attr(row.number)}" placeholder="n°">
+        <input type="text" data-i="${i}" data-j="${j}" data-k="joy" value="${attr(row.joy)}" placeholder="Joy_1">
         <button class="del" data-delrow="${i}.${j}">x</button>
       </div>`;
     });
     card.innerHTML=`<div class="hd">
-        <input type="text" data-i="${i}" data-k="label" value="${(b.label||'').replace(/"/g,'&quot;')}" placeholder="Label (A1...)">
+        <input type="text" data-i="${i}" data-k="label" value="${attr(b.label)}" placeholder="Label (A1...)">
         <button class="ghost" data-setbtn="${i}" title="Set/move the button point">${b.button_xy?'● btn':'Set btn'}</button>
         ${b.button_xy?`<button class="ghost" data-clrbtn="${i}" title="Remove only the red point">✕ pt</button>`:''}
         <button class="del" data-delbox="${i}" title="Delete the whole box">Del box</button>
@@ -530,8 +613,9 @@ function bindPanel(){
 
 function mapping(){
   const did=$("#deviceid").value.trim();
-  return {title:$("#title").value, image:state.image, device_ids:did?[did]:[],
-          styling:"Group", width:state.width, height:state.height, boxes:state.boxes};
+  const ids=[...new Set([did,...(state.device_ids||[])].filter(Boolean).map(id=>id.trim().toUpperCase()))];
+  return {...state,title:$("#title").value, image:state.image, device_ids:ids,
+          styling:state.styling||'Group', width:state.width, height:state.height, boxes:state.boxes};
 }
 
 // Blank scaffold: same grouping/layout heuristics as scripts/scaffold.py,
@@ -576,17 +660,17 @@ $("#btnaddbox").addEventListener('click',()=>{
   selectOnly(state.boxes.length-1); renderPanel(); renderStage();
 });
 
-$("#btnupload").addEventListener('click',async()=>{
+bindAsync('#btnupload',async()=>{
   const f=$("#file").files[0]; if(!f){alert("Pick an image file.");return;}
   const fd=new FormData(); fd.append('image',f); fd.append('name',$("#imgname").value||f.name);
   if($("#pad").checked) fd.append('pad','1');
   $("#status").textContent="Upload…";
-  const r=await fetch('/admin/mapping-editor/upload',{method:'POST',body:fd});
-  const j=await r.json(); if(j.error){$("#status").textContent="Error: "+j.error;return;}
+  const j=await requestJSON('/admin/mapping-editor/upload',{method:'POST',body:fd});
+  if(j.error) throw new Error(j.error);
+  snapshot('upload');
   // Rescale existing boxes (e.g. a scaffolded draft on the nominal canvas)
   // proportionally onto the real image dimensions.
   if(state.boxes.length && state.width && state.height && (state.width!==j.width || state.height!==j.height)){
-    snapshot('rescale');
     const fx=j.width/state.width, fy=j.height/state.height;
     state.boxes.forEach(b=>{
       b.box_xy=[Math.round(b.box_xy[0]*fx),Math.round(b.box_xy[1]*fy)];
@@ -595,27 +679,27 @@ $("#btnupload").addEventListener('click',async()=>{
     });
   }
   state.image=j.name; state.width=j.width; state.height=j.height; $("#imgname").value=j.name;
-  img.onload=()=>{applyZoom();renderStage();}; img.src=j.url+'?t='+Date.now();
+  loadImage(j.name); autosave();
   $("#status").textContent=`Image ${j.name} (${j.width}x${j.height})`;
 });
 
 // Manufacturer AcroForm sheet import: artwork + pre-positioned no_chrome boxes
 $("#btnpdf").addEventListener('click',()=>$("#pdffile").click());
-$("#pdffile").addEventListener('change',async()=>{
+bindAsync('#pdffile',async()=>{
   const f=$("#pdffile").files[0]; if(!f) return;
   const fd=new FormData(); fd.append('pdf',f); fd.append('name',$("#imgname").value||f.name);
   $("#status").textContent="Importing PDF…";
-  const r=await fetch('/admin/mapping-editor/import-pdf',{method:'POST',body:fd});
-  const j=await r.json(); if(j.error){$("#status").textContent="Error: "+j.error;return;}
+  const j=await requestJSON('/admin/mapping-editor/import-pdf',{method:'POST',body:fd});
+  if(j.error) throw new Error(j.error);
   snapshot('importpdf');
   state.image=j.name; state.width=j.width; state.height=j.height; state.boxes=j.boxes;
   $("#imgname").value=j.name;
   if(!$("#title").value) $("#title").value=j.title||'';
   clearSel();
-  img.onload=()=>{applyZoom();renderStage();renderPanel();}; img.src=j.url+'?t='+Date.now();
+  loadImage(j.name); autosave();
   $("#status").textContent=`PDF imported: ${j.boxes.length} boxes pre-positioned (${j.width}x${j.height})`;
   $("#pdffile").value='';
-});
+},'change');
 
 // ---- mapping JSON export / import (backup, sharing, forum review) ----
 $("#btnjsondl").addEventListener('click',()=>{
@@ -628,47 +712,62 @@ $("#btnjsondl").addEventListener('click',()=>{
   $("#status").textContent="Downloaded "+name;
 });
 $("#btnjsonimp").addEventListener('click',()=>$("#jsonfile").click());
-$("#jsonfile").addEventListener('change',async()=>{
+bindAsync('#jsonfile',async()=>{
   const f=$("#jsonfile").files[0]; if(!f) return;
   let m;
   try{ m=JSON.parse(await f.text()); }
   catch(e){ $("#status").textContent="Import error: not valid JSON."; $("#jsonfile").value=''; return; }
-  const boxesOk=Array.isArray(m.boxes) && m.boxes.every(b=>
-    Array.isArray(b.box_xy)&&b.box_xy.length===2&&Array.isArray(b.box_wh)&&b.box_wh.length===2);
+  const pair=(v,positive=false)=>Array.isArray(v)&&v.length===2&&v.every(n=>typeof n==='number'&&Number.isFinite(n)&&(positive?n>0:n>=0));
+  const boxesOk=m && typeof m==='object' && Array.isArray(m.boxes) && m.boxes.every(b=>
+    b && pair(b.box_xy)&&pair(b.box_wh,true)&&(!b.button_xy||pair(b.button_xy))&&
+    Array.isArray(b.rows)&&b.rows.every(r=>r&&typeof r==='object'&&typeof(r.joy||'')==='string')) &&
+    (!m.device_ids || (Array.isArray(m.device_ids)&&m.device_ids.every(id=>typeof id==='string'))) &&
+    ['width','height'].every(k=>typeof m[k]==='number'&&Number.isFinite(m[k])&&m[k]>0);
   if(!boxesOk){ $("#status").textContent="Import error: no valid boxes[] in this file."; $("#jsonfile").value=''; return; }
   if(state.boxes.length && !confirm("Replace the current "+state.boxes.length+" boxes with the imported mapping? (Ctrl+Z to undo)")){
     $("#jsonfile").value=''; return;
   }
   snapshot('importjson');
+  const knownIds=mapping().device_ids;
   state=Object.assign({title:'',image:null,width:0,height:0,boxes:[]}, m);
-  if(m.title) $("#title").value=m.title;
+  if(mappingId) state.device_ids=[...new Set([...knownIds,...(state.device_ids||[])])];
+  $("#title").value=m.title||'';
   if(Array.isArray(m.device_ids)&&m.device_ids[0]&&!$("#deviceid").value) $("#deviceid").value=m.device_ids[0];
-  if(m.image) $("#imgname").value=m.image;
+  $("#imgname").value=m.image||'';
   clearSel();
-  if(state.image){ loadImage(state.image); } else { renderPanel(); renderStage(); }
+  if(state.image){ loadImage(state.image); } else { img.removeAttribute('src');renderPanel(); renderStage(); }
+  autosave();
   $("#status").textContent="Imported "+state.boxes.length+" boxes from "+f.name;
   $("#jsonfile").value='';
-});
+},'change');
 
-$("#btnpreview").addEventListener('click',async()=>{
+bindAsync('#btnpreview',async()=>{
   if(!state.image){alert("No image.");return;}
   $("#status").textContent="Rendering…";
-  const r=await fetch('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping()})});
-  const j=await r.json(); if(j.error){$("#status").textContent="Preview error: "+j.error;return;}
+  const j=await requestJSON('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping()})});
+  if(j.error) throw new Error(j.error);
   $("#preview").innerHTML='<h2>Preview</h2><img src="'+j.url+'?t='+Date.now()+'">';
   $("#status").textContent="Preview OK";
 });
 
-$("#btnsave").addEventListener('click',async()=>{
+bindAsync('#btnsave',async()=>{
   const did=$("#deviceid").value.trim();
   if(!did){alert("Enter a Device ID.");return;}
   if(!state.image){alert("No image.");return;}
   $("#status").textContent="Saving…";
-  const r=await fetch('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_id:did,device_name:$("#title").value,mapping:mapping(),base_updated_at:baseUpdatedAt})});
-  const j=await r.json();
-  if(r.status===409){ alert(j.error||'Conflict: this mapping was saved by someone else. Reload the page.'); $("#status").textContent="CONFLICT - not saved."; return; }
-  $("#status").textContent=j.ok?("Saved (id "+j.id+(j.updated?", updated":"")+(j.status==='draft'?", DRAFT - an admin must publish it":"")+")"):("Error: "+(j.error||'?'));
-  if(j.ok){ dirty=false; baseUpdatedAt=j.updated_at||baseUpdatedAt; try{ localStorage.removeItem(LS_KEY); }catch(e){} }
+  flushDraft();
+  const j=await requestJSON('/admin/mapping-editor/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping_id:mappingId,device_id:did,device_name:$("#title").value,mapping:mapping(),base_updated_at:baseUpdatedAt})});
+  if(!j.ok) throw new Error(j.error||'Save failed. Download JSON before leaving.');
+  clearTimeout(saveTimer);
+  state.device_ids=j.device_ids||mapping().device_ids;
+  dirty=false; baseUpdatedAt=j.updated_at; mappingId=j.id; savedDeviceId=did;
+  $('#deviceid').readOnly=true;
+  try{ if(localStorage.getItem(LS_KEY)===storedRecoveryValue) localStorage.removeItem(LS_KEY); }catch(e){}
+  storedRecoveryValue=null;
+  LS_KEY='mapedit:v2:'+EDITOR_USER+':'+did.toUpperCase();
+  history.replaceState(null,'',location.pathname+'?device='+encodeURIComponent(did));
+  renderStage();
+  $('#status').textContent='Draft saved. '+(j.public_status==='published'?'The public revision is unchanged.':'Not public yet.')+' An admin can publish it after review.';
 });
 
 // ---- zoom / pan / keyboard / draft restore ----
@@ -695,6 +794,7 @@ wrap.addEventListener('mousedown',e=>{
 
 function isEditable(t){ return t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'); }
 document.addEventListener('keydown',e=>{
+  if(saveInFlight || pendingRecovery) return;
   if(isEditable(e.target)) return;
   if(e.code==='Space'){ spaceDown=true; wrap.classList.add('panning'); e.preventDefault(); return; }
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z' && !e.shiftKey){ e.preventDefault(); undo(); return; }
@@ -735,30 +835,62 @@ function setHintLang(l){
 document.querySelectorAll('#hint [data-lang]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();setHintLang(a.dataset.lang);}));
 setHintLang((()=>{ try{ return localStorage.getItem('mapedit:lang')||'en'; }catch(e){ return 'en'; } })());
 
-window.addEventListener('beforeunload',e=>{ if(dirty){ e.preventDefault(); e.returnValue=''; } });
-["#title","#deviceid"].forEach(s=>$(s).addEventListener('input',autosave));
+window.addEventListener('beforeunload',e=>{ flushDraft(); if(dirty){ e.preventDefault(); e.returnValue=''; } });
+window.addEventListener('pagehide',flushDraft);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushDraft();});
+["#title","#deviceid"].forEach(s=>{
+  let before=null;
+  $(s).addEventListener('focus',()=>{before=captureDocument();});
+  $(s).addEventListener('input',()=>{
+    if(before){ snapshot('metadata',before);before=null; }
+    dirty=true;autosave();
+  });
+});
 
 window.addEventListener('resize',()=>{ applyZoom(); renderStage(); });
 loadExisting();
 if(!state.image){ renderStage(); renderPanel(); }
+ready=true;
 
-// offer to restore a locally autosaved draft (survives crash/refresh)
+// Do not write anything to recovery storage until the user chooses what to keep.
 (function(){
-  let saved=null; try{ saved=JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){}
-  if(!saved || !saved.state || !(saved.state.boxes||[]).length) return;
-  const btn=document.createElement('button'); btn.className='ghost';
-  btn.textContent='Restore local draft ('+new Date(saved.ts).toLocaleString()+')';
-  btn.title='Unsaved session found in this browser';
-  btn.addEventListener('click',()=>{
-    snapshot('restore');
-    state=Object.assign({title:'',image:null,width:0,height:0,boxes:[]}, saved.state);
-    $("#title").value=saved.title||''; $("#deviceid").value=saved.deviceid||''; $("#imgname").value=saved.imgname||state.image||'';
-    clearSel();
-    if(state.image){ loadImage(state.image); } else { renderPanel(); renderStage(); }
-    btn.remove();
-  });
-  $("#status").before(btn);
+  let saved=null, key=LS_KEY;
+  try{
+    storedRecoveryValue=localStorage.getItem(key);
+    saved=JSON.parse(storedRecoveryValue);
+    if(!saved){key=LEGACY_LS_KEY;saved=JSON.parse(localStorage.getItem(key));}
+  }catch(e){$('#status').textContent='Local recovery could not be read. Save or download JSON before leaving.';}
+  if(!saved || !(saved.document?.state || saved.state)) return;
+  const doc=saved.document||{state:saved.state,title:saved.title,deviceid:saved.deviceid,imgname:saved.imgname};
+  pendingRecovery={...saved,document:doc,key};
+  $('#recovery').hidden=false;
+  $('#recoverytext').textContent='Unsaved local work found ('+new Date(saved.ts).toLocaleString()+'). Restore it or discard it before editing.';
+  lockEditing(true);
 })();
+$('#btnrestore').addEventListener('click',()=>{
+  if(!pendingRecovery) return;
+  const saved=pendingRecovery;
+  try{
+    if(!Array.isArray(saved.document.state.boxes)) throw new Error('Invalid local document.');
+    snapshot('restore');
+    // Preserve the draft's base, not the newer server revision loaded underneath.
+    baseUpdatedAt=saved.base_updated_at ?? (mappingId?'unknown-local-base':null);
+    pendingRecovery=null;restoreDocument(saved.document);
+    $('#recovery').hidden=true;lockEditing(false);flushDraft();
+    if(saved.key!==LS_KEY && localStorage.getItem(LS_KEY)===storedRecoveryValue && storedRecoveryValue)
+      localStorage.removeItem(saved.key);
+    $('#status').textContent='Local draft restored. Save checks for changes made by other mappers.';
+  }catch(e){pendingRecovery=saved;$('#status').textContent='Cannot restore this local draft. It has not been deleted.';}
+});
+$('#btndiscardlocal').addEventListener('click',()=>{
+  if(!pendingRecovery || !confirm('Discard this local draft? The server version is kept.')) return;
+  try{localStorage.removeItem(pendingRecovery.key);}catch(e){return;}
+  pendingRecovery=null;$('#recovery').hidden=true;lockEditing(false);
+  storedRecoveryValue=null;
+  $('#status').textContent='Local draft discarded. The server version is unchanged.';
+  autosave();
+});
+if(EXISTING?._unsaved_seed){dirty=true;autosave();}
 </script>
 </body>
 </html>

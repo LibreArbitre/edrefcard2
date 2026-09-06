@@ -6,7 +6,7 @@
 <div class="page-header">
     <h1>🕘 History: {{ mapping.device_name }}</h1>
     <p>Every editor save records a version here (the 20 most recent are kept).
-       <strong>Rollback</strong> restores that state as the current mapping without deleting
+       <strong>Rollback</strong> restores that state as a draft, leaving the public revision unchanged, without deleting
        anything: the restore itself becomes a new version, so a rollback can be rolled back.</p>
 </div>
 
@@ -43,8 +43,9 @@
                         <form method="post" action="{{ url_for('admin.controllers_rollback') }}"
                               onsubmit="return confirm('Restore &quot;{{ mapping.device_name }}&quot; to version #{{ v.id }} of {{ v.saved_at }}?')">
                             <input type="hidden" name="version_id" value="{{ v.id }}">
+                            <input type="hidden" name="base_updated_at" value="{{ mapping.updated_at }}">
                             <button class="btn btn-outline btn-sm" type="submit"
-                                    title="Make this version the current mapping">Rollback</button>
+                                    title="Restore this version as a draft">Rollback to draft</button>
                         </form>
                         {% endif %}
                     </div>

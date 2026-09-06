@@ -7,6 +7,7 @@ SQLite database for storing configurations and device information.
 
 import sqlite3
 import datetime
+import json
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -146,6 +147,33 @@ def init_db(db_path):
                 conn.execute(ddl)
             except Exception:
                 pass  # Column already exists
+
+        migrate_controller_publications(conn)
+
+
+def migrate_controller_publications(conn):
+    """Preserve the currently published document before introducing draft edits.
+
+    Additive and repeatable: never replace an existing publication snapshot.
+    """
+    columns = {r[1] for r in conn.execute('PRAGMA table_info(controller_mappings)')}
+    for name, definition in (('published_snapshot', 'TEXT'),
+                             ('has_draft', 'INTEGER NOT NULL DEFAULT 0')):
+        if name not in columns:
+            try:
+                conn.execute(f'ALTER TABLE controller_mappings ADD COLUMN {name} {definition}')
+            except sqlite3.OperationalError as exc:
+                if 'duplicate column name' not in str(exc):
+                    raise
+    for row in conn.execute("SELECT * FROM controller_mappings WHERE status = 'published' "
+                            "AND published_snapshot IS NULL").fetchall():
+        conn.execute('UPDATE controller_mappings SET published_snapshot = ? WHERE id = ?',
+                     (json.dumps(_publication_document(dict(row))), row['id']))
+
+
+def _publication_document(row):
+    return {key: row[key] for key in ('device_name', 'template_name', 'image_filename',
+                                     'image_width', 'image_height', 'mapping_json')}
 
 
 @contextmanager
@@ -476,7 +504,11 @@ def create_controller_mapping(device_id, device_name, template_name, image_filen
         """, (device_id, device_name, template_name, image_filename,
               image_width, image_height, mapping_json, now, now,
               status, updated_by))
-
+        if status == 'published':
+            row = conn.execute('SELECT * FROM controller_mappings WHERE id = ?',
+                               (cursor.lastrowid,)).fetchone()
+            conn.execute('UPDATE controller_mappings SET published_snapshot = ? WHERE id = ?',
+                         (json.dumps(_publication_document(dict(row))), cursor.lastrowid))
         return cursor.lastrowid
 
 
@@ -623,6 +655,113 @@ def get_all_controller_mappings():
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM controller_mappings").fetchall()
         return [dict(r) for r in rows]
+
+
+class MappingConflict(ValueError):
+    """The submitted base is stale or the requested identity already exists."""
+
+
+def _record_mapping_version(conn, row, actor):
+    conn.execute('INSERT INTO controller_mapping_versions '
+                 '(mapping_id, device_name, mapping_json, saved_by) VALUES (?, ?, ?, ?)',
+                 (row['id'], row['device_name'], row['mapping_json'], actor))
+    conn.execute('DELETE FROM controller_mapping_versions WHERE mapping_id = ? AND id NOT IN '
+                 '(SELECT id FROM controller_mapping_versions WHERE mapping_id = ? '
+                 'ORDER BY id DESC LIMIT 20)', (row['id'], row['id']))
+
+
+def save_controller_draft(device_id, device_name, mapping, actor, base_updated_at=None,
+                          mapping_id=None):
+    """Save a draft and its history in one serialized transaction, never publish.
+
+    Existing aliases are preserved even for older clients sending only one ID.
+    BEGIN IMMEDIATE makes checking the base and updating it one atomic operation.
+    """
+    import copy
+    document = copy.deepcopy(mapping)
+    device_id = str(device_id).strip().upper()
+    with get_db() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        if mapping_id is not None:
+            row = conn.execute('SELECT * FROM controller_mappings WHERE id = ?',
+                               (mapping_id,)).fetchone()
+            if row is None or row['device_id'].upper() != device_id:
+                raise MappingConflict('This mapping was removed or its identity changed. Reload before saving.')
+        else:
+            row = conn.execute('SELECT * FROM controller_mappings WHERE UPPER(device_id) = ?',
+                               (device_id,)).fetchone()
+        previous = dict(row) if row else None
+        if previous and str(previous['updated_at'] or '') != str(base_updated_at or ''):
+            raise MappingConflict('A newer revision exists. Download your JSON, then reload and compare before saving.')
+        if not previous and base_updated_at:
+            raise MappingConflict('The original mapping no longer exists. Download your JSON before reloading.')
+        old_ids = json.loads(previous['mapping_json']).get('device_ids', []) if previous else []
+        document['device_ids'] = list(dict.fromkeys(
+            str(value).strip().upper() for value in
+            [device_id, *old_ids, *(document.get('device_ids') or [])] if str(value).strip()))
+        # A new draft must not silently steal an ID from another controller.
+        wanted = set(document['device_ids'])
+        for other in conn.execute('SELECT * FROM controller_mappings').fetchall():
+            if previous and other['id'] == previous['id']:
+                continue
+            ids = set(str(v).upper() for v in json.loads(other['mapping_json']).get('device_ids', []))
+            ids.add(other['device_id'].upper())
+            if other['published_snapshot']:
+                live = json.loads(other['published_snapshot'])
+                ids.update(str(v).upper() for v in json.loads(live['mapping_json']).get('device_ids', []))
+            if wanted & ids:
+                raise MappingConflict('One of these hardware IDs already belongs to another controller.')
+        now = datetime.datetime.now(datetime.UTC).isoformat()
+        payload = json.dumps(document)
+        if previous:
+            if not conn.execute('SELECT 1 FROM controller_mapping_versions WHERE mapping_id = ?',
+                                (previous['id'],)).fetchone():
+                _record_mapping_version(conn, previous, previous.get('updated_by'))
+            mid = previous['id']
+            conn.execute('UPDATE controller_mappings SET device_name = ?, template_name = ?, '
+                         'image_filename = ?, image_width = ?, image_height = ?, mapping_json = ?, '
+                         'updated_at = ?, updated_by = ?, has_draft = 1 WHERE id = ?',
+                         (device_name, document['image'], document['image'] + '.jpg',
+                          document['width'], document['height'], payload, now, actor, mid))
+        else:
+            mid = conn.execute('INSERT INTO controller_mappings '
+                               '(device_id, device_name, template_name, image_filename, image_width, '
+                               'image_height, mapping_json, updated_at, updated_by, status, has_draft) '
+                               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', 1)",
+                               (device_id, device_name, document['image'], document['image'] + '.jpg',
+                                document['width'], document['height'], payload, now, actor)).lastrowid
+        fresh = dict(conn.execute('SELECT * FROM controller_mappings WHERE id = ?', (mid,)).fetchone())
+        _record_mapping_version(conn, fresh, actor)
+        return fresh
+
+
+def set_controller_publication(mapping_id, state, base_updated_at, actor):
+    """Publish exactly the reviewed revision, or explicitly take it offline."""
+    if state not in ('published', 'draft'):
+        raise ValueError('Invalid publication state.')
+    with get_db() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('SELECT * FROM controller_mappings WHERE id = ?', (mapping_id,)).fetchone()
+        if not row or str(row['updated_at']) != str(base_updated_at):
+            raise MappingConflict('This mapping changed since you opened the page. Review the latest revision first.')
+        now = datetime.datetime.now(datetime.UTC).isoformat()
+        if state == 'published':
+            conn.execute('UPDATE controller_mappings SET published_snapshot = ?, status = ?, '
+                         'has_draft = 0, updated_at = ?, updated_by = ? WHERE id = ?',
+                         (json.dumps(_publication_document(dict(row))), state, now, actor, mapping_id))
+        else:
+            conn.execute('UPDATE controller_mappings SET status = ?, updated_at = ?, updated_by = ? '
+                         'WHERE id = ?', (state, now, actor, mapping_id))
+
+
+def get_published_controller_mappings():
+    """Public consumers must never read editable draft documents."""
+    result = []
+    for row in get_all_controller_mappings():
+        if row.get('status') != 'published' or not row.get('published_snapshot'):
+            continue
+        result.append({**row, **json.loads(row['published_snapshot'])})
+    return result
 
 
 def record_unknown_device(device_id, run_id):

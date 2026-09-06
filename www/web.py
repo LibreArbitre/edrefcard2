@@ -48,7 +48,7 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
     import json
     created, handled = [], set()
     try:
-        rows = database.get_all_controller_mappings()
+        rows = database.get_published_controller_mappings()
     except Exception as e:
         logError(f"data-driven: cannot load mappings: {e}\n")
         return created, handled
@@ -581,7 +581,7 @@ def show_binds(run_id):
             # Archived data-driven images (controller_mappings)
             try:
                 import json as _json
-                for _row in database.get_all_controller_mappings():
+                for _row in database.get_published_controller_mappings():
                     try:
                         _img = _json.loads(_row['mapping_json']).get('image')
                     except Exception:
@@ -647,7 +647,7 @@ def list_devices():
     import json as _json
     dd_devices = []
     try:
-        for row in database.get_all_controller_mappings():
+        for row in database.get_published_controller_mappings():
             if row.get('status', 'published') != 'published':
                 continue
             try:

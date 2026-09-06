@@ -89,6 +89,7 @@
                 <td>
                     <span class="badge {{ 'badge-success' if m.status == 'published' else 'badge-warning' }}"
                           title="Drafts are hidden from public rendering until published">{{ m.status }}</span>
+                    {% if m.has_draft and m.status == 'published' %}<span class="badge badge-warning">unpublished changes</span>{% endif %}
                 </td>
                 <td>{{ m.updated_at }}{% if m.updated_by %}<br><span style="color:var(--text-muted);font-size:0.8rem">by {{ m.updated_by }}</span>{% endif %}</td>
                 <td>
@@ -101,6 +102,7 @@
                         {% if role == 'admin' %}
                         <form method="post" action="{{ url_for('admin.controllers_publish') }}">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">
+                            <input type="hidden" name="base_updated_at" value="{{ m.updated_at }}">
                             {% if m.status == 'published' %}
                             <input type="hidden" name="state" value="draft">
                             <button class="btn btn-outline btn-sm" type="submit"
@@ -111,6 +113,15 @@
                                     title="Make it live for public rendering">Publish</button>
                             {% endif %}
                         </form>
+                        {% if m.status == 'published' and m.has_draft %}
+                        <form method="post" action="{{ url_for('admin.controllers_publish') }}"
+                              onsubmit="return confirm('Publish the saved draft? This replaces the public revision.')">
+                            <input type="hidden" name="mapping_id" value="{{ m.id }}">
+                            <input type="hidden" name="base_updated_at" value="{{ m.updated_at }}">
+                            <input type="hidden" name="state" value="published">
+                            <button class="btn btn-primary btn-sm" type="submit">Publish draft</button>
+                        </form>
+                        {% endif %}
                         {% endif %}
                         <form method="post" action="{{ url_for('admin.controllers_duplicate') }}" style="display:flex;gap:0.25rem;align-items:center">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">

@@ -34,9 +34,9 @@
             Sizes are normalised automatically. Do not spend time pixel-pushing box sizes.</li>
         <li>Fix labels, numbers and Joy_N values in the right-hand panel (check them against the manual or a .binds).</li>
         <li><strong>Preview</strong> renders the real card server-side. Iterate until the layout reads well.</li>
-        <li><strong>Save</strong>. Your save is stored as a <span class="badge badge-warning">draft</span>:
-            it is not visible to the public until an admin reviews and publishes it. You will see
-            "DRAFT - an admin must publish it" in the status bar; that is normal, nothing else to do.</li>
+        <li><strong>Save draft</strong>. Every save, including an admin's save, is a draft.
+            If this controller is already published, its public revision stays unchanged.
+            An admin reviews the saved draft and uses <strong>Publish draft</strong> on Controllers to release it.</li>
     </ol>
 </div>
 
@@ -63,8 +63,10 @@
     <ul style="line-height:1.9">
         <li><strong>Ctrl + mouse wheel</strong> zoom (around the cursor) &middot; <strong>Space + drag</strong> pan &middot; <strong>Fit</strong> resets</li>
         <li><strong>Arrows</strong> nudge the selected box (Shift = x10) &middot; <strong>Del</strong> delete &middot; <strong>Ctrl+D</strong> duplicate</li>
-        <li><strong>Ctrl+Z / Ctrl+Y</strong> undo/redo (100 steps)</li>
-        <li>Your work autosaves in the browser: after a crash or refresh, a <em>"Restore local draft"</em> button appears</li>
+        <li><strong>Ctrl+Z / Ctrl+Y</strong> undo/redo (100 full-document steps, including imports)</li>
+        <li>Your unsaved work is stored in this browser. After a crash or refresh, choose
+            <em>Restore local draft</em> or <em>Discard local draft</em> before editing.
+            Downloads and server saves are still recommended; browser storage can be unavailable.</li>
         <li>If someone else saved the same mapping while you were editing, Save is refused with a message instead of overwriting their work</li>
     </ul>
 </div>

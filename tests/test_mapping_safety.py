@@ -59,6 +59,20 @@ class MappingSafetyTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_pdf_requires_owner_verification_before_publication(self):
+        mapping = document()
+        mapping['input_verification_required'] = True
+        entry = mapping['boxes'][0]['rows'][0]
+        entry['verification'] = 'unverified'
+        self.save(mapping)
+        revision = db.get_all_controller_mappings()[0]['updated_at']
+        with self.assertRaises(db.MappingConflict):
+            db.set_controller_publication(1, 'published', revision, 'admin')
+        entry['verification'] = 'verified'
+        self.save(mapping, revision)
+        revision = db.get_all_controller_mappings()[0]['updated_at']
+        db.set_controller_publication(1, 'published', revision, 'admin')
+
     def save(self, mapping=None, base='old'):
         return db.save_controller_draft('TEST0001', 'Edited', mapping or document('new-image'),
                                         'mapper', base, 1)

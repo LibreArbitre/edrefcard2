@@ -8,6 +8,7 @@ SQLite database for storing configurations and device information.
 import sqlite3
 import datetime
 import json
+import re
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -746,6 +747,16 @@ def set_controller_publication(mapping_id, state, base_updated_at, actor):
             raise MappingConflict('This mapping changed since you opened the page. Review the latest revision first.')
         now = datetime.datetime.now(datetime.UTC).isoformat()
         if state == 'published':
+            mapping = json.loads(row['mapping_json'])
+            pending = []
+            for box in mapping.get('boxes', []):
+                for entry in box.get('rows', []):
+                    if mapping.get('input_verification_required') or 'verification' in entry:
+                        valid = re.fullmatch(r'Joy_(?:[1-9][0-9]*|(?:X|Y|Z|RX|RY|RZ|U|V)Axis|POV[1-9][0-9]*(?:Up|Right|Down|Left))', entry.get('joy') or '')
+                        if entry.get('verification') != 'verified' or not valid:
+                            pending.append(box.get('label', 'Unnamed input'))
+            if pending:
+                raise MappingConflict(f'Publication blocked: {len(pending)} input(s) still need a valid game code and owner verification.')
             conn.execute('UPDATE controller_mappings SET published_snapshot = ?, status = ?, '
                          'has_draft = 0, updated_at = ?, updated_by = ? WHERE id = ?',
                          (json.dumps(_publication_document(dict(row))), state, now, actor, mapping_id))

@@ -1314,9 +1314,9 @@ def mapping_editor_import_pdf():
     user_name, _ = current_user()
     database.log_mapping_action('import-pdf', user_name, None, None,
                                 f'{f.filename} -> {name}.jpg, {len(mapping["boxes"])} boxes')
-    return jsonify({'name': name, 'width': mapping['width'], 'height': mapping['height'],
+    return jsonify({**mapping, 'name': name, 'width': mapping['width'], 'height': mapping['height'],
                     'boxes': mapping['boxes'],
-                    'title': f.filename.rsplit('.', 1)[0],
+                    'title': mapping.get('title') or f.filename.rsplit('.', 1)[0],
                     'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
 
 

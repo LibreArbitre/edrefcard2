@@ -32,6 +32,61 @@ _DIR_SYMBOL = {'U': 'up', 'R': 'right', 'D': 'down', 'L': 'left', 'P': 'press'}
 _ROLE_RE = re.compile(r'_(Name|Desc|Min|Max|Mid)$')
 
 
+def _vkb_boxes(page, zoom):
+    """Read VKB/UntoldForce blank worksheets, not hardware input numbers.
+
+    A/B and 1/2 pairs are number/description columns. Field suffixes are
+    authoring identifiers, NOT DirectInput numbers or reliable directions.
+    Keep each writing area in its original position and retain provenance.
+    """
+    text = page.get_text()
+    if 'VKB STECS' not in text or 'UntoldForce' not in text:
+        return [], None
+    widgets = {w.field_name: w for w in page.widgets() or []}
+    entries = []
+    for name, widget in widgets.items():
+        if name.upper().startswith('USER'):
+            continue
+        axis = name.upper().startswith('AX_')
+        pair = None
+        if name.endswith('_B'):
+            pair = widgets.get(name[:-2] + '_A')
+        elif name.endswith('_2'):
+            pair = widgets.get(name[:-2] + '_1')
+        if not axis and pair is None:
+            continue
+        if pair is not None:
+            # Fail closed if a different PDF uses this naming convention.
+            if (pair.rect.x1 > widget.rect.x0 + 2 or
+                    abs(pair.rect.y0 - widget.rect.y0) > 2 or
+                    widget.rect.width <= pair.rect.width):
+                raise ValueError(f'Unexpected VKB field geometry: {name}')
+        family = re.sub(r'_[AB12]$', '', name) if not axis else name
+        group = re.sub(r'_(?:\d+|UP|DN|BUT|NEU|CW|CCW|PUSH|Up|Down|Left|Right|Push|A|B)$', '', family)
+        if axis:
+            group = 'Axes'
+        r = widget.rect
+        entries.append((group, r.y0, r.x0, {
+            'label': family.replace('_', ' ') + ' [VERIFY]',
+            'physical_group': group,
+            'box_xy': [int(r.x0 * zoom), int(r.y0 * zoom)],
+            'box_wh': [max(1, int(r.width * zoom)), max(1, int(r.height * zoom))],
+            'button_xy': None,
+            'no_chrome': True,
+            'rows': [{'symbol': None, 'number': None, 'joy': '',
+                      'type': 'Analogue' if axis else 'Digital',
+                      'verification': 'unverified', 'source_field': name}],
+        }))
+    entries.sort(key=lambda item: (item[0], item[1], item[2]))
+    counters = {}
+    for group, _, _, box in entries:
+        counters[group] = counters.get(group, 0) + 1
+        box['source_row'] = counters[group]
+        box['label'] = f'{group} / row {counters[group]} [VERIFY]'
+    title = next((line.strip() for line in text.splitlines() if line.startswith('VKB STECS')), 'VKB STECS')
+    return [entry[3] for entry in entries], title
+
+
 def _family_boxes(page):
     """Group the page's widgets into {family: {role: widget}} dicts."""
     fams = {}
@@ -103,6 +158,14 @@ def extract_mapping_from_pdf(pdf_bytes, zoom=1.0):
             'no_chrome': True,
             'rows': [row],
         })
+    vkb_title = None
+    if not boxes:
+        boxes, vkb_title = _vkb_boxes(page, zoom)
+    if vkb_title and zoom == 1.0:
+        # Small PDF point dimensions leave no usable room after renderer padding.
+        # Rasterize these worksheets at 216 DPI, preserving relative geometry.
+        doc.close()
+        return extract_mapping_from_pdf(pdf_bytes, zoom=3.0)
     if not boxes:
         raise ValueError('No fillable description fields found in this PDF '
                          '(is it an AcroForm reference sheet?)')
@@ -118,13 +181,15 @@ def extract_mapping_from_pdf(pdf_bytes, zoom=1.0):
                 page.delete_widget(w)
             except Exception:
                 pass
-    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+    # VKB number fields are blank by design. Do not bake user-entered actions
+    # or guessed numbers into a reusable background. Printed credits remain.
+    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), annots=not bool(vkb_title))
     img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=92)
 
     mapping = {
-        'title': '',
+        'title': vkb_title or '',
         'image': None,           # set by the caller after saving the JPEG
         'device_ids': [],
         'styling': 'Group',
@@ -132,4 +197,11 @@ def extract_mapping_from_pdf(pdf_bytes, zoom=1.0):
         'height': pix.height,
         'boxes': boxes,
     }
+    if vkb_title:
+        mapping['input_verification_required'] = True
+        mapping['source_credit'] = 'Design by UntoldForce v1.0; distributed by VKB'
+        mapping['import_format'] = 'vkb-stecs-worksheet'
+        mapping['review_note'] = ('Physical positions imported; all game input codes require owner verification. '
+                                  'Field names and row numbers are not Joy numbers.')
+    doc.close()
     return mapping, buf.getvalue()

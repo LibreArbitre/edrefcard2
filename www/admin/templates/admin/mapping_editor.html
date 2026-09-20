@@ -570,6 +570,11 @@ function renderPanel(){
         <input type="text" data-i="${i}" data-j="${j}" data-k="joy" value="${attr(row.joy)}" placeholder="Joy_1">
         <button class="del" data-delrow="${i}.${j}">x</button>
       </div>`;
+      if(row.verification!==undefined) rowsHtml+=`<label>Input verification
+        <select data-i="${i}" data-j="${j}" data-k="verification">
+          <option value="unverified" ${row.verification!=='verified'?'selected':''}>Needs owner verification</option>
+          <option value="verified" ${row.verification==='verified'?'selected':''}>Verified with hardware owner</option>
+        </select></label>`;
     });
     card.innerHTML=`<div class="hd">
         <input type="text" data-i="${i}" data-k="label" value="${attr(b.label)}" placeholder="Label (A1...)">
@@ -599,7 +604,11 @@ function bindPanel(){
     el.addEventListener('change',()=>{
       const i=+el.dataset.i, k=el.dataset.k;
       snapshot('edit');
-      if(el.dataset.j!==undefined){ const j=+el.dataset.j; let v=el.value; if(k==='number'&&v==='')v=null; state.boxes[i].rows[j][k]=v; }
+      if(el.dataset.j!==undefined){
+        const j=+el.dataset.j; let v=el.value; if(k==='number'&&v==='')v=null;
+        const row=state.boxes[i].rows[j]; row[k]=v;
+        if(k==='joy' && row.verification!==undefined){ row.verification='unverified'; renderPanel(); }
+      }
       else if(k==='label'){ state.boxes[i].label=el.value; }
       renderStage();
     });
@@ -693,11 +702,16 @@ bindAsync('#pdffile',async()=>{
   if(j.error) throw new Error(j.error);
   snapshot('importpdf');
   state.image=j.name; state.width=j.width; state.height=j.height; state.boxes=j.boxes;
+  for(const key of ['input_verification_required','source_credit','import_format','review_note']) {
+    delete state[key];
+    if(j[key]!==undefined) state[key]=j[key];
+  }
   $("#imgname").value=j.name;
   if(!$("#title").value) $("#title").value=j.title||'';
   clearSel();
   loadImage(j.name); autosave();
   $("#status").textContent=`PDF imported: ${j.boxes.length} boxes pre-positioned (${j.width}x${j.height})`;
+  if(j.review_note) $("#status").textContent+=' '+j.review_note;
   $("#pdffile").value='';
 },'change');
 

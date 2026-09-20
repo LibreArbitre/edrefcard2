@@ -627,6 +627,11 @@ def list_devices():
     """List all supported devices."""
     from scripts.database import get_device_counts
     try:
+        from scripts.bindingsData import apply_legacy_device_aliases
+        apply_legacy_device_aliases(database.list_legacy_device_aliases())
+    except Exception:
+        pass
+    try:
         counts = get_device_counts(public_only=True)
     except Exception:
         counts = {}

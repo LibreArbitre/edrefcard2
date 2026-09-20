@@ -78,13 +78,30 @@ def _vkb_boxes(page, zoom):
                       'verification': 'unverified', 'source_field': name}],
         }))
     entries.sort(key=lambda item: (item[0], item[1], item[2]))
-    counters = {}
-    for group, _, _, box in entries:
-        counters[group] = counters.get(group, 0) + 1
-        box['source_row'] = counters[group]
-        box['label'] = f'{group} / row {counters[group]} [VERIFY]'
+    grouped = []
+    for group in sorted({entry[0] for entry in entries}):
+        members = [entry for entry in entries if entry[0] == group]
+        members.sort(key=lambda item: (item[1], item[2]))
+        left = min(item[3]['box_xy'][0] for item in members)
+        top = min(item[3]['box_xy'][1] for item in members)
+        right = max(item[3]['box_xy'][0] + item[3]['box_wh'][0] for item in members)
+        bottom = max(item[3]['box_xy'][1] + item[3]['box_wh'][1] for item in members)
+        rows = []
+        for row_number, (_, _, _, member) in enumerate(members, 1):
+            row = dict(member['rows'][0])
+            row['source_row'] = row_number
+            rows.append(row)
+        grouped.append({
+            'label': f'{group} [VERIFY]',
+            'physical_group': group,
+            'box_xy': [left, top],
+            'box_wh': [right - left, bottom - top],
+            'button_xy': None,
+            'no_chrome': True,
+            'rows': rows,
+        })
     title = next((line.strip() for line in text.splitlines() if line.startswith('VKB STECS')), 'VKB STECS')
-    return [entry[3] for entry in entries], title
+    return grouped, title
 
 
 def _family_boxes(page):

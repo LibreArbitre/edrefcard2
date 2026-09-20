@@ -333,19 +333,23 @@ function renderStage(){
   // approximated in HTML (row grid = 72 image px, header = 40)
   const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   const GLYPH={press:'●',up:'▲',right:'▶',down:'▼',left:'◀',stage1:'◔',stage2:'◕',push:'⊙',pull:'↺'};
-  const k=(state.width||4400)/4400, rowH=Math.max(4,72*k*scale), fs=Math.max(6,Math.min(14,Math.round(rowH*0.55)));
+  const k=(state.width||4400)/4400;
   state.boxes.forEach((b,i)=>{
+    const rows=b.rows||[], chrome=!b.no_chrome;
+    const headerH=chrome?Math.max(2,40*k*scale):0;
+    const rowH=chrome?Math.max(4,72*k*scale):Math.max(4,(b.box_wh[1]*scale)/Math.max(rows.length,1));
+    const fs=Math.max(6,Math.min(14,Math.round(rowH*0.55)));
     const d=document.createElement('div'); d.className='box'+(selSet.has(i)?' sel':'');
     d.style.left=(b.box_xy[0]*scale)+'px'; d.style.top=(b.box_xy[1]*scale)+'px';
     d.style.width=(b.box_wh[0]*scale)+'px'; d.style.height=(b.box_wh[1]*scale)+'px';
-    const rowsHtml=(b.rows||[]).map(r=>{
+    const rowsHtml=rows.map(r=>{
       // The final card prints the number, not the Joy key: only show the
       // Joy when it adds information (POV/axes, or number/Joy mismatch)
       const joyDup=r.joy && r.number!=null && r.joy===('Joy_'+r.number);
       return `<div class="mrow" style="font-size:${fs}px;height:${rowH}px;line-height:${rowH}px">`+
       `${GLYPH[r.symbol]||''} ${esc(r.number)}${joyDup?'':' <b>'+esc(r.joy)+'</b>'}</div>`;}).join('');
-    d.innerHTML='<span class="lbl">'+esc(b.label||'box '+(i+1))+'</span>'+
-      `<div style="height:${Math.max(2,40*k*scale)}px;pointer-events:none"></div>`+rowsHtml+
+    d.innerHTML=(chrome?'<span class="lbl">'+esc(b.label||'box '+(i+1))+'</span>':'')+
+      `<div style="height:${headerH}px;pointer-events:none"></div>`+rowsHtml+
       '<span class="rsz"></span>';
     d.addEventListener('mousedown',e=>startDrag(e,i,d));
     d.querySelector('.rsz').addEventListener('mousedown',e=>{e.stopPropagation();startResize(e,i,d);});

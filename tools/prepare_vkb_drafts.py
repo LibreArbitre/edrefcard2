@@ -35,7 +35,7 @@ def main():
                  '| --- | --- | --- | --- |']
         for box in mapping['boxes']:
             row = box['rows'][0]
-            lines.append(f'| {box["physical_group"]} / {box["source_row"]} | {row["source_field"]} | | |')
+            lines.append(f'| {box["physical_group"]} / {row["source_row"]} | {row["source_field"]} | | |')
         lines += ['', mapping['source_credit'], '',
                   'The printed frames remain visible even when an input is unused.',
                   'Dense multi-mode text still needs a real-render review before publication.']

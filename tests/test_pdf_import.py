@@ -43,6 +43,20 @@ class PdfImportTests(unittest.TestCase):
             self.assertEqual(box['rows'][0]['verification'], 'unverified')
             self.assertTrue(box['no_chrome'])
 
+    def test_vkb_groups_rows_of_one_control(self):
+        mapping, _ = self.extract([
+            ('HAT1_1_A', (20, 70, 40, 90), ''),
+            ('HAT1_1_B', (42, 70, 200, 90), ''),
+            ('HAT1_2_A', (20, 92, 40, 112), ''),
+            ('HAT1_2_B', (42, 92, 200, 112), ''),
+            ('HAT1_3_A', (20, 114, 40, 134), ''),
+            ('HAT1_3_B', (42, 114, 200, 134), ''),
+        ])
+        self.assertEqual(len(mapping['boxes']), 1)
+        self.assertEqual(len(mapping['boxes'][0]['rows']), 3)
+        self.assertEqual(mapping['boxes'][0]['physical_group'], 'HAT1')
+        self.assertEqual([row['source_row'] for row in mapping['boxes'][0]['rows']], [1, 2, 3])
+
     def test_virpil_unchanged(self):
         mapping, _ = self.extract([
             ('BTN1_Name', (20, 70, 40, 90), '7'),

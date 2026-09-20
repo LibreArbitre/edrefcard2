@@ -17,10 +17,8 @@
     </summary>
     <p style="color:var(--text-secondary)">
         Attach only after confirming the same controller variant and input numbering.
-        The configuration name is not proof of device identity.
-        This list offers editable mappings only; historical templates are listed under
-        <a href="#legacy-controllers" style="color:var(--ed-orange)">Legacy controllers</a>.
-        Adding an ID to a historical template currently requires a code change and validation.
+        A configuration name is only a clue, not proof of device identity.
+        Legacy attachments are stored as reviewed runtime aliases and can be verified with a new upload.
     </p>
     {% if unknown %}
     <table>
@@ -44,12 +42,20 @@
                     <div class="actions">
                         <a class="btn btn-primary btn-sm"
                            href="{{ url_for('admin.mapping_editor', device=u.device_id, **({'from': u.last_run_id} if u.last_run_id else {})) }}">Scaffold</a>
-                        {% if mappings %}
+                        {% if mappings or mappings_legacy %}
                         <form method="post" action="{{ url_for('admin.controllers_attach') }}" style="display:flex;gap:0.25rem">
                             <input type="hidden" name="device_id" value="{{ u.device_id }}">
                             <select name="mapping_id" required aria-label="Target mapping for {{ u.device_id }}" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem">
                                 <option value="" selected disabled>Choose a verified match...</option>
+                                {% if mappings %}<optgroup label="Data-driven mappings">
                                 {% for m in mappings %}<option value="{{ m.id }}">{{ m.device_name }}</option>{% endfor %}
+                                </optgroup>{% endif %}
+                                {% if u.legacy_suggestions %}<optgroup label="Possible legacy matches from config name">
+                                {% for l in u.legacy_suggestions %}<option value="legacy:{{ l.key }}">{{ l.key }} (name clue)</option>{% endfor %}
+                                </optgroup>{% endif %}
+                                <optgroup label="All legacy controllers">
+                                {% for l in mappings_legacy %}<option value="legacy:{{ l.key }}">{{ l.key }} (legacy)</option>{% endfor %}
+                                </optgroup>
                             </select>
                             <button class="btn btn-outline btn-sm" type="submit">Attach</button>
                         </form>

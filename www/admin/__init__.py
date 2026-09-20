@@ -955,18 +955,51 @@ def controllers():
                if _find_mapping_for_device(u['device_id']) is None]
     # Legacy controllers: baked artwork + coords in bindingsData.py (read-only
     # here; migrating one to data-driven = create a mapping for its device IDs)
-    from scripts.bindingsData import supportedDevices
+    from scripts.bindingsData import supportedDevices, apply_legacy_device_aliases
+    aliases = database.list_legacy_device_aliases()
+    apply_legacy_device_aliases(aliases)
     dd_ids = {did for m in mappings for did in m['device_ids']}
+    alias_by_key = {}
+    for alias in aliases:
+        alias_by_key.setdefault(alias['legacy_key'], []).append(alias['device_id'])
     legacy = []
     for key, sd in sorted(supportedDevices.items()):
+        if key == 'Keyboard':
+            continue
         ids = [h.split('::')[0] for h in sd.get('HandledDevices', [])]
         legacy.append({
             'key': key, 'template': sd.get('Template'),
             'device_ids': sorted(set(ids)),
             'dd_overlap': any(i in dd_ids for i in ids),
+            'alias_count': len(alias_by_key.get(key, [])),
         })
+    legacy_targets = [dict(item) for item in legacy]
+
+    def name_clue_score(run_id, target):
+        import re
+        haystack = re.sub(r'[^a-z0-9]+', '', (run_id or '').lower())
+        if not haystack:
+            return 0
+        candidates = [target['key'], target['template']]
+        score = 0
+        for candidate in candidates:
+            needle = re.sub(r'[^a-z0-9]+', '', str(candidate or '').lower())
+            if len(needle) >= 3 and needle in haystack:
+                score = max(score, 100 + len(needle))
+            for token in re.findall(r'[a-z]+|[0-9]+', str(candidate or '').lower()):
+                if len(token) >= 3 and token in haystack:
+                    score = max(score, 20 + len(token))
+        return score
+
+    for unknown_item in unknown:
+        ranked = [(name_clue_score(unknown_item.get('last_run_id'), target), target)
+                  for target in legacy_targets]
+        unknown_item['legacy_suggestions'] = [target for score, target in
+                                              sorted(ranked, key=lambda item: (-item[0], item[1]['key']))
+                                              if score > 0][:5]
     return render_template('admin/controllers.html', mappings=mappings,
-                           unknown=unknown, legacy=legacy, role=role,
+                           unknown=unknown, mappings_legacy=legacy_targets,
+                           legacy=legacy, role=role,
                            audit=database.list_mapping_audit(25))
 
 
@@ -1000,6 +1033,25 @@ def controllers_attach():
     import json
     device_id = (request.form.get('device_id') or '').strip().upper()
     mapping_id = request.form.get('mapping_id')
+    user_name, _ = current_user()
+    if mapping_id and str(mapping_id).startswith('legacy:'):
+        from scripts.bindingsData import supportedDevices, apply_legacy_device_aliases
+        legacy_key = str(mapping_id)[len('legacy:'):]
+        target = supportedDevices.get(legacy_key)
+        if not device_id or target is None:
+            flash('Device ID and a valid legacy controller are required.', 'error')
+            return redirect(url_for('admin.controllers'))
+        try:
+            database.attach_legacy_device_alias(device_id, legacy_key, user_name)
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('admin.controllers'))
+        apply_legacy_device_aliases([{'device_id': device_id, 'legacy_key': legacy_key}])
+        database.dismiss_unknown_device(device_id)
+        database.log_mapping_action('attach-legacy', user_name, None, device_id,
+                                    f'to legacy "{legacy_key}"')
+        flash(f'{device_id} attached to legacy "{legacy_key}". Verify it with a new upload.', 'success')
+        return redirect(url_for('admin.controllers'))
     row = database.get_controller_mapping(mapping_id) if mapping_id else None
     if not device_id or not row:
         flash('Device ID and mapping required.', 'error')
@@ -1009,7 +1061,6 @@ def controllers_attach():
     if device_id not in [str(x).upper() for x in ids]:
         ids.append(device_id)
     m['device_ids'] = ids
-    user_name, _ = current_user()
     try:
         database.save_controller_draft(row['device_id'], row['device_name'], m, user_name,
                                        row['updated_at'], row['id'])

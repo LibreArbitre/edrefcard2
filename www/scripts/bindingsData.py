@@ -78,6 +78,23 @@ supportedDevices = OrderedDict([
     ('Keyboard', {'Template': 'keyboard', 'HandledDevices': ['Keyboard']})
 ])
 
+
+def apply_legacy_device_aliases(aliases):
+    """Add reviewed runtime hardware aliases to the legacy device registry.
+
+    The database owns the alias list. This function only updates the in-memory
+    registry used by the current worker and is safe to call repeatedly.
+    """
+    for alias in aliases or []:
+        device_id = str(alias.get('device_id') or '').strip()
+        legacy_key = str(alias.get('legacy_key') or '').strip()
+        target = supportedDevices.get(legacy_key)
+        if not device_id or target is None:
+            continue
+        for field in ('HandledDevices', 'KeyDevices'):
+            if field in target and device_id not in target[field]:
+                target[field].append(device_id)
+
 #controls went in here!
 
 hotasMap = {    # map aliases to rendering box definitions - DRY code out

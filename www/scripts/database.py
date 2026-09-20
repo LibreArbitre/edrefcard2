@@ -121,6 +121,16 @@ def init_db(db_path):
                 last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
+            -- Runtime aliases for legacy templates, reviewed by a mapper.
+            -- This keeps hardware-ID additions out of the source file while
+            -- allowing a confirmed variant to use an existing legacy card.
+            CREATE TABLE IF NOT EXISTS legacy_device_aliases (
+                device_id TEXT PRIMARY KEY,
+                legacy_key TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_config_created ON configurations(created_at);
             CREATE INDEX IF NOT EXISTS idx_config_public ON configurations(is_public);
@@ -810,6 +820,36 @@ def dismiss_unknown_device(device_id):
     with get_db() as conn:
         conn.execute("DELETE FROM unknown_device_sightings WHERE device_id = ?",
                      (device_id,))
+
+
+def list_legacy_device_aliases():
+    """Return reviewed aliases from hardware IDs to legacy controller keys."""
+    with get_db() as conn:
+        rows = conn.execute(
+            'SELECT device_id, legacy_key, created_at, created_by '
+            'FROM legacy_device_aliases ORDER BY legacy_key, device_id').fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_legacy_device_alias(device_id):
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM legacy_device_aliases WHERE device_id = ?',
+            (device_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def attach_legacy_device_alias(device_id, legacy_key, actor):
+    """Persist a mapper-reviewed alias. Existing aliases are never replaced silently."""
+    with get_db() as conn:
+        existing = conn.execute(
+            'SELECT * FROM legacy_device_aliases WHERE device_id = ?',
+            (device_id,)).fetchone()
+        if existing and existing['legacy_key'] != legacy_key:
+            raise ValueError(f'{device_id} is already attached to {existing["legacy_key"]}.')
+        conn.execute(
+            'INSERT OR IGNORE INTO legacy_device_aliases (device_id, legacy_key, created_by) '
+            'VALUES (?, ?, ?)', (device_id, legacy_key, actor))
 
 
 def count_configs_for_device_ids(device_ids):

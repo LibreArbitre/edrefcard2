@@ -162,6 +162,15 @@ def parseBindings(runId, xml, displayGroups, errors):
     Returns:
         Tuple of (physicalKeys, modifiers, devices)
     """
+    try:
+        from .bindingsData import apply_legacy_device_aliases
+        from . import database
+        apply_legacy_device_aliases(database.list_legacy_device_aliases())
+    except Exception:
+        # Parsing remains available in standalone tools and unit tests before
+        # the application database has been initialized.
+        pass
+
     parser = etree.XMLParser(encoding='utf-8', resolve_entities=False)
     
     try:

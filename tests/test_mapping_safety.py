@@ -50,6 +50,9 @@ class MappingSafetyTests(unittest.TestCase):
                 CREATE TABLE controller_mapping_versions (
                     id INTEGER PRIMARY KEY, mapping_id INTEGER, device_name TEXT,
                     mapping_json TEXT, saved_by TEXT, saved_at TEXT DEFAULT CURRENT_TIMESTAMP);
+                CREATE TABLE legacy_device_aliases (
+                    device_id TEXT PRIMARY KEY, legacy_key TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP, created_by TEXT);
             ''')
             conn.execute('INSERT INTO controller_mappings VALUES '
                          "(1, 'TEST0001', 'Original', 'original', 'original.jpg', 4400, 2560, ?, "
@@ -58,6 +61,12 @@ class MappingSafetyTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_legacy_alias_is_persistent_and_not_silently_reassigned(self):
+        db.attach_legacy_device_alias('07382221', 'SaitekX56', 'mapper')
+        self.assertEqual(db.list_legacy_device_aliases()[0]['legacy_key'], 'SaitekX56')
+        with self.assertRaises(ValueError):
+            db.attach_legacy_device_alias('07382221', 'SaitekX52', 'mapper')
 
     def test_pdf_requires_owner_verification_before_publication(self):
         mapping = document()

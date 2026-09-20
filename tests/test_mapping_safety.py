@@ -209,6 +209,17 @@ class TemplateSafetyTests(unittest.TestCase):
             unknown=[], legacy=[], audit=[], role='mapper')
         self.assertNotIn('>Publish draft<', rendered)
 
+    def test_drafts_lead_and_unknown_matches_require_selection(self):
+        rendered = self.env.get_template('admin/controllers.html').render(
+            mappings=[{'id': 1, 'device_name': 'Published example', 'status': 'published'},
+                      {'id': 2, 'device_name': 'Draft example', 'status': 'draft'}],
+            unknown=[{'device_id': 'UNKNOWN'}], legacy=[], audit=[], role='mapper')
+        self.assertLess(rendered.index('Draft example'), rendered.index('Published example'))
+        self.assertLess(rendered.index('Controller mappings'), rendered.index('id="unknown-devices"'))
+        self.assertIn('<details class="card" id="unknown-devices">', rendered)
+        self.assertIn('<option value="" selected disabled>Choose a verified match...</option>', rendered)
+        self.assertIn('name="mapping_id" required', rendered)
+
 
 if __name__ == '__main__':
     unittest.main()

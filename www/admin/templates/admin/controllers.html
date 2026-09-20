@@ -10,10 +10,18 @@
        and <span class="badge badge-muted">legacy</span> (artwork + coordinates baked into bindingsData.py).</p>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h2>Unknown devices ({{ unknown|length }})</h2>
-    </div>
+{% macro unknown_devices() %}
+<details class="card" id="unknown-devices">
+    <summary style="cursor:pointer;color:var(--ed-orange);font-weight:600;padding:0.5rem 0">
+        Unknown devices ({{ unknown|length }}) - review hardware IDs
+    </summary>
+    <p style="color:var(--text-secondary)">
+        Attach only after confirming the same controller variant and input numbering.
+        The configuration name is not proof of device identity.
+        This list offers editable mappings only; historical templates are listed under
+        <a href="#legacy-controllers" style="color:var(--ed-orange)">Legacy controllers</a>.
+        Adding an ID to a historical template currently requires a code change and validation.
+    </p>
     {% if unknown %}
     <table>
         <thead>
@@ -39,7 +47,8 @@
                         {% if mappings %}
                         <form method="post" action="{{ url_for('admin.controllers_attach') }}" style="display:flex;gap:0.25rem">
                             <input type="hidden" name="device_id" value="{{ u.device_id }}">
-                            <select name="mapping_id" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem">
+                            <select name="mapping_id" required aria-label="Target mapping for {{ u.device_id }}" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem">
+                                <option value="" selected disabled>Choose a verified match...</option>
                                 {% for m in mappings %}<option value="{{ m.id }}">{{ m.device_name }}</option>{% endfor %}
                             </select>
                             <button class="btn btn-outline btn-sm" type="submit">Attach</button>
@@ -59,11 +68,12 @@
     {% else %}
     <p style="color:var(--text-secondary)">No unknown devices pending. 🎉</p>
     {% endif %}
-</div>
+</details>
+{% endmacro %}
 
 <div class="card">
     <div class="card-header">
-        <h2>Mappings ({{ mappings|length }})</h2>
+        <h2>Controller mappings ({{ mappings|length }})</h2>
         <a class="btn btn-primary btn-sm" href="{{ url_for('admin.mapping_editor') }}">+ New (editor)</a>
     </div>
     {% if mappings %}
@@ -80,7 +90,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for m in mappings %}
+            {% for m in mappings|sort(attribute='status') %}
             <tr>
                 <td>{{ m.device_name }}</td>
                 <td>{% for did in m.device_ids %}<code>{{ did }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</td>
@@ -150,7 +160,9 @@
     {% endif %}
 </div>
 
-<div class="card">
+{{ unknown_devices() }}
+
+<div class="card" id="legacy-controllers">
     <div class="card-header">
         <h2>Legacy controllers ({{ legacy|length }})</h2>
         <input type="search" id="legacyfilter" placeholder="Filter..." style="width:220px">

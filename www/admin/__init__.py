@@ -1034,6 +1034,8 @@ def controllers_attach():
     device_id = (request.form.get('device_id') or '').strip().upper()
     mapping_id = request.form.get('mapping_id')
     user_name, _ = current_user()
+    if mapping_id and str(mapping_id).startswith('mapping:'):
+        mapping_id = str(mapping_id)[len('mapping:'):]
     if mapping_id and str(mapping_id).startswith('legacy:'):
         from scripts.bindingsData import supportedDevices, apply_legacy_device_aliases
         legacy_key = str(mapping_id)[len('legacy:'):]

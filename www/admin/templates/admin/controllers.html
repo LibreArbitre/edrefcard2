@@ -3,6 +3,50 @@
 {% block title %}Controllers{% endblock %}
 
 {% block content %}
+<style>
+    #unknown-devices .attach-form {
+        display: flex;
+        gap: 0.35rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    #unknown-devices .attach-form select {
+        min-width: 260px;
+        max-width: 390px;
+        padding: 0.42rem 0.65rem;
+        color: var(--text-primary);
+        background: #101925;
+        border: 1px solid rgba(255, 140, 0, 0.5);
+        border-radius: 5px;
+        color-scheme: dark;
+    }
+    #unknown-devices .attach-form select:focus {
+        outline: none;
+        border-color: var(--ed-orange);
+        box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+    }
+    #unknown-devices .attach-form option,
+    #unknown-devices .attach-form optgroup {
+        background: #151c27;
+        color: var(--text-primary);
+        font-style: normal;
+    }
+    #unknown-devices .attach-form optgroup {
+        color: var(--ed-orange-light);
+        font-weight: 700;
+    }
+    #unknown-devices .attach-form option[value^="mapping:"] {
+        color: #91e6a8;
+    }
+    #unknown-devices .attach-form option[value^="legacy:"] {
+        color: #a9c7ff;
+    }
+    #unknown-devices .attach-key {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        white-space: nowrap;
+    }
+</style>
 <div class="page-header">
     <h1>🎛️ Controllers</h1>
     <p>Vocabulary: a <strong>device</strong> = a hardware ID seen in a .binds; a <strong>controller</strong> = the rendered card.
@@ -43,12 +87,12 @@
                         <a class="btn btn-primary btn-sm"
                            href="{{ url_for('admin.mapping_editor', device=u.device_id, **({'from': u.last_run_id} if u.last_run_id else {})) }}">Scaffold</a>
                         {% if mappings or mappings_legacy %}
-                        <form method="post" action="{{ url_for('admin.controllers_attach') }}" style="display:flex;gap:0.25rem">
+                        <form method="post" action="{{ url_for('admin.controllers_attach') }}" class="attach-form">
                             <input type="hidden" name="device_id" value="{{ u.device_id }}">
                             <select name="mapping_id" required aria-label="Target mapping for {{ u.device_id }}" style="width:auto;padding:0.25rem 0.5rem;font-size:0.8rem">
                                 <option value="" selected disabled>Choose a verified match...</option>
                                 {% if mappings %}<optgroup label="Data-driven mappings">
-                                {% for m in mappings %}<option value="{{ m.id }}">{{ m.device_name }}</option>{% endfor %}
+                                {% for m in mappings %}<option value="mapping:{{ m.id }}">{{ m.device_name }}</option>{% endfor %}
                                 </optgroup>{% endif %}
                                 {% if u.legacy_suggestions %}<optgroup label="Possible legacy matches from config name">
                                 {% for l in u.legacy_suggestions %}<option value="legacy:{{ l.key }}">{{ l.key }} (name clue)</option>{% endfor %}
@@ -57,6 +101,7 @@
                                 {% for l in mappings_legacy %}<option value="legacy:{{ l.key }}">{{ l.key }} (legacy)</option>{% endfor %}
                                 </optgroup>
                             </select>
+                            <span class="attach-key" aria-hidden="true">green: editable | blue: legacy</span>
                             <button class="btn btn-outline btn-sm" type="submit">Attach</button>
                         </form>
                         {% endif %}

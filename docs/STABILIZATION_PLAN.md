@@ -5,7 +5,7 @@ completion percentages as a measure of release readiness. The editor features
 exist, but reliable rendering and owner validation of additional controllers
 remain unfinished. Finish a bounded delivery before adding more editor features.
 
-## Verified deployment and data
+## Initial deployment and data before stabilization
 
 - Fork `origin/dev` and `origin/main`: `8283300669e68e8016445afa9695a0dc08d1ed5e`.
 - Upstream `beta`: `7d71ff3070906da8b42c5c699b933c6c8cc948c7`.
@@ -284,3 +284,30 @@ The authenticated endpoint checks are actual HTTPS requests. The 17 editor
 interaction checks described above remain isolated browser-fixture tests;
 they are not a claim that a full authenticated browser journey was executed.
 Mobile editor overflow remains known and outside this batch.
+
+## Beta promotion October 3
+
+Stéphane requested beta evaluation, so the tested changes through `bf425e2`
+were fast-forwarded from `dev` to `main` and deployed through Dokploy compose
+`t9mEDDtK0_JFCQX1XR2oo`. The editor and models SHA256 hashes match the tested
+source. Authenticated HTTPS requests confirm the new preview controls are served.
+
+Before deployment, a SQLite backup was retained outside the container at
+`/var/tmp/edrefcard-beta-before-befac61bf0a845bca307fcf07d62eefa.sqlite`.
+The beta had 3,076 configurations and three existing controller mappings.
+Those three mapping rows were verified byte-for-byte unchanged after adding
+Orion. The configuration catalogue was not replaced or populated with tests.
+
+Orion is beta draft ID `4`, not published support. Only its clean image, mapping
+and two filesystem-only review sources were transferred from staging. No
+database, mapper account, other contribution or version history was copied
+between environments.
+
+- [Orion beta editor](https://beta.edrefcard.info/admin/mapping-editor?device=4098BEF0&from=orion-owner-validation-20261003)
+- [Owner profile preview](https://beta.edrefcard.info/configs/dd/ddpreview-324de2a55ba74678a887d16ae3c4d97e-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [Three-axis synthetic preview](https://beta.edrefcard.info/configs/dd/ddpreview-f2b620ffe5024ae2b78cc92b03577a76-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+Both previews report no missing used inputs. The real image was also opened
+and visually checked in the browser on the beta domain. Synthetic Pitch/Roll
+labels remain test data, not Alicina's assignments. Owner/visual approval is
+still needed before publishing the Orion template.

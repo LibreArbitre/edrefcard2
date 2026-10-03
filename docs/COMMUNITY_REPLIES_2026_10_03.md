@@ -32,8 +32,8 @@ have your iapcqr bindings reference, so there is no need to upload it again.
 I also need to correct my earlier explanation about TARGET. Your file contains
 the physical Warthog stick and throttle, not a combined TARGET device. The
 warning is a false positive in the detection logic, not evidence that TARGET is
-still running or that you need to edit your bindings. I'm correcting that in
-the refactored beta; it won't automatically change the separate original live
+still running or that you need to edit your bindings. I've corrected that in
+the refactored beta; it doesn't automatically change the separate original live
 site.
 
 For the Orion pedals, I now have the hardware ID and the three axis codes.
@@ -54,7 +54,7 @@ will also include both brake axes for people who bind them.
 
 I've also checked the TARGET warning properly. My earlier explanation was
 wrong: your file does not contain a combined TARGET device. It's a detection
-bug, and you don't need to change your setup. I'm correcting it in the beta
+bug, and you don't need to change your setup. I've corrected it in the beta
 codebase, which is separate from the original live site.
 
 I've now prepared the Orion draft and checked it against your existing profile.

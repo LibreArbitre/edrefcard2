@@ -56,6 +56,10 @@ class PdfImportTests(unittest.TestCase):
         self.assertEqual(len(mapping['boxes'][0]['rows']), 3)
         self.assertEqual(mapping['boxes'][0]['physical_group'], 'HAT1')
         self.assertEqual([row['source_row'] for row in mapping['boxes'][0]['rows']], [1, 2, 3])
+        rects = [row['field_rect'] for row in mapping['boxes'][0]['rows']]
+        self.assertEqual(rects[0][:2], [0, 0])
+        self.assertGreater(rects[1][1], rects[0][3])
+        self.assertAlmostEqual(rects[-1][1] + rects[-1][3], 1)
 
     def test_virpil_unchanged(self):
         mapping, _ = self.extract([

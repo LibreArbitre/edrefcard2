@@ -5,7 +5,7 @@
  * All requests are intercepted; no application data is read or written.
  */
 export async function verifyEditorSafety(page, html) {
-  const results = [], requests = [], errors = [];
+  const results = [], requests = [], previews = [], errors = [];
   let mode = 'ok';
   const check = (name, ok) => {
     results.push({name, ok});
@@ -21,9 +21,15 @@ export async function verifyEditorSafety(page, html) {
     const request = route.request(), url = request.url();
     if (url.startsWith('https://editor-safety.invalid/') && request.resourceType() === 'document')
       return route.fulfill({contentType: 'text/html', body: html});
-    if (url.includes('/configs/controllers/'))
+    if (url.includes('/configs/controllers/') || url.includes('/configs/dd/'))
       return route.fulfill({contentType: 'image/svg+xml', body:
         '<svg xmlns="http://www.w3.org/2000/svg" width="4400" height="2560"><rect width="4400" height="2560" fill="white"/></svg>'});
+    if (url.endsWith('/admin/mapping-editor/preview')) {
+      previews.push(JSON.parse(request.postData()));
+      return route.fulfill({contentType:'application/json', body:JSON.stringify({
+        url:'/configs/dd/preview.jpg', coverage:{used_inputs:3,device_index:0,
+          missing_inputs:mode==='partial-preview'?['Pos_Joy_RYAxis']:[]}})});
+    }
     if (url.endsWith('/admin/mapping-editor/save')) {
       requests.push(JSON.parse(request.postData()));
       if (mode === 'offline') return route.abort('internetdisconnected');
@@ -40,6 +46,17 @@ export async function verifyEditorSafety(page, html) {
   await page.reload();
   await page.setViewportSize({width: 1440, height: 1000});
   check('editor loaded', await page.title() === 'Mapping editor - EDRefCard admin');
+  await page.locator('#previewreference').fill('profile');
+  await page.locator('#btnpreview').click();
+  await page.waitForFunction(() => !saveInFlight);
+  check('real preview sends the saved reference', previews[0].reference === 'profile');
+  check('real preview reports coverage', (await page.locator('#previewcoverage').textContent()).includes('All bound inputs are covered'));
+  check('preview never saves or publishes', requests.length === 0);
+  mode = 'partial-preview';
+  await page.locator('#btnpreview').click();
+  await page.waitForFunction(() => !saveInFlight);
+  check('partial preview names the missing direction', (await page.locator('#previewcoverage').textContent()).includes('Pos_Joy_RYAxis'));
+  mode = 'ok';
   await page.locator('#title').fill('Edited title');
   await page.locator('#btnsave').click();
   await page.waitForFunction(() => !saveInFlight);

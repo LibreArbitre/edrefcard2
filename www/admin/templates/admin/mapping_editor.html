@@ -28,7 +28,7 @@
   .box .mrow{padding:0 3px;white-space:nowrap;overflow:hidden;border-top:1px solid rgba(0,0,0,.15);color:#1c1b1a;pointer-events:none}
   .box .mrow b{color:var(--accent)}
   .box.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(150,35,30,.25)}
-  .box .lbl{position:absolute;top:-18px;left:0;background:#cfcfcf;color:#000;padding:0 5px;font-weight:700;white-space:nowrap}
+  .box .lbl{position:absolute;top:0;left:0;width:100%;background:#cfcfcf;color:#000;padding:0 2px;font-weight:700;white-space:nowrap;text-align:center;overflow:hidden;pointer-events:none}
   .box .rsz{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--accent);border-radius:50%;cursor:nwse-resize}
   .marker{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #fff;background:var(--accent);border-radius:50%;cursor:move;box-shadow:0 0 0 1px var(--accent)}
   .marker:hover{box-shadow:0 0 0 3px rgba(150,35,30,.35)}
@@ -146,6 +146,11 @@
         <button id="btnjsonimp" class="ghost" style="font-size:.78rem" title="Load a mapping .json exported from this editor (replaces current boxes)">Import JSON</button>
       </div>
     </details>
+    <label class="small" for="previewreference">Preview with a saved .binds reference (optional)</label>
+    <input id="previewreference" type="text" placeholder="e.g. iapcqr" maxlength="200"
+           aria-describedby="previewhelp" style="width:100%;margin-top:4px">
+    <p class="small" id="previewhelp">Enter the reference after /binds/ in a card URL. Preview uses all game modes and does not save or publish your draft.</p>
+    <p class="small" id="previewcoverage" role="status" aria-live="polite"></p>
     <div id="preview"></div>
   </div>
 </div>
@@ -183,6 +188,7 @@ let mappingId = EXISTING?.id || null;
 let savedDeviceId = EXISTING?.device_id || null;
 const undoStack = [], redoStack = [];
 const draftParams = new URLSearchParams(location.search);
+$('#previewreference').value = draftParams.get('from') || '';
 // Each new controller gets its own recovery slot, retained on reload.
 if(!draftParams.get('device') && !draftParams.get('draft')){
   draftParams.set('draft', crypto.randomUUID());
@@ -224,6 +230,7 @@ function lockEditing(locked){
   document.querySelectorAll('header input,header select,header button').forEach(el=>el.disabled=locked);
   ['#stagewrap','#boxes','#scaffolder'].forEach(s=>$(s).inert=locked);
   $('#btnjsonimp').disabled=locked;
+  $('#previewreference').disabled=locked;
 }
 function bindAsync(selector, action, event='click'){
   $(selector).addEventListener(event, async e=>{
@@ -332,12 +339,11 @@ function renderStage(){
   // Live content preview: the same header/rows the renderer will draw,
   // approximated in HTML (row grid = 72 image px, header = 40)
   const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  const GLYPH={press:'●',up:'▲',right:'▶',down:'▼',left:'◀',stage1:'◔',stage2:'◕',push:'⊙',pull:'↺'};
-  const k=(state.width||4400)/4400;
+  const GLYPH={press:'0',up:'^',right:'>',down:'v',left:'<',stage1:'stage 1',stage2:'stage 2',push:'push',pull:'pull'};
   state.boxes.forEach((b,i)=>{
     const rows=b.rows||[], chrome=!b.no_chrome;
-    const headerH=chrome?Math.max(2,40*k*scale):0;
-    const rowH=chrome?Math.max(4,72*k*scale):Math.max(4,(b.box_wh[1]*scale)/Math.max(rows.length,1));
+    const headerH=chrome&&b.label?Math.min(40,b.box_wh[1]/4)*scale:0;
+    const rowH=(b.box_wh[1]*scale-headerH)/Math.max(rows.length,1);
     const fs=Math.max(6,Math.min(14,Math.round(rowH*0.55)));
     const d=document.createElement('div'); d.className='box'+(selSet.has(i)?' sel':'');
     d.style.left=(b.box_xy[0]*scale)+'px'; d.style.top=(b.box_xy[1]*scale)+'px';
@@ -346,9 +352,13 @@ function renderStage(){
       // The final card prints the number, not the Joy key: only show the
       // Joy when it adds information (POV/axes, or number/Joy mismatch)
       const joyDup=r.joy && r.number!=null && r.joy===('Joy_'+r.number);
-      return `<div class="mrow" style="font-size:${fs}px;height:${rowH}px;line-height:${rowH}px">`+
-      `${GLYPH[r.symbol]||''} ${esc(r.number)}${joyDup?'':' <b>'+esc(r.joy)+'</b>'}</div>`;}).join('');
-    d.innerHTML=(chrome?'<span class="lbl">'+esc(b.label||'box '+(i+1))+'</span>':'')+
+      const f=!chrome&&r.field_rect;
+      const height=f?f[3]*b.box_wh[1]*scale:rowH;
+      const position=f?`position:absolute;left:${f[0]*100}%;top:${f[1]*100}%;width:${f[2]*100}%;`:'';
+      return `<div class="mrow" style="${position}font-size:${fs}px;height:${height}px;line-height:${height}px">`+
+      `${esc(GLYPH[r.symbol]||'')} ${esc(r.number)}${joyDup?'':' <b>'+esc(r.joy)+'</b>'}</div>`;}).join('');
+    const labelFs=Math.max(1,Math.min(26,(headerH/scale)*.65)*scale);
+    d.innerHTML=(headerH?`<span class="lbl" style="height:${headerH}px;line-height:${headerH}px;font-size:${labelFs}px">`+esc(b.label)+'</span>':'')+
       `<div style="height:${headerH}px;pointer-events:none"></div>`+rowsHtml+
       '<span class="rsz"></span>';
     d.addEventListener('mousedown',e=>startDrag(e,i,d));
@@ -762,9 +772,17 @@ bindAsync('#jsonfile',async()=>{
 bindAsync('#btnpreview',async()=>{
   if(!state.image){alert("No image.");return;}
   $("#status").textContent="Rendering…";
-  const j=await requestJSON('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping()})});
+  const j=await requestJSON('/admin/mapping-editor/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping:mapping(),reference:$('#previewreference').value.trim()})});
   if(j.error) throw new Error(j.error);
-  $("#preview").innerHTML='<h2>Preview</h2><img src="'+j.url+'?t='+Date.now()+'">';
+  $('#preview').replaceChildren();
+  const heading=document.createElement('h2'); heading.textContent='Preview';
+  const previewImage=document.createElement('img'); previewImage.src=j.url+'?t='+Date.now();
+  previewImage.alt='Rendered controller card preview';
+  $('#preview').append(heading,previewImage);
+  $('#previewcoverage').textContent=j.coverage
+    ? `${j.coverage.used_inputs} bound inputs checked (device index ${j.coverage.device_index}). `+
+      (j.coverage.missing_inputs.length?`Missing from this card: ${j.coverage.missing_inputs.join(', ')}.`:'All bound inputs are covered.')
+    : 'Layout preview only. Add a saved reference to check real commands and coverage.';
   $("#status").textContent="Preview OK";
 });
 

@@ -38,3 +38,10 @@ def validate_mapping(mapping):
         for row in rows:
             if not isinstance(row.get('joy', ''), str):
                 raise ValueError(f'Group {index}: input codes must be text.')
+            rect = row.get('field_rect')
+            if rect is not None:
+                if (not isinstance(rect, list) or len(rect) != 4 or
+                        any(type(v) not in (int, float) or not math.isfinite(v) for v in rect) or
+                        rect[0] < 0 or rect[1] < 0 or rect[2] <= 0 or rect[3] <= 0 or
+                        rect[0] + rect[2] > 1.000001 or rect[1] + rect[3] > 1.000001):
+                    raise ValueError(f'Group {index}: invalid imported field rectangle.')

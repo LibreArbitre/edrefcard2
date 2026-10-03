@@ -184,7 +184,8 @@ English. Do not infer device ownership or an alias from a configuration filename
 
 ## Implementation checkpoint October 3 2026
 
-The first implementation batch is complete locally, not deployed:
+The first implementation batch was tested locally and then deployed to staging
+on October 3. It has not been promoted to beta:
 
 - Detection now checks the actual virtual Warthog device, and old TARGET notices
   are recomputed when the .binds source is available. Empty XML nodes are ignored.
@@ -226,3 +227,60 @@ to be done. This checkpoint does not declare Lot 1 or the project fully released
 
 Community replies are drafted in [Community reply drafts](COMMUNITY_REPLIES_2026_10_03.md),
 including both private messages. Nothing has been sent to the forum or by email.
+
+## Authenticated staging validation October 3
+
+The deployed core changes match commit `a50a993` by SHA256 for the editor,
+renderer and web routes. The current staging compose is `9u4MIXvnm49dpxCsfhM66`
+on Dokploy2, using branch `dev` and domain `edrefcard2-dev.l0l.fr`.
+
+A SQLite backup was retained on the VPS at
+`/var/tmp/edrefcard-before-stabilization-1791033482.sqlite` before deployment.
+The original mapping row hash remained
+`0216d96f08ff950594573e683ee2d20ff49d4533924db19b3e7bf0e5e5a54c05`.
+The configuration catalogue stayed at 2,912 records. No beta deployment or data
+modification was performed.
+
+Authenticated HTTPS requests against the deployed app verified:
+
+- The editor serves the new reference and coverage controls.
+- A real owner's profile renders correctly, with missing-input coverage.
+- Simultaneous preview names differ; preview does not save or publish a mapping.
+- All four styling modes render successfully.
+- Missing source returns 404; invalid references, traversal, wrong hardware and
+  nonexistent device instances return 400.
+- An intentionally incomplete mapping reports `Joy_RZAxis` as missing.
+- An outdated draft save returns 409, preserving the newer version.
+
+### Orion pilot draft
+
+Staging draft ID `11` represents WINCTRL Orion Rudder Pedals, hardware
+`4098BEF0`. The source image is the clean 1600-square manufacturer photograph
+from the [Orion product page](https://winctrl.com/view/goods-details.html?id=546),
+uploaded with the existing side-margins helper to make a 4800 x 1600 canvas.
+No photo retouching or AI generation was used.
+
+The owner's September 22 message confirms yaw `Joy_RZAxis`, right toe brake
+`Joy_RXAxis`, and left toe brake `Joy_RYAxis`. All three axes are present in
+the template. Her actual public `iapcqr` source uses yaw only, so both brake
+groups disappear in the real-profile preview. A separate synthetic profile
+checks all three groups; its Pitch/Roll commands are test labels, not the owner's
+bindings or recommended pedal assignments.
+
+The validation sources are filesystem-only staging fixtures, not public
+catalogue entries: `orion-owner-validation-20261003` and
+`orion-three-axis-validation-20261003`.
+
+[Open the staging draft](https://edrefcard2-dev.l0l.fr/admin/mapping-editor?device=4098BEF0&from=orion-owner-validation-20261003).
+Owner validation and visual approval are still required before publication.
+
+Live image review also revealed an HTTP printed origin behind Traefik. The
+follow-up gives the explicitly configured external `APP_URL` priority over
+the proxy's internal request scheme. Three regression tests cover configured
+origins and both unconfigured fallbacks.
+
+The browser view of the generated Orion images was inspected at 1440 x 1000.
+The authenticated endpoint checks are actual HTTPS requests. The 17 editor
+interaction checks described above remain isolated browser-fixture tests;
+they are not a claim that a full authenticated browser journey was executed.
+Mobile editor overflow remains known and outside this batch.

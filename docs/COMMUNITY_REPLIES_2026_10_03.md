@@ -37,7 +37,8 @@ the refactored beta; it won't automatically change the separate original live
 site.
 
 For the Orion pedals, I now have the hardware ID and the three axis codes.
-That is enough to prepare a draft and a preview for you to check.
+I've prepared a draft on staging and checked it against your existing bindings.
+I'll share the preview once the visual review is complete.
 
 ## Alicina private message
 
@@ -56,7 +57,10 @@ wrong: your file does not contain a combined TARGET device. It's a detection
 bug, and you don't need to change your setup. I'm correcting it in the beta
 codebase, which is separate from the original live site.
 
-I'll prepare an Orion preview and send it for you to check against your pedals.
+I've now prepared the Orion draft and checked it against your existing profile.
+Both unused brake groups stay hidden on your card, while the template includes
+them for other users. I'll send the preview after the visual review so you can
+check it against your pedals.
 You won't need to learn the editor; confirming the physical left/right labels
 and the placement of your actions will be the useful part.
 

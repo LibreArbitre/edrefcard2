@@ -54,9 +54,13 @@ class Config:
             return Config._configs_path
         return Config.dirRoot() / 'configs'
     
-    @staticmethod    
+    @staticmethod
     def webRoot():
         """Get the web root URL for generating links."""
+        # APP_URL is the configured external origin. A reverse proxy can leave
+        # request.url_root on HTTP even when the visitor used HTTPS.
+        if Config._web_root is not None:
+            return Config._web_root
         # Try to use Flask request context if available
         try:
             from flask import has_request_context, request
@@ -65,8 +69,6 @@ class Config:
         except ImportError:
             pass
             
-        if Config._web_root is not None:
-            return Config._web_root
         return urljoin(os.environ.get('SCRIPT_URI', 'https://edrefcard.info/'), '/')
     
     @staticmethod

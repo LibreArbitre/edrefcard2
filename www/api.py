@@ -128,7 +128,7 @@ def generate_api():
         # Data-driven controllers (from controller_mappings), same path as the web UI.
         try:
             dd_created, _handled = render_data_driven(physical_keys, modifiers, devices,
-                                                      config, True, styling)
+                                                      config, True, styling, errors)
             created_images.extend(dd_created)
         except Exception as e:
             logError(f'API data-driven render failed for {run_id}: {e}')

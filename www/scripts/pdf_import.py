@@ -90,6 +90,12 @@ def _vkb_boxes(page, zoom):
         for row_number, (_, _, _, member) in enumerate(members, 1):
             row = dict(member['rows'][0])
             row['source_row'] = row_number
+            mx, my = member['box_xy']
+            mw, mh = member['box_wh']
+            # Relative positions preserve gaps and side-by-side fields on resize.
+            row['field_rect'] = [(mx - left) / (right - left),
+                                 (my - top) / (bottom - top),
+                                 mw / (right - left), mh / (bottom - top)]
             rows.append(row)
         grouped.append({
             'label': f'{group} [VERIFY]',

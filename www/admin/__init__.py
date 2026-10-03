@@ -1376,27 +1376,77 @@ def mapping_editor_import_pdf():
 @admin_bp.route('/mapping-editor/preview', methods=['POST'])
 @require_mapper
 def mapping_editor_preview():
-    """Render a data-driven preview from a mapping_json (no persistence)."""
-    import os
-    from flask import jsonify, current_app
+    """Render a draft, optionally using a saved .binds, without saving a mapping."""
+    import re
+    import uuid
+    from flask import jsonify
     from scripts import createDataDrivenImage
-    mapping = (request.get_json(force=True) or {}).get('mapping')
-    if not mapping or not mapping.get('image'):
-        return jsonify({'error': 'mapping with image required'}), 400
-    os.chdir(current_app.config['WWW_DIR'] / 'scripts')
-    config = Config('ddpreview')
+    from scripts.mapping_validation import validate_mapping
+    from scripts.mapping_runtime import missing_inputs, used_inputs
+    from scripts.parser import DISPLAY_GROUP_FIELDS
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object.'}), 400
+    mapping = data.get('mapping')
+    physical_keys, modifiers, coverage = None, None, None
+    device_ids = mapping.get('device_ids', []) if isinstance(mapping, dict) else []
+    device_index = 0
+    try:
+        validate_mapping(mapping)
+        reference = data.get('reference', '')
+        if not isinstance(reference, str):
+            raise ValueError('Enter a saved configuration reference, not a URL.')
+        reference = reference.strip()
+        if reference:
+            if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', reference):
+                raise ValueError('Enter the reference after /binds/ in the card URL.')
+            source = Config(reference).pathWithSuffix('.binds')
+            if not source.is_file():
+                return jsonify({'error': 'The .binds source for this reference is not available.'}), 404
+            preview_errors = Errors()
+            physical_keys, modifiers, devices = parseBindings(
+                reference, source.read_text(encoding='utf-8-sig'),
+                list(DISPLAY_GROUP_FIELDS.values()), preview_errors)
+            if preview_errors.errors:
+                raise ValueError('This reference does not contain a valid .binds XML file.')
+            matched = [key for key in devices
+                       if key.split('::')[0].upper() in {v.upper() for v in device_ids}]
+            if not matched:
+                raise ValueError('No bound inputs for this hardware ID were found in that reference.')
+            # Default to the first matching instance. Explicit indices permit
+            # profiles containing two identical controllers to be reviewed.
+            selected_index = data.get('device_index')
+            device_index = min(int(key.split('::')[1]) for key in matched)
+            if selected_index is not None:
+                if type(selected_index) is not int or selected_index < 0:
+                    raise ValueError('Device index must be a non-negative integer.')
+                device_index = selected_index
+            selected_ids = [key.split('::')[0] for key in matched
+                            if int(key.split('::')[1]) == device_index]
+            if not selected_ids:
+                raise ValueError('That device index has no bound inputs in this reference.')
+            device_ids = selected_ids
+            used = used_inputs(physical_keys, modifiers, device_ids, device_index)
+            coverage = {'used_inputs': len(used), 'missing_inputs': missing_inputs(mapping, used),
+                        'device_index': device_index, 'device_ids': device_ids}
+    except (ValueError, UnicodeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    # Unique output prevents concurrent mapper previews overwriting one another.
+    config = Config('ddpreview-' + uuid.uuid4().hex)
     config.makeDir()
-    out = config.pathWithNameAndSuffix(mapping['image'], '.jpg')
     try:
-        if out.exists():
-            out.unlink()
-    except Exception:
-        pass
-    try:
-        createDataDrivenImage(mapping, config, public=True)
+        createDataDrivenImage(mapping, config, public=False, physicalKeys=physical_keys,
+                              modifiers=modifiers, imageDevices=device_ids,
+                              deviceIndex=device_index)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    return jsonify({'url': url_for('web.serve_config', path=f"dd/ddpreview-{mapping['image']}.jpg")})
+        logError(f'Mapping preview failed: {e}')
+        return jsonify({'error': 'Preview failed. Check the image and box geometry, then retry.'}), 500
+    image_name = mapping['image'] if device_index == 0 else f"{mapping['image']}-{device_index}"
+    return jsonify({'url': url_for('web.serve_config',
+                                  path=f'dd/{config.name}-{image_name}.jpg'),
+                    'coverage': coverage})
 
 
 def _notify_discord_mapping(title, message, fields=None):

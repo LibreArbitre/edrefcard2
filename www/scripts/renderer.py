@@ -8,6 +8,7 @@ using the Wand/ImageMagick library.
 
 import math
 import re
+import copy
 from collections import OrderedDict
 
 try:
@@ -25,6 +26,7 @@ except ImportError as e:
 
 from .models import Config
 from .utils import getFontPath, transKey, logError
+from .mapping_runtime import matches_input, normalize_input
 
 # Import data files
 try:
@@ -1145,6 +1147,10 @@ def layoutText(img, context, texts, hotasDetail, biggestFontSize):
     """
     width = hotasDetail.get('width')
     height = hotasDetail.get('height', 54)
+    if width <= 0 or height <= 0:
+        raise ValueError('Text area must have positive width and height.')
+    if not texts:
+        return []
 
     # Calculate best fit font size
     fontSize = calculateBestFitFontSize(context, width, height, texts, biggestFontSize)
@@ -1190,40 +1196,36 @@ def calculateBestFitFontSize(context, width, height, texts, biggestFontSize):
     Returns:
         Best fit font size
     """
-    fontSize = biggestFontSize
+    if width <= 0 or height <= 0:
+        raise ValueError('Text area must have positive width and height.')
+    fontSize = max(1, min(int(biggestFontSize), 256))
+    if not texts:
+        return fontSize
     context.push()
-    
-    with Image(width=width, height=height) as img:
-        fits = False
-        while not fits:
-            currentX = 0
-            currentY = 0
-            tooLong = False
-            
-            for text in texts:
-                context.font = text['Style']['Font']
-                context.font_size = fontSize
-                metrics = context.get_font_metrics(img, text['Text'], multiline=False)
-                
-                if currentX + int(metrics.text_width) > width:
-                    if currentX == 0:
-                        tooLong = True
-                        break
-                    else:
+    try:
+        with Image(width=max(1, math.ceil(width)), height=max(1, math.ceil(height))) as img:
+            for fontSize in range(fontSize, 0, -1):
+                currentX = 0
+                currentY = 0
+                tooLong = False
+                for text in texts:
+                    context.font = text['Style']['Font']
+                    context.font_size = fontSize
+                    metrics = context.get_font_metrics(img, text['Text'], multiline=False)
+                    if currentX + int(metrics.text_width) > width:
+                        if currentX == 0:
+                            tooLong = True
+                            break
                         currentX = 0
-                        currentY = currentY + fontSize
-                
-                text['X'] = currentX
-                text['Y'] = currentY + int(metrics.ascender)
-                currentX = currentX + int(metrics.text_width + metrics.character_width)
-            
-            if not tooLong and currentY + metrics.text_height < height:
-                fits = True
-            else:
-                fontSize = fontSize - 1
-    
-    context.pop()
-    return fontSize
+                        currentY += fontSize
+                    text['X'] = currentX
+                    text['Y'] = currentY + int(metrics.ascender)
+                    currentX += int(metrics.text_width + metrics.character_width)
+                if not tooLong and currentY + metrics.text_height <= height:
+                    return fontSize
+        raise ValueError('Text does not fit this box even at the minimum font size. Enlarge the box.')
+    finally:
+        context.pop()
 
 
 def calculateBestFontSize(context, text, hotasDetail, biggestFontSize):
@@ -1240,12 +1242,14 @@ def calculateBestFontSize(context, text, hotasDetail, biggestFontSize):
     """
     width = hotasDetail.get('width')
     height = hotasDetail.get('height', 54)
+    if width <= 0 or height <= 0:
+        raise ValueError('Text area must have positive width and height.')
     
     with Image(width=width, height=height) as img:
         fontSize = biggestFontSize
         fits = False
         
-        while not fits:
+        while not fits and fontSize >= 1:
             fitText = text
             context.font_size = fontSize
             metrics = context.get_font_metrics(img, fitText, multiline=False)
@@ -1273,6 +1277,8 @@ def calculateBestFontSize(context, text, hotasDetail, biggestFontSize):
                     else:
                         fontSize = fontSize - 1
 
+    if not fits:
+        raise ValueError('Text does not fit this box even at the minimum font size. Enlarge the box.')
     return (fitText, fontSize, metrics)
 
 
@@ -1303,7 +1309,7 @@ def _symbolColumnWidth(symbol):
     return 150 if len(g) > 2 else 44
 
 
-def _drawControlSymbol(context, x, y_center, symbol):
+def _drawControlSymbol(context, x, y_center, symbol, scale=1):
     """Render the legacy text glyph for a control, vertically centred on y_center."""
     g = _SYMBOL_GLYPHS.get(symbol or '')
     if not g:
@@ -1312,8 +1318,8 @@ def _drawControlSymbol(context, x, y_center, symbol):
     context.stroke_color = Color('transparent')
     context.fill_color = Color('#333333')
     context.font = getFontPath('Bold', 'Normal')
-    context.font_size = 28
-    context.text(x=int(x), y=int(y_center + 10), body=g)
+    context.font_size = max(1, 28 * scale)
+    context.text(x=int(x), y=int(y_center + 10 * scale), body=g)
     context.pop()
 
 
@@ -1325,9 +1331,11 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     their row content written, no chrome drawn on top."""
     x, y = box['box_xy']
     w, h = box['box_wh']
+    if w <= 0 or h <= 0:
+        raise ValueError('Controller box must have positive width and height.')
     rows = box.get('rows', [])
     chrome = not box.get('no_chrome')
-    header_h = 40 if (box.get('label') and chrome) else 0
+    header_h = min(40, h / 4) if (box.get('label') and chrome) else 0
 
     # Leader line (orthogonal elbow) from the box side facing the button to the button point
     btn = box.get('button_xy') if chrome else None
@@ -1353,9 +1361,13 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
         context.rectangle(left=x, top=y, width=w, height=header_h)
         context.fill_color = Color('Black')
         context.font = getFontPath('Bold', 'Normal')
-        context.font_size = 26
+        context.font_size = max(1, min(26, header_h * 0.65))
         m = context.get_font_metrics(sourceImg, box['label'], multiline=False)
-        context.text(x=int(x + (w - m.text_width) / 2), y=int(y + header_h - 12), body=box['label'])
+        if m.text_width > w - 4:
+            context.font_size = max(1, context.font_size * max(1, w - 4) / m.text_width)
+            m = context.get_font_metrics(sourceImg, box['label'], multiline=False)
+        context.text(x=int(x + max(1, (w - m.text_width) / 2)),
+                     y=int(y + header_h * 0.8), body=box['label'])
         context.pop()
 
     # Outer frame
@@ -1374,7 +1386,13 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     row_h = rows_h / n
     for i, row in enumerate(rows):
         ry = rows_top + i * row_h
-        row_cy = ry + row_h / 2
+        rx, rw, rh = x, w, row_h
+        if not chrome and row.get('field_rect'):
+            fx, fy, fw, fh = row['field_rect']
+            rx, ry, rw, rh = x + fx * w, y + fy * h, fw * w, fh * h
+        if not chrome and not row.get('_texts'):
+            continue
+        row_cy = ry + rh / 2
         if i > 0 and chrome:
             context.push()
             context.stroke_color = Color('#dddddd')
@@ -1382,33 +1400,35 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
             context.line((x + 1, ry), (x + w - 1, ry))
             context.pop()
         # Column layout: [symbol glyph][number][binding text]
-        sym_w = _symbolColumnWidth(row.get('symbol'))
+        gutter_scale = min(1, rw / 400, rh / 54)
+        sym_w = _symbolColumnWidth(row.get('symbol')) * gutter_scale if chrome else 0
         if sym_w:
-            _drawControlSymbol(context, x + 16, row_cy, row['symbol'])
-        col_x = x + 16 + sym_w
-        if row.get('number') is not None:
+            _drawControlSymbol(context, rx + 16 * gutter_scale, row_cy, row['symbol'], gutter_scale)
+        col_x = rx + (16 * gutter_scale if chrome else 0) + sym_w
+        if row.get('number') is not None and chrome:
             context.push()
             context.stroke_color = Color('transparent')
             context.fill_color = Color('#555555')
             context.font = getFontPath('Bold', 'Normal')
-            context.font_size = 24
-            context.text(x=int(col_x), y=int(row_cy + 8), body=str(row['number']))
+            context.font_size = max(1, 24 * gutter_scale)
+            context.text(x=int(col_x), y=int(row_cy + 8 * gutter_scale), body=str(row['number']))
             context.pop()
-            col_x += 56
+            col_x += 56 * gutter_scale
         # Binding text (pre-resolved by createDataDrivenImage), reusing layoutText fitting
         texts = row.get('_texts') or []
         if texts:
-            tx = col_x + 10
-            rect = {'x': int(tx), 'y': int(ry + 6),
-                    'width': int(x + w - tx - 14), 'height': int(row_h - 12)}
+            pad_x, pad_y = min(10, rw * 0.04), min(6, rh * 0.1)
+            tx = col_x + pad_x
+            rect = {'x': tx, 'y': ry + pad_y,
+                    'width': rx + rw - tx - pad_x, 'height': rh - 2 * pad_y}
             laid = layoutText(sourceImg, context, texts, rect, biggestFontSize)
             for t in laid:
                 context.push()
                 context.stroke_color = Color('transparent')
                 context.font_size = t['Size']
                 context.font = t['Style']['Font']
-                context.fill_color = t['Style']['Color']
-                context.text(x=t['X'], y=t['Y'], body=t['Text'])
+                context.fill_color = Color('Black') if styling == 'None' else t['Style']['Color']
+                context.text(x=int(t['X']), y=int(t['Y']), body=t['Text'])
                 context.pop()
 
 
@@ -1420,19 +1440,35 @@ def _buildJoyTexts(deviceIds, joyKey, deviceIndex, physicalKeys, modifiers, styl
     """
     texts = []
     pk = None
-    pkspec = None
-    for spec, k in physicalKeys.items():
-        if (k.get('Key') == joyKey and int(k.get('DeviceIndex', 0)) == deviceIndex
+    for k in physicalKeys.values():
+        if (k.get('Key') == normalize_input(joyKey) and int(k.get('DeviceIndex', 0)) == deviceIndex
                 and k.get('Device') in deviceIds):
             pk = k
-            pkspec = spec
             break
     if pk is None:
-        return texts
+        pk = {'Key': normalize_input(joyKey), 'BaseKey': joyKey, 'Binds': {}}
 
-    for keyModifier in modifiers.get(pkspec, []):
-        style = ModifierStyles.index(keyModifier.get('Number')) if styling == 'Modifier' else groupStyles.get('Modifier')
-        texts.append({'Text': 'Modifier %s' % keyModifier.get('Number'), 'Group': 'Modifier', 'Style': style})
+    # Filter before specialization deduplication, without changing shared keys.
+    pk = {**pk, 'Binds': {
+        modifier: {**bind, 'Controls': {
+            name: control for name, control in bind.get('Controls', {}).items()
+            if matches_input(joyKey, control.get('InputKey', pk.get('BaseKey', pk['Key'])))
+        }} for modifier, bind in pk.get('Binds', {}).items()
+    }}
+
+    seen_modifiers = set()
+    for spec, entries in modifiers.items():
+        parts = spec.split('::')
+        if (len(parts) != 3 or parts[0] not in deviceIds or
+                parts[1] != str(deviceIndex) or not matches_input(joyKey, parts[2])):
+            continue
+        for keyModifier in entries:
+            number = keyModifier.get('Number')
+            if number in seen_modifiers:
+                continue
+            seen_modifiers.add(number)
+            style = ModifierStyles.index(number) if styling == 'Modifier' else groupStyles.get('Modifier')
+            texts.append({'Text': 'Modifier %s' % number, 'Group': 'Modifier', 'Style': style})
 
     # Unmodified bindings
     for modifier, bind in pk.get('Binds', {}).items():
@@ -1498,7 +1534,7 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
     # the mapping editor); fall back to baked res/ for bundled images.
     candidates = [
         config.configsPath() / 'controllers' / (source + '.jpg'),
-        Path('../res') / (source + '.jpg'),
+        Path(__file__).resolve().parents[1] / 'res' / (source + '.jpg'),
     ]
     template_path = next((c for c in candidates if c.exists()), None)
     if template_path is None:
@@ -1527,18 +1563,20 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
             context.font = getFontPath('Bold', 'Normal')
             context.font_size = 30
             context.fill_color = Color(_LEADER_COLOR)
-            context.text(x=44, y=118, body=config.refcardURL())
+            context.text(x=44, y=118, body=config.refcardURL() if public else Config.webRoot())
             context.pop()
 
             styling = styling or mapping.get('styling', 'Group')
             device_ids = imageDevices or mapping.get('device_ids') or []
-            for box in mapping.get('boxes', []):
+            for original_box in mapping.get('boxes', []):
+                box = copy.deepcopy(original_box)
                 # Resolve each row's coloured texts: from the user's real bindings
                 # (generation) or the row's sample binds (editor preview).
                 for row in box.get('rows', []):
-                    if physicalKeys is not None and row.get('joy'):
-                        row['_texts'] = _buildJoyTexts(device_ids, row['joy'], deviceIndex,
+                    if physicalKeys is not None:
+                        row['_texts'] = (_buildJoyTexts(device_ids, row['joy'], deviceIndex,
                                                        physicalKeys, modifiers or {}, styling)
+                                         if row.get('joy') else [])
                     else:
                         row['_texts'] = [
                             {'Text': b.get('name', ''), 'Group': b.get('group', 'General'),
@@ -1553,7 +1591,8 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
                     kept = [r for r in box.get('rows', []) if r.get('_texts')]
                     if not kept:
                         continue
-                    box = {**box, 'rows': kept}
+                    if not box.get('no_chrome'):
+                        box = {**box, 'rows': kept}
                 _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling)
 
             context.draw(sourceImg)

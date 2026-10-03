@@ -13,6 +13,7 @@ from lxml import etree
 
 from .models import Config, Mode, Errors
 from .utils import logError
+from .mapping_runtime import mapping_software_warning
 
 # Import data files
 try:
@@ -208,7 +209,7 @@ def parseBindings(runId, xml, displayGroups, errors):
         hasHoldModifier = xmlBinding.find("Hold") is not None
 
         device = xmlBinding.get('Device')
-        if device == '{NoDevice}':
+        if not device or device == '{NoDevice}' or not xmlBinding.get('Key'):
             continue
 
         # Device rewrites for specific hardware configurations
@@ -343,8 +344,11 @@ def parseBindings(runId, xml, displayGroups, errors):
         
         # Create or update bind entry
         bind = physicalKey['Binds'].setdefault(modifiersKey, {'Controls': OrderedDict()})
-        bind['Controls'][controlName] = control
+        # Legacy cards aggregate half-axis actions. Retain each action's original
+        # input so data-driven rows can distinguish opposite directions.
+        bind['Controls'][controlName] = {**control, 'InputKey': xmlBinding.get('Key')}
 
+    errors.deviceWarnings = mapping_software_warning(devices)
     return (physicalKeys, modifiers, devices)
 
 

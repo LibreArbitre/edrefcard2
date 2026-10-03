@@ -39,7 +39,7 @@ _VISUAL_KEYBOARD_LAYOUTS = {
 # Route handlers
 
 
-def render_data_driven(physical_keys, modifiers, devices, config, public, styling):
+def render_data_driven(physical_keys, modifiers, devices, config, public, styling, errors=None):
     """Render data-driven cards for any device matching a controller_mappings entry.
 
     Returns (image_base_names, handled_device_keys). The clean image + box layout
@@ -93,13 +93,23 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
         # mapping doesn't cover yet (VIRPIL configs vary per user), with a
         # ready-to-open editor URL that merges them as an UNASSIGNED box.
         try:
-            from scripts.scaffold import missing_keys
-            used = sorted({pk['Key'] for pk in physical_keys.values()
-                           if pk['Device'] == dev_id and str(pk['DeviceIndex']) == str(idx)})
-            miss = missing_keys(m, used)
+            from scripts.mapping_runtime import missing_inputs, used_inputs
+            used = used_inputs(physical_keys, modifiers, [dev_id], idx)
+            miss = missing_inputs(m, used)
             if miss:
                 logError(f"data-driven: {dev_id} inputs not in mapping: {', '.join(miss)} "
                          f"-> /admin/mapping-editor?device={dev_id}&from={config.name}\n")
+                if errors is not None:
+                    import html
+                    warning = (
+                        f'<p data-controller-coverage="{html.escape(dev_id, quote=True)}">'
+                        '<strong>Incomplete controller card:</strong> '
+                        f'{html.escape(dev_id)} has bound inputs not covered by its template: '
+                        f'{html.escape(", ".join(miss))}. '
+                        'These commands are missing from the card. '
+                        'Please report this configuration reference.</p>')
+                    if warning not in errors.misconfigurationWarnings:
+                        errors.misconfigurationWarnings += warning
         except Exception as e:
             logError(f"data-driven enrichment check failed for {device_key}: {e}\n")
     return created, handled
@@ -299,7 +309,7 @@ def generate():
         # Data-driven controllers (from controller_mappings) - rendered from the
         # clean image + box layout, filled with this config's real bindings.
         dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
-                                                    config, public, styling)
+                                                    config, public, styling, errors)
         data_driven_images.extend(dd_created)
 
     except RuntimeError as e:
@@ -332,8 +342,6 @@ def generate():
                 logError(f'{run_id}: cannot record unknown device sighting: {e}\n')
             if errors.unhandledDevicesWarnings == '':
                 errors.unhandledDevicesWarnings = f'<h1>Unknown controller detected</h1>You have a device that is not supported at this time. Please report details of your device by following the link at the bottom of this page supplying the reference "{run_id}" and we will attempt to add support for it.'
-        if device is not None and 'ThrustMasterWarthogCombined' in device['HandledDevices'] and errors.deviceWarnings == '':
-            errors.deviceWarnings = '<h2>Mapping Software Detected</h2>You are using the ThrustMaster TARGET software. As a result it is possible that not all of the controls will show up. If you have missing controls then you should remove the mapping from TARGET and map them using Elite\'s own configuration UI.'
     
     if len(created_images) == 0 and len(data_driven_images) == 0 and not errors.misconfigurationWarnings and not errors.unhandledDevicesWarnings and not errors.errors:
         errors.errors = '<h1>The file supplied does not have any bindings for a supported controller or keyboard.</h1>'
@@ -518,8 +526,12 @@ def show_binds(run_id):
             styling = db_config.get('styling', 'None')
             db_config.get('description', '')
             if not source_missing:
-                errors.misconfigurationWarnings = db_config.get('misconfiguration_warnings', '')
-                errors.deviceWarnings = db_config.get('device_warnings', '')
+                import re
+                # Keep unrelated stored notices, but recompute coverage and
+                # software detection from the current source and public mapping.
+                errors.misconfigurationWarnings = re.sub(
+                    r'<p data-controller-coverage="[^"]*">.*?</p>', '',
+                    db_config.get('misconfiguration_warnings', ''), flags=re.DOTALL)
 
         else:
             # Fallback defaults for configs not in database (very old legacy)
@@ -562,7 +574,7 @@ def show_binds(run_id):
 
             # Data-driven controllers (from controller_mappings), same path as generate()
             dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
-                                                        config, True, styling)
+                                                        config, True, styling, errors)
             data_driven_images.extend(dd_created)
 
         else:

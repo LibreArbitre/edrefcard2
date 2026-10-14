@@ -47,18 +47,20 @@ input-verification metadata.
 ## Review links and rendering correction
 
 - [Beta editor](https://beta.edrefcard.info/admin/mapping-editor?device=231D0136)
-- [Corrected owner-profile preview](https://beta.edrefcard.info/configs/dd/ddpreview-cc30e714a8f5447b96753d29ce52d663-vkb-stecs-space-mini-lh-9a5fb4c3a4074059b20b1ea54ef6c34d.jpg)
+- [Owner-profile preview from the deployed beta renderer](https://beta.edrefcard.info/configs/dd/ddpreview-cf56c6e488204efe8980b95a04628717-vkb-stecs-space-mini-lh-9a5fb4c3a4074059b20b1ea54ef6c34d.jpg)
 
 The preview uses the manufacturer artwork, retaining UntoldForce's credit.
 Unused printed frames remain visible. Dense encoder rows are small at this
 sheet's fixed geometry and need a readability pass before release.
 
-The corrected preview was rendered with the tested follow-up renderer in a
-scratch copy. This correction adds `show_title: false` for artwork which already
+The correction was promoted to beta on October 14 with commit `65a65d1`.
+It adds `show_title: false` for artwork which already
 contains its title, and `url_xy: [44, 1810]` to put the generated URL in the
 bottom margin. Both are optional; older mappings keep their existing defaults.
-The correction is not yet promoted to the beta application, so its ordinary
-Preview button still uses the previous header behavior until promotion.
+The beta Preview route accepts these options and generates the expected header.
+An out-of-image URL position is rejected with HTTP 400. The deployed file hashes
+match the tested code; all five mapping rows remain unchanged and the STECS
+stays in draft state. The catalogue retains its 3,097 configurations.
 
 All 43 Python tests passed with the runtime dependencies, without skips.
 The corrected image was loaded and visually reviewed in the browser.

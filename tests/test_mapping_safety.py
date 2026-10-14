@@ -36,6 +36,22 @@ def document(image='original', ids=None):
 
 
 class MappingSafetyTests(unittest.TestCase):
+    def test_imported_artwork_can_keep_its_title_and_move_generated_url(self):
+        mapping = document()
+        mapping.update(show_title=False, url_xy=[40, 2500])
+        validation.validate_mapping(mapping)
+
+    def test_imported_header_geometry_rejects_invalid_metadata(self):
+        for value in ([40, 2560], [-1, 100], [40, float('nan')], '40,100'):
+            mapping = document()
+            mapping['url_xy'] = value
+            with self.assertRaises(ValueError):
+                validation.validate_mapping(mapping)
+        mapping = document()
+        mapping['show_title'] = 'false'
+        with self.assertRaises(ValueError):
+            validation.validate_mapping(mapping)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='edrefcard-mapping-tests-')
         db.DB_PATH = Path(self.temp.name) / 'test.db'

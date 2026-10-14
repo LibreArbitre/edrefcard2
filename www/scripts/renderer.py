@@ -1549,7 +1549,7 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
             context.fill_color = Color('Black')
             context.fill_opacity = 1
 
-            if mapping.get('title'):
+            if mapping.get('title') and mapping.get('show_title', True):
                 context.push()
                 context.font = getFontPath('Black', 'Normal')
                 context.font_size = 52
@@ -1563,7 +1563,9 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
             context.font = getFontPath('Bold', 'Normal')
             context.font_size = 30
             context.fill_color = Color(_LEADER_COLOR)
-            context.text(x=44, y=118, body=config.refcardURL() if public else Config.webRoot())
+            url_x, url_y = mapping.get('url_xy', [44, 118])
+            context.text(x=int(url_x), y=int(url_y),
+                         body=config.refcardURL() if public else Config.webRoot())
             context.pop()
 
             styling = styling or mapping.get('styling', 'Group')

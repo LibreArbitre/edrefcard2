@@ -47,9 +47,9 @@ this reviewed profile and are not added from generic product specifications.
 ## Final card and verification
 
 - [Beta editor](https://beta.edrefcard.info/admin/mapping-editor?device=231D0136)
-- [Final owner-profile card](https://beta.edrefcard.info/configs/dd/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17-vkb-stecs-space-mini-lh-final-eae3ca447a2842cdbaade9e35173ff3f.jpg)
-- [A4 export](https://beta.edrefcard.info/download/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17/pdf?format=A4)
-- [Letter export](https://beta.edrefcard.info/download/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17/pdf?format=Letter)
+- [Final owner-profile card](https://beta.edrefcard.info/configs/dd/ddpreview-compact-owner-f72b7d9824704403b5cfc22e7616319a-vkb-stecs-space-mini-lh-final-eae3ca447a2842cdbaade9e35173ff3f.jpg)
+- [A4 export](https://beta.edrefcard.info/download/ddpreview-compact-owner-f72b7d9824704403b5cfc22e7616319a/pdf?format=A4)
+- [Letter export](https://beta.edrefcard.info/download/ddpreview-compact-owner-f72b7d9824704403b5cfc22e7616319a/pdf?format=Letter)
 
 The final 3600 x 2400 card uses the intact [VKB product photograph](https://flightsimcontrols.com/wp-content/uploads/2025/08/STECS-Mini-STG-L_04_1200.webp)
 on a white canvas with runtime-generated frames. It replaces the earlier
@@ -70,13 +70,28 @@ Verification on October 16:
   in all four styles, with no missing-input warning.
 - The public device catalogue lists this controller. No synthetic catalogue
   record was added; all 3,098 existing configurations were retained.
-- All 44 Python tests pass without skips in the server runtime. Real-Wand/Flask
+- All 50 Python tests pass without skips in the server runtime. Real-Wand/Flask
   integration checks pass, including three legacy templates and both PDF sizes.
 
 Commit `aaa06cd` also fixes a renderer crash discovered with the real profile:
 unknown or empty command categories/groups now use their General style. Tests
 cover modified and unmodified bindings. The correction was deployed through
 staging and beta, with the deployed renderer file hash checked in both.
+
+Commit `fa80c95` fixes the spacing of generated frames. Real-profile previews
+and generated cards measure row heights from wrapped command text, retain
+consistent padding and shrink frames within their reserved geometry. With Ty's
+profile, BASE is 160 px high instead of 610 px; SPEED LIM uses 60/180/180 px
+rows instead of three 260 px rows. All 56 command labels retain the 40 px font.
+Fixed artwork, imported PDF slots and tiny constrained frames keep their
+existing fitting behavior. Editor previews without a reference profile retain
+the full editable geometry.
+
+Stéphane approved the compact rendering before promotion. Beta verification
+checks the deployed file hash, an authenticated HTTPS preview's frame pixels,
+four real-profile styles and preservation of all mapping rows. Existing cached
+PDFs were not bulk-regenerated; the linked compact-card exports use a fresh
+review reference and were individually checked.
 
 The private review source is retained in a restricted, non-web-served location,
 and a pre-change database backup plus the final mapping and review artifacts

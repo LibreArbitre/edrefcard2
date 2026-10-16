@@ -1,9 +1,9 @@
 # EdRefCard2 stabilization and controller delivery
 
-Verified on 2026-10-03. This is the current restart point, replacing old roadmap
-completion percentages as a measure of release readiness. The editor features
-exist, but reliable rendering and owner validation of additional controllers
-remain unfinished. Finish a bounded delivery before adding more editor features.
+Updated on 2026-10-16. Use the dated delivery checkpoints below rather than old
+roadmap completion percentages to assess release readiness. STECS Space Mini
+LH is now published after owner validation. Other controller pilots remain
+separate work; finish their review before adding more editor features.
 
 ## Initial deployment and data before stabilization
 
@@ -311,3 +311,34 @@ Both previews report no missing used inputs. The real image was also opened
 and visually checked in the browser on the beta domain. Synthetic Pitch/Roll
 labels remain test data, not Alicina's assignments. Owner/visual approval is
 still needed before publishing the Orion template.
+
+## STECS Mini delivery October 16
+
+The [STECS Space Mini Left-Hand](controllers/VKB_STECS_SPACE_MINI_LH.md)
+is published on beta for hardware `231D0136`, after TyWuNon confirmed his
+setup and axes. The card covers 29 logical buttons and five enabled axis codes.
+Axes stay in a global block: RY is virtual in this profile and no unconfirmed
+physical sensor placement is asserted. This does not publish support for the
+different Max/STEM ID `231D0139`.
+
+The final card uses a clean manufacturer photograph with larger generated
+frames, replacing the fixed-height worksheet. All 56 displayed commands in
+the owner's profile retain the maximum 40 px body font. A4 and Letter exports
+were reopened, rasterized and visually checked. All 26 used input codes are
+covered; a synthetic inventory fixture also renders all 34 template inputs.
+
+Commit `aaa06cd` fixes missing command-style fallback discovered in the Category
+rendering test. The 44 Python tests pass without skips in the server runtime,
+and real-Wand/Flask integration checks pass, including legacy cards and PDF
+exports. Staging and beta renderer hashes match the tested commit. The
+published web/API helper renders the real profile in all four styles without
+a coverage warning, and the public device catalogue lists the new controller.
+
+The four other mapping rows are unchanged, including Merc's drafts and Orion.
+The configuration catalogue retains all 3,098 records; no test catalogue record
+was created. A pre-change database backup and final review artifacts are
+preserved outside the container. The private owner XML remains non-web-served.
+
+Next controller work remains Orion owner/visual sign-off, Merc's SOL-R4 drafts,
+and a separate review of STECS Max/STEM. This checkpoint completes the Mini
+pilot, not the entire controller backlog or the mobile editor work.

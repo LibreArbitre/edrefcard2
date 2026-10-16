@@ -14,7 +14,10 @@ import tempfile
 import datetime
 import logging
 import signal
+import sqlite3
 from pathlib import Path
+from contextlib import closing
+from uuid import uuid4
 
 import paramiko
 import requests
@@ -26,6 +29,8 @@ import base64
 from scripts.models import Config
 
 logger = logging.getLogger(__name__)
+
+_CONTROLLER_IMAGE_SUFFIXES = frozenset({'.jpg', '.jpeg', '.png', '.webp'})
 
 
 # ============== Encryption Utilities ==============
@@ -254,19 +259,22 @@ class BackupManager:
         logger.debug(f"[BackupManager] backup_dir: {self.backup_dir}")
     
     def create_backup(self, include_db: bool = True, include_binds: bool = True,
-                      backup_type: str = 'manual') -> Path:
+                      backup_type: str = 'manual', include_controller_images=None) -> Path:
         """Create a backup archive.
         
         Args:
             include_db: Include SQLite database
             include_binds: Include .binds files
             backup_type: Type of backup ('manual', 'scheduled', 'pre_restore')
+            include_controller_images: Include source images (defaults to include_db)
             
         Returns:
             Path to created backup archive
         """
+        if include_controller_images is None:
+            include_controller_images = include_db
         timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')
-        filename = f"backup_{timestamp}.tar.gz"
+        filename = f"backup_{timestamp}_{uuid4().hex}.tar.gz"
         final_backup_path = self.backup_dir / filename
         
         # Use a temporary file to avoid concurrent write corruption
@@ -276,11 +284,12 @@ class BackupManager:
         
         # Create metadata
         metadata = {
-            'version': '1.0',
+            'version': '2.0',
             'created_at': datetime.datetime.now(datetime.UTC).isoformat(),
             'backup_type': backup_type,
             'includes_db': include_db,
             'includes_binds': include_binds,
+            'includes_controller_images': include_controller_images,
         }
         
         try:
@@ -303,7 +312,14 @@ class BackupManager:
                     if not db_path.exists():
                         db_path = self.data_path / 'edrefcard.db'
                     if db_path.exists():
-                        tar.add(db_path, arcname='database/edrefcard.db')
+                        # Online backup includes committed WAL data and cannot capture
+                        # half of a concurrent database write like a raw file copy.
+                        with tempfile.TemporaryDirectory() as snapshot_dir:
+                            snapshot = Path(snapshot_dir) / 'edrefcard.db'
+                            with closing(sqlite3.connect(db_path.resolve().as_uri() + '?mode=ro', uri=True)) as source:
+                                with closing(sqlite3.connect(snapshot)) as target:
+                                    source.backup(target)
+                            tar.add(snapshot, arcname='database/edrefcard.db')
                         logger.info(f"Added database from {db_path}")
                 
                 # Add binds files only (no images/PDFs)
@@ -311,6 +327,22 @@ class BackupManager:
                     for binds_file in self.configs_path.rglob('*.binds'):
                         rel_path = binds_file.relative_to(self.configs_path)
                         tar.add(binds_file, arcname=f'binds/{rel_path}')
+
+                # These are source assets, unlike regenerable card JPGs/PDFs.
+                if include_controller_images:
+                    configs_root = self.configs_path.resolve()
+                    image_root = self.configs_path / 'controllers'
+                    if image_root.exists():
+                        if not image_root.resolve().is_relative_to(configs_root):
+                            raise ValueError('Controller image directory is outside the configs directory.')
+                        for image in sorted(image_root.rglob('*')):
+                            if image.suffix.lower() not in _CONTROLLER_IMAGE_SUFFIXES:
+                                continue
+                            if image.is_symlink() or not image.resolve().is_relative_to(image_root.resolve()):
+                                raise ValueError('Unsafe controller image path in backup.')
+                            if image.is_file():
+                                tar.add(image, arcname='controllers/' + image.relative_to(image_root).as_posix(),
+                                        recursive=False)
             
             # Atomically rename temp file to final location
             import shutil
@@ -647,7 +679,8 @@ class RestoreManager:
     def restore_from_archive(self, archive_path: Path, 
                              restore_db: bool = True,
                              restore_binds: bool = True,
-                             create_safety_backup: bool = True) -> dict:
+                             create_safety_backup: bool = True,
+                             restore_controller_images=None) -> dict:
         """Restore from a backup archive.
         
         Args:
@@ -655,15 +688,19 @@ class RestoreManager:
             restore_db: Restore the database
             restore_binds: Restore binds files
             create_safety_backup: Create a backup before restore
+            restore_controller_images: Restore source images (defaults to restore_db)
             
         Returns:
             Dictionary with restore results
         """
+        if restore_controller_images is None:
+            restore_controller_images = restore_db
         results = {
             'success': False,
             'safety_backup': None,
             'db_restored': False,
             'binds_restored': 0,
+            'controller_images_restored': 0,
             'errors': []
         }
         
@@ -677,11 +714,12 @@ class RestoreManager:
                     safety_path = self.backup_manager.create_backup(
                         include_db=restore_db,
                         include_binds=restore_binds,
-                        backup_type='pre_restore'
+                        backup_type='pre_restore',
+                        include_controller_images=restore_controller_images
                     )
                     results['safety_backup'] = str(safety_path)
                 except Exception as e:
-                    results['errors'].append(f"Safety backup failed: {e}")
+                    raise RuntimeError(f"Safety backup failed: {e}") from e
             
             # Extract and restore
             with tarfile.open(archive_path, 'r:gz') as tar:
@@ -698,11 +736,17 @@ class RestoreManager:
                 if restore_db:
                     try:
                         db_member = tar.getmember('database/edrefcard.db')
+                        if not db_member.isfile():
+                            raise ValueError('Database archive entry must be a regular file.')
                         logger.debug(f"[RESTORE] Found database in backup: {db_member.name}")
                         
                         with tempfile.TemporaryDirectory() as tmpdir:
-                            tar.extract(db_member, path=tmpdir)
-                            extracted_db = Path(tmpdir) / 'database' / 'edrefcard.db'
+                            extracted_db = Path(tmpdir) / 'edrefcard.db'
+                            with tar.extractfile(db_member) as source, open(extracted_db, 'wb') as target:
+                                shutil.copyfileobj(source, target)
+                            with closing(sqlite3.connect(extracted_db.resolve().as_uri() + '?mode=ro', uri=True)) as check:
+                                if check.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                                    raise ValueError('Backup database integrity check failed.')
                             
                             # ALWAYS restore to configs_path - that's where the app reads from
                             # (as configured by EDREFCARD_CONFIGS_DIR)
@@ -771,6 +815,36 @@ class RestoreManager:
 
                     results['binds_restored'] = binds_count
                     logger.info(f"Restored {binds_count} binds files")
+
+                if restore_controller_images:
+                    configs_root = self.configs_path.resolve()
+                    image_root = (self.configs_path / 'controllers').resolve()
+                    if not image_root.is_relative_to(configs_root):
+                        raise ValueError('Controller image directory is outside the configs directory.')
+                    for member in tar.getmembers():
+                        if not (member.name.startswith('controllers/') and
+                                Path(member.name).suffix.lower() in _CONTROLLER_IMAGE_SUFFIXES):
+                            continue
+                        target_path = (image_root / member.name[len('controllers/'):]).resolve()
+                        if not member.isfile() or not target_path.is_relative_to(image_root):
+                            results['errors'].append(f"Skipped unsafe controller image: {member.name}")
+                            continue
+                        temp_image = None
+                        try:
+                            source = tar.extractfile(member)
+                            if source is None:
+                                continue
+                            target_path.parent.mkdir(parents=True, exist_ok=True)
+                            with source, tempfile.NamedTemporaryFile(dir=target_path.parent, delete=False) as dest:
+                                temp_image = Path(dest.name)
+                                shutil.copyfileobj(source, dest)
+                            os.replace(temp_image, target_path)
+                            results['controller_images_restored'] += 1
+                        except Exception as e:
+                            results['errors'].append(f"Failed to restore {member.name}: {e}")
+                        finally:
+                            if temp_image is not None:
+                                temp_image.unlink(missing_ok=True)
             
             results['success'] = len(results['errors']) == 0
             
@@ -788,6 +862,8 @@ class RestoreManager:
                 except Exception as e:
                     results['errors'].append(f"Database reconnection failed: {e}")
                     logger.error(f"Database reconnection failed: {e}")
+
+            results['success'] = len(results['errors']) == 0
             
             # Signal Gunicorn to reload all workers (multi-worker fix)
             if results['success'] and restore_db and results['db_restored']:

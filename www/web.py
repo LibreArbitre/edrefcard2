@@ -715,6 +715,9 @@ def show_device(device_name):
 def generate_pdf(run_id, page_format='A4'):
     from fpdf import FPDF
     from PIL import Image
+    import hashlib
+    import io
+    import fitz
     
     # Use Flask's CONFIGS_FOLDER directly for consistency with serve_config
     configs_folder = Path(current_app.config['CONFIGS_FOLDER'])
@@ -723,9 +726,6 @@ def generate_pdf(run_id, page_format='A4'):
     pdf_filename = f"{run_id}-{page_format}.pdf"
     pdf_path = config_dir / pdf_filename
     
-    if pdf_path.exists():
-         return str(pdf_path)
-
     # Search for images
     search_pattern = f"{run_id}-*.jpg"
     all_files = list(config_dir.glob(search_pattern))
@@ -748,13 +748,33 @@ def generate_pdf(run_id, page_format='A4'):
     if not ordered_images:
         logError(f"PDF Gen: No images found for {run_id} in {config_dir}. Search pattern: {search_pattern}")
         return None
+
+    # Embed the source signature in the PDF itself, so concurrent workers can
+    # atomically replace one complete cache file, not a PDF/sidecar pair.
+    try:
+        sources = [(p.name, p.read_bytes()) for p in ordered_images]
+        signature = hashlib.sha256(b'edrefcard-pdf-v2\0' + page_format.encode())
+        for name, content in sources:
+            signature.update(name.encode('utf-8') + b'\0' + hashlib.sha256(content).digest())
+        cache_key = 'edrefcard-source-sha256=' + signature.hexdigest()
+        if pdf_path.exists():
+            try:
+                with fitz.open(pdf_path) as cached:
+                    if cached.metadata.get('keywords') == cache_key and len(cached) == len(sources):
+                        return str(pdf_path)
+            except Exception:
+                pass  # A legacy or damaged cache can be safely regenerated.
+    except Exception as e:
+        logError(f"Error reading PDF source images for {run_id}: {e}")
+        return None
         
     pdf = FPDF(orientation='P', unit='mm', format=page_format)
     pdf.set_auto_page_break(False)
+    pdf.set_keywords(cache_key)
     
-    for img_path in ordered_images:
+    for image_name, image_bytes in sources:
         try:
-            with Image.open(str(img_path)) as im:
+            with Image.open(io.BytesIO(image_bytes)) as im:
                 if im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info):
                     bg = Image.new('RGB', im.size, (255, 255, 255))
                     if im.mode != 'RGBA':
@@ -800,14 +820,21 @@ def generate_pdf(run_id, page_format='A4'):
                     if os.path.exists(tmp_name):
                         os.unlink(tmp_name)
         except Exception as e:
-            logError(f"Error adding image {img_path} to PDF: {e}")
-            continue
+            logError(f"Error adding image {image_name} to PDF: {e}")
+            return None  # Never cache a partial export or overwrite the last good PDF.
 
+    temp_pdf = None
     try:
-        pdf.output(str(pdf_path))
+        with tempfile.NamedTemporaryFile(suffix='.pdf', dir=config_dir, delete=False) as output:
+            temp_pdf = output.name
+        pdf.output(temp_pdf)
+        os.replace(temp_pdf, pdf_path)
     except Exception as e:
          logError(f"Error saving PDF {pdf_path}: {e}")
          return None
+    finally:
+        if temp_pdf and os.path.exists(temp_pdf):
+            os.unlink(temp_pdf)
          
     return str(pdf_path)
 

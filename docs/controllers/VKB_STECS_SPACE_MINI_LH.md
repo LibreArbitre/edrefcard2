@@ -1,4 +1,4 @@
-# VKB STECS Space Mini Left Hand draft
+# VKB STECS Space Mini Left Hand
 
 Prepared October 14, 2026 from TyWuNon's emailed bindings and VKBDevCfg
 screenshots. Hardware ID `231D0136` appears in both the .binds and the owner's
@@ -6,9 +6,10 @@ PID 0136 screenshot. Firmware is v2.20C, profile 0, with no custom button remaps
 reported by the owner. Do not attach the different Max/STEM ID `231D0139` to
 this Mini template without a separate comparison.
 
-Beta draft ID `5` is saved, not published. The four existing mapping rows were
-verified unchanged. The emailed XML is kept outside the web-served configs
-tree. Only the rendered STECS review image is linked below.
+Published on beta on October 16, 2026 as mapping ID `5`, after TyWuNon confirmed
+the shown setup and axes. The four other mapping rows, including the community
+drafts, remain unchanged. The emailed XML stays outside the web-served configs
+tree; only the rendered controller image is shared.
 
 ## Logical button assignments
 
@@ -27,44 +28,57 @@ physical input numbers. They correspond to `Joy_N` in the game profile.
 | Speed Lim | Push, encoder first/second output | 11, 12, 13 |
 | Base | Modes 1-5, START, SYS | 3, 4, 5, 6, 7, 2, 1 |
 
-The two encoder directions still need owner validation. Together these rows
-cover logical buttons 1-29, including unused buttons in the owner's .binds.
-They remain individual rows within grouped hats, not separate groups per hat
-direction.
+These rows cover logical buttons 1-29, including unused buttons in the owner's
+.binds. The owner's preview approval confirms the shown encoder assignments.
+Hat directions remain rows within one physical group, not separate boxes.
 
-## Axis validation pending
+## Validated logical axes
 
-The file uses X, Y, Z, positive RX, and RY. Their real game actions are shown
-in a separate box labelled `AXIS CODES: PHYSICAL LOCATIONS UNVERIFIED`, with no
-leader line. The five physical axis slots in the manufacturer artwork stay
-unassigned until the owner confirms their correspondence.
+The owner's configuration enables HID outputs X, Y, Z, RX and RY. His file
+uses X, Y, Z, positive RX and RY. The template's full `Joy_RXAxis` row covers
+the positive-direction digital bindings without inventing another physical
+control. RY is virtual in this profile, not a fifth independent physical sensor.
 
-The preview covers all 26 used input codes: 21 buttons and five axis codes.
-Zero missing used inputs is a coverage result, not confirmation of physical
-axis placement or exhaustive hardware support. Publication is blocked by the
-input-verification metadata.
+The enabled outputs appear in one `AXES: GAME INPUT CODES` block without a
+leader line. Owner approval covers the logical codes and shown commands, not
+individual physical sensor positions. RZ, Slider and Dial are not enabled in
+this reviewed profile and are not added from generic product specifications.
 
-## Review links and rendering correction
+## Final card and verification
 
 - [Beta editor](https://beta.edrefcard.info/admin/mapping-editor?device=231D0136)
-- [Owner-profile preview from the deployed beta renderer](https://beta.edrefcard.info/configs/dd/ddpreview-cf56c6e488204efe8980b95a04628717-vkb-stecs-space-mini-lh-9a5fb4c3a4074059b20b1ea54ef6c34d.jpg)
+- [Final owner-profile card](https://beta.edrefcard.info/configs/dd/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17-vkb-stecs-space-mini-lh-final-eae3ca447a2842cdbaade9e35173ff3f.jpg)
+- [A4 export](https://beta.edrefcard.info/download/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17/pdf?format=A4)
+- [Letter export](https://beta.edrefcard.info/download/ddpreview-stecs-final-dadec1455e064e8ba158ba190144de17/pdf?format=Letter)
 
-The preview uses the manufacturer artwork, retaining UntoldForce's credit.
-Unused printed frames remain visible. Dense encoder rows are small at this
-sheet's fixed geometry and need a readability pass before release.
+The final 3600 x 2400 card uses the intact [VKB product photograph](https://flightsimcontrols.com/wp-content/uploads/2025/08/STECS-Mini-STG-L_04_1200.webp)
+on a white canvas with runtime-generated frames. It replaces the earlier
+fixed-height PDF worksheet, so unused groups disappear and dense encoder
+commands have enough room. No worksheet artwork is reused in this final image.
+The rear trigger and base group have descriptive labels rather than speculative
+leader lines. Other digital groups point to the corresponding visible controls.
 
-The correction was promoted to beta on October 14 with commit `65a65d1`.
-It adds `show_title: false` for artwork which already
-contains its title, and `url_xy: [44, 1810]` to put the generated URL in the
-bottom margin. Both are optional; older mappings keep their existing defaults.
-The beta Preview route accepts these options and generates the expected header.
-An out-of-image URL position is rejected with HTTP 400. The deployed file hashes
-match the tested code; all five mapping rows remain unchanged and the STECS
-stays in draft state. The catalogue retains its 3,097 configurations.
+Verification on October 16:
 
-All 43 Python tests passed with the runtime dependencies, without skips.
-The corrected image was loaded and visually reviewed in the browser.
+- All 34 template inputs render: 29 digital buttons and five enabled axis codes.
+- All 26 inputs used by Ty are covered: 21 buttons and five axis codes.
+- His 56 displayed command labels all fit at the renderer's maximum body size
+  of 40 px, about 9.35 pt in the A4 export and 8.79 pt in Letter.
+- Both PDF exports reopen as one landscape page with an unclipped image and
+  were visually inspected after rasterization.
+- The published revision is selected by the deployed web/API rendering helper
+  in all four styles, with no missing-input warning.
+- The public device catalogue lists this controller. No synthetic catalogue
+  record was added; all 3,098 existing configurations were retained.
+- All 44 Python tests pass without skips in the server runtime. Real-Wand/Flask
+  integration checks pass, including three legacy templates and both PDF sizes.
+
+Commit `aaa06cd` also fixes a renderer crash discovered with the real profile:
+unknown or empty command categories/groups now use their General style. Tests
+cover modified and unmodified bindings. The correction was deployed through
+staging and beta, with the deployed renderer file hash checked in both.
 
 The private review source is retained in a restricted, non-web-served location,
-and a pre-change database backup is preserved. No original owner XML,
-screenshots or private infrastructure paths are committed to Git.
+and a pre-change database backup plus the final mapping and review artifacts
+are preserved outside the container. No original owner XML, screenshots,
+credentials or private infrastructure paths are committed to Git.

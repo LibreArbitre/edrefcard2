@@ -250,8 +250,9 @@ class BackupManager:
     def __init__(self):
         self.configs_path = Config.configsPath()
         self.data_path = Path(__file__).parent.parent / 'data'
-        self.backup_dir = self.data_path / 'backups'
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.legacy_backup_dir = self.data_path / 'backups'
+        self.backup_dir = self.configs_path / '.backups'
+        self.backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         
         # Debug logging
         logger.debug(f"[BackupManager] configs_path: {self.configs_path}")
@@ -397,17 +398,22 @@ class BackupManager:
     def list_local_backups(self) -> list:
         """List local backup files."""
         backups = []
-        for f in self.backup_dir.glob('backup_*.tar.gz'):
-            try:
-                stat = f.stat()
-                backups.append({
-                    'filename': f.name,
-                    'path': str(f),
-                    'size_bytes': stat.st_size,
-                    'created_at': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                })
-            except Exception as e:
-                logger.warning(f"Could not stat backup file {f}: {e}")
+        seen = set()
+        for folder in (self.backup_dir, self.legacy_backup_dir):
+            for f in folder.glob('backup_*.tar.gz'):
+                if f.name in seen or not f.is_file() or f.is_symlink():
+                    continue
+                try:
+                    stat = f.stat()
+                    backups.append({
+                        'filename': f.name,
+                        'path': str(f),
+                        'size_bytes': stat.st_size,
+                        'created_at': datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    })
+                    seen.add(f.name)
+                except Exception as e:
+                    logger.warning(f"Could not stat backup file {f}: {e}")
         
         # Sort by created_at descending
         backups.sort(key=lambda x: x['created_at'], reverse=True)
@@ -437,9 +443,13 @@ class BackupManager:
     
     def get_backup_path(self, filename: str) -> Path | None:
         """Get full path to a backup file."""
-        path = self.backup_dir / filename
-        if path.exists() and path.is_file():
-            return path
+        if (Path(filename).name != filename or not filename.startswith('backup_') or
+                not filename.endswith('.tar.gz')):
+            return None
+        for folder in (self.backup_dir, self.legacy_backup_dir):
+            path = folder / filename
+            if path.is_file() and not path.is_symlink() and path.resolve().parent == folder.resolve():
+                return path
         return None
 
 

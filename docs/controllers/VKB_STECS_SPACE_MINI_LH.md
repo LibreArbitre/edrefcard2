@@ -89,9 +89,10 @@ the full editable geometry.
 
 Stéphane approved the compact rendering before promotion. Beta verification
 checks the deployed file hash, an authenticated HTTPS preview's frame pixels,
-four real-profile styles and preservation of all mapping rows. Existing cached
-PDFs were not bulk-regenerated; the linked compact-card exports use a fresh
-review reference and were individually checked.
+four real-profile styles and preservation of all mapping rows. The subsequent
+backup/PDF reliability release validates existing PDF caches against their
+source images and regenerates stale exports on access. The linked A4 and Letter
+exports were checked again through the deployed beta download routes.
 
 The private review source is retained in a restricted, non-web-served location,
 and a pre-change database backup plus the final mapping and review artifacts

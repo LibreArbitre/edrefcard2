@@ -76,7 +76,8 @@ class RenderingSafetyTests(unittest.TestCase):
         style = {'Font': 'test-font', 'Color': 'green'}
         self.env = functions('www/scripts/renderer.py',
                              ['_drawDataDrivenBox', '_drawControlSymbol', '_symbolColumnWidth',
-                              '_buildJoyTexts', 'calculateBestFitFontSize', 'calculateBestFontSize'], {
+                              '_buildJoyTexts', '_dataDrivenRowHeights',
+                              'calculateBestFitFontSize', 'calculateBestFontSize'], {
             'math': math, 'Image': ImageProbe, 'Color': lambda c: c,
             'getFontPath': lambda *args: 'test-font', 'layoutText': layout,
             '_LEADER_COLOR': '#962320', '_SYMBOL_GLYPHS': {'press':'0','up':'^','stage1':'stage 1'},
@@ -118,6 +119,61 @@ class RenderingSafetyTests(unittest.TestCase):
 
     def test_empty_font_fit_is_safe(self):
         self.assertEqual(self.env['calculateBestFitFontSize'](DrawingProbe(), 100, 20, [], 40), 40)
+
+    def test_compact_sparse_rows_do_not_stretch_into_unused_space(self):
+        rows=[{'symbol':'press','number':n,'_texts':[
+            {'Text':'HUD Mode','Style':self.env['groupStyles']['Ship']}]} for n in [2,1]]
+        before=copy.deepcopy(rows)
+        context=DrawingProbe()
+        heights,size=self.env['_dataDrivenRowHeights'](context,None,rows,900,570,40)
+        self.assertEqual(heights,[54,54])
+        self.assertEqual(size,40)
+        self.assertEqual(context.balance,0)
+        self.assertEqual(rows,before)
+
+    def test_compact_dense_encoder_rows_get_more_space_than_push(self):
+        style=self.env['groupStyles']['Ship']
+        rows=[{'symbol':'press','number':11,'_texts':[{'Text':'100% Throttle','Style':style}]},
+              *[{'symbol':'up','number':n,'_texts':[
+                  {'Text':'Long command name','Style':style} for _ in range(8)]} for n in [12,13]]]
+        heights,size=self.env['_dataDrivenRowHeights'](DrawingProbe(),None,rows,900,780,40)
+        self.assertEqual(size,40)
+        self.assertEqual(heights[0],54)
+        self.assertGreater(heights[1],heights[0])
+        self.assertEqual(heights[1],heights[2])
+        self.assertLess(sum(heights),780)
+
+    def test_compact_layout_respects_height_budget_with_shared_font(self):
+        rows=[{'_texts':[{'Text':'Long command name','Style':self.env['groupStyles']['Ship']}
+                         for _ in range(12)]} for _ in range(3)]
+        heights,size=self.env['_dataDrivenRowHeights'](DrawingProbe(),None,rows,500,240,40)
+        self.assertLess(size,40)
+        self.assertLessEqual(sum(heights),240)
+        self.assertTrue(all(h>=54 for h in heights))
+
+    def test_compact_tiny_boxes_keep_existing_geometry(self):
+        rows=[{'_texts':[{'Text':'Fire','Style':self.env['groupStyles']['Ship']}]}]
+        heights,size=self.env['_dataDrivenRowHeights'](DrawingProbe(),None,rows,193,30,40)
+        self.assertEqual(heights,[30])
+        self.assertEqual(size,40)
+
+    def test_compact_draw_uses_variable_text_rectangles(self):
+        style=self.env['groupStyles']['Ship']
+        rows=[{'_texts':[{'Text':'Fire','Style':style}]},
+              {'_texts':[{'Text':'Long command name','Style':style} for _ in range(8)]}]
+        self.env['_drawDataDrivenBox'](DrawingProbe(),None,{
+            'label':'Mixed density','box_xy':[10,20],'box_wh':[900,610],'rows':rows},compact=True)
+        self.assertEqual(self.rectangles[0]['height'],42)
+        self.assertGreater(self.rectangles[1]['height'],self.rectangles[0]['height'])
+        self.assertEqual(self.rectangles[1]['y'],self.rectangles[0]['y']+54)
+
+    def test_compact_never_moves_imported_pdf_slots(self):
+        box={'box_xy':[100,100],'box_wh':[400,400],'no_chrome':True,
+             'rows':[{'_texts':[]} for _ in range(4)]}
+        box['rows'][1]['_texts']=[{'Text':'Only down is bound'}]
+        self.env['_drawDataDrivenBox'](DrawingProbe(),None,box,compact=True)
+        self.assertEqual(self.rectangles[0]['y'],206)
+        self.assertEqual(self.rectangles[0]['height'],88)
 
     def test_font_fit_stops_and_restores_context(self):
         context = DrawingProbe(impossible=True)

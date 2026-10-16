@@ -1323,7 +1323,57 @@ def _drawControlSymbol(context, x, y_center, symbol, scale=1):
     context.pop()
 
 
-def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Group'):
+def _dataDrivenRowHeights(context, sourceImg, rows, width, available_height, biggestFontSize):
+    """Measure content at one shared font size within the editor's height budget.
+
+    Normal rows keep 6 px vertical padding and a 54 px minimum. This also
+    keeps the symbol/number gutters identical to their drawing geometry.
+    Tiny existing boxes retain the original fitting path instead of growing
+    beyond their reserved space. The caller's rows and context are preserved.
+    """
+    count = max(len(rows), 1)
+    font_size = max(1, min(int(biggestFontSize), 256))
+    if not rows or available_height < 54 * count:
+        return [available_height / count] * count, font_size
+    context.push()
+    try:
+        for size in range(font_size, 0, -1):
+            heights = []
+            for row in rows:
+                scale = min(1, width / 400)
+                gutters = 16 + (_symbolColumnWidth(row.get('symbol')) if row.get('symbol') else 0)
+                if row.get('number') is not None:
+                    gutters += 56
+                text_width = width - gutters * scale - 2 * min(10, width * 0.04)
+                if text_width <= 0:
+                    raise ValueError('Controller row must have a positive text width.')
+                current_x = current_y = 0
+                content_height = size
+                for text in row.get('_texts') or []:
+                    context.font = text['Style']['Font']
+                    context.font_size = size
+                    metrics = context.get_font_metrics(sourceImg, text['Text'], multiline=False)
+                    if int(metrics.text_width) > text_width:
+                        break
+                    if current_x + int(metrics.text_width) > text_width:
+                        current_x = 0
+                        current_y += size
+                    content_height = max(content_height, current_y + size,
+                                         current_y + metrics.text_height)
+                    current_x += int(metrics.text_width + metrics.character_width)
+                else:
+                    heights.append(max(54, math.ceil(content_height) + 12))
+                    continue
+                break  # An individual command needs a smaller font.
+            else:
+                if sum(heights) <= available_height:
+                    return heights, size
+        raise ValueError('Text does not fit this box even at the minimum font size. Enlarge the box.')
+    finally:
+        context.pop()
+
+
+def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Group', compact=False):
     """Draw one box: leader line, header label, frame, per-row symbol + number + binding text.
 
     Boxes with no_chrome=True (imported from a manufacturer AcroForm sheet
@@ -1336,6 +1386,11 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     rows = box.get('rows', [])
     chrome = not box.get('no_chrome')
     header_h = min(40, h / 4) if (box.get('label') and chrome) else 0
+    row_heights = [(h - header_h) / max(len(rows), 1)] * max(len(rows), 1)
+    if compact and chrome:
+        row_heights, biggestFontSize = _dataDrivenRowHeights(
+            context, sourceImg, rows, w, h - header_h, biggestFontSize)
+        h = header_h + sum(row_heights)
 
     # Leader line (orthogonal elbow) from the box side facing the button to the button point
     btn = box.get('button_xy') if chrome else None
@@ -1381,12 +1436,11 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
 
     # Per-row symbol + number gutters (+ light separators)
     rows_top = y + header_h
-    rows_h = h - header_h
-    n = max(len(rows), 1)
-    row_h = rows_h / n
+    row_y = rows_top
     for i, row in enumerate(rows):
-        ry = rows_top + i * row_h
-        rx, rw, rh = x, w, row_h
+        ry = row_y
+        rx, rw, rh = x, w, row_heights[i]
+        row_y += rh
         if not chrome and row.get('field_rect'):
             fx, fy, fw, fh = row['field_rect']
             rx, ry, rw, rh = x + fx * w, y + fy * h, fw * w, fh * h
@@ -1417,7 +1471,8 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
         # Binding text (pre-resolved by createDataDrivenImage), reusing layoutText fitting
         texts = row.get('_texts') or []
         if texts:
-            pad_x, pad_y = min(10, rw * 0.04), min(6, rh * 0.1)
+            pad_x = min(10, rw * 0.04)
+            pad_y = 6 if compact and chrome and rh >= 54 else min(6, rh * 0.1)
             tx = col_x + pad_x
             rect = {'x': tx, 'y': ry + pad_y,
                     'width': rx + rw - tx - pad_x, 'height': rh - 2 * pad_y}
@@ -1595,7 +1650,8 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
                         continue
                     if not box.get('no_chrome'):
                         box = {**box, 'rows': kept}
-                _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling)
+                _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling=styling,
+                                   compact=physicalKeys is not None)
 
             context.draw(sourceImg)
             sourceImg.save(filename=str(filePath))

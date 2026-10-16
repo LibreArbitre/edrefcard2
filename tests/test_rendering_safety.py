@@ -158,6 +158,23 @@ class RenderingSafetyTests(unittest.TestCase):
         mapping['boxes'][0]['rows'][0]['joy'] = 'Joy_RYAxis'
         self.assertEqual(runtime.missing_inputs(mapping,keys),[])
 
+    def test_unknown_or_empty_command_styles_use_general_fallback(self):
+        for field, styling in [('Category','Category'),('Group','Group')]:
+            for value in ['Unregistered command style', None, '']:
+                with self.subTest(field=field, value=value):
+                    control={'Name':'Example','Group':'Ship','Category':'General',
+                             'InputKey':'Joy_1',field:value}
+                    modifier='TEST::0::Joy_2'
+                    physical={'TEST::0::Joy_1':{'Device':'TEST','DeviceIndex':0,
+                        'Key':'Joy_1','BaseKey':'Joy_1','Binds':{
+                            'Unmodified':{'Controls':{'Example':control}},
+                            modifier:{'Controls':{'Example':control}}}}}
+                    modifiers={modifier:[{'Number':1,'ModifierKey':modifier}]}
+                    texts=self.env['_buildJoyTexts'](['TEST'],'Joy_1',0,physical,modifiers,styling)
+                    self.assertEqual(len(texts),2)
+                    expected=self.env['categoryStyles' if styling=='Category' else 'groupStyles']['General']
+                    self.assertTrue(all(t['Style'] is expected for t in texts))
+
     def test_modifier_only_button_is_rendered_and_counted(self):
         modifiers = {'TEST::0::Joy_3':[{'Number':1,'Device':'TEST','DeviceIndex':0,
                                       'Key':'Joy_3','ModifierKey':'TEST::0::Joy_3'}]}

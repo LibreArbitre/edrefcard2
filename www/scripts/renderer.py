@@ -1480,9 +1480,9 @@ def _buildJoyTexts(deviceIds, joyKey, deviceIndex, physicalKeys, modifiers, styl
             if styling == 'Modifier':
                 style = ModifierStyles.index(0)
             elif styling == 'Category':
-                style = categoryStyles.get(control.get('Category', 'General'))
+                style = categoryStyles.get(control.get('Category')) or categoryStyles['General']
             else:
-                style = groupStyles.get(control.get('Group'))
+                style = groupStyles.get(control.get('Group')) or groupStyles['General']
             texts.append({'Text': control.get('Name'), 'Group': control.get('Group'), 'Style': style})
 
     # Modified bindings, in modifier-number order
@@ -1504,10 +1504,10 @@ def _buildJoyTexts(deviceIds, joyKey, deviceIndex, physicalKeys, modifiers, styl
                     style = ModifierStyles.index(curMod)
                     txt = control.get('Name')
                 elif styling == 'Category':
-                    style = categoryStyles.get(control.get('Category', 'General'))
+                    style = categoryStyles.get(control.get('Category')) or categoryStyles['General']
                     txt = '%s[%s]' % (control.get('Name'), curMod)
                 else:
-                    style = groupStyles.get(control.get('Group'))
+                    style = groupStyles.get(control.get('Group')) or groupStyles['General']
                     txt = '%s[%s]' % (control.get('Name'), curMod)
                 texts.append({'Text': txt, 'Group': control.get('Group'), 'Style': style})
     return texts

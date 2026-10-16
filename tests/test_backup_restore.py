@@ -138,6 +138,17 @@ class BackupRestoreTests(unittest.TestCase):
         self.assertNotEqual(first,second)
         self.assertEqual(first.read_bytes(),original)
 
+    def test_new_backups_use_persistent_volume_and_legacy_files_stay_accessible(self):
+        manager=self.manager()
+        path=manager.create_backup()
+        self.assertEqual(path.parent,self.configs/'.backups')
+        manager.legacy_backup_dir.mkdir(parents=True)
+        legacy=manager.legacy_backup_dir/'backup_legacy.tar.gz';legacy.write_bytes(b'old archive')
+        self.assertEqual(manager.get_backup_path(legacy.name),legacy)
+        self.assertEqual({b['filename'] for b in manager.list_local_backups()},{path.name,legacy.name})
+        self.assertIsNone(manager.get_backup_path('../outside.tar.gz'))
+        self.assertIsNone(manager.get_backup_path(str(path)))
+
     def test_safety_backup_failure_aborts_restore(self):
         archive=self.manager().create_backup()
         target=self.configs/'controllers/controller-one.jpg';target.write_bytes(b'keep newer image')

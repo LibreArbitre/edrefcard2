@@ -342,3 +342,26 @@ preserved outside the container. The private owner XML remains non-web-served.
 Next controller work remains Orion owner/visual sign-off, Merc's SOL-R4 drafts,
 and a separate review of STECS Max/STEM. This checkpoint completes the Mini
 pilot, not the entire controller backlog or the mobile editor work.
+
+## Compact generated frames promoted October 16
+
+After visual approval, commit `fa80c95` was promoted from `dev` to `main` and
+deployed on beta. Generated controller rows now use content-based heights and
+consistent padding, bounded by the editor's reserved dimensions. Sparse groups
+shrink instead of stretching their remaining rows. Digital hats stay grouped.
+Imported PDF artwork slots and the legacy renderer remain unchanged.
+
+All 50 Python tests pass without skips in the beta runtime. The deployed
+renderer hash matches staging and the tested commit. An authenticated HTTPS
+preview verifies the compact frame in the actual output pixels. Ty's profile
+renders in all four styles with 26 used inputs covered and all 56 command
+labels at 40 px. BASE measures 160 px; SPEED LIM row heights are 60/180/180 px.
+The compact A4 and Letter exports were reopened and visually inspected.
+
+All five mapping rows and the 3,098 pre-existing configurations are preserved;
+the pre-promotion backup is retained outside the container. The controller
+evidence and current review links are in the STECS Mini delivery note.
+
+Export-cache follow-up: existing cached PDFs are not bulk-regenerated on a
+renderer deployment. Review invalidation when a source image changes as a
+separate export correctness task, without deleting historical configurations.

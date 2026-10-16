@@ -362,6 +362,44 @@ All five mapping rows and the 3,098 pre-existing configurations are preserved;
 the pre-promotion backup is retained outside the container. The controller
 evidence and current review links are in the STECS Mini delivery note.
 
-Export-cache follow-up: existing cached PDFs are not bulk-regenerated on a
-renderer deployment. Review invalidation when a source image changes as a
-separate export correctness task, without deleting historical configurations.
+The PDF cache follow-up identified here is resolved by the reliability release
+below. Historical configurations are retained; no bulk PDF deletion is needed.
+
+## Backup and PDF reliability October 16
+
+Commits `fb0a31e` and `afd3252` are deployed on staging and beta. New version 2
+backup archives include controller source images alongside the database by
+default. A bindings-only backup or restore remains bindings-only. The database
+is captured with SQLite's online backup API, including committed WAL data.
+Generated card images and PDFs remain regenerable and are not archived.
+
+New local archives live in the persistent configs volume's `.backups` folder.
+Remaining archives in the previous application data folder stay accessible.
+Archive names are unique even within the same second. A failed safety backup
+aborts restoration, and database reconnection failures are not reported as
+successful restores. Older archives without controller images remain readable
+without deleting existing assets. Image restoration rejects traversal and
+link entries and replaces individual images atomically.
+
+PDF caches embed a SHA256 signature of the ordered source image names and
+contents. Changed, added or removed sources invalidate the cache even when
+timestamps are preserved. Untouched content reuses it. Legacy or damaged caches
+are regenerated on access. Exports use stable image-byte snapshots and atomic
+PDF replacement; a failed image or write does not overwrite the last good PDF
+with a partial export. Keyboard pages remain last.
+
+All 68 Python tests pass with the server dependencies. Staging and beta code
+hashes match the tested files. Actual HTTPS requests verify A4 and Letter cache
+reuse and invalidation, and the owner-profile exports were reopened and visually
+checked. A new full beta archive was restored only into an isolated folder:
+3,099 configuration records, 3,078 bindings files and 12 source images. Restored
+images are byte-identical. The five live mappings and live maintenance state
+remain unchanged. Authenticated archive download returns 200; unauthenticated
+access through the public configs route is denied.
+
+Run administrative CLI backup jobs as the container's `appuser`, matching the
+web workers, so private archive ownership remains compatible with downloads.
+The final production archive and restoration check were repeated under that
+account. The archive is retained on the persistent volume with an additional
+private copy outside the container. This release does not claim a new off-site
+SFTP transfer or a live database restoration.

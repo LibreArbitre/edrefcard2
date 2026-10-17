@@ -8,6 +8,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import types
@@ -175,4 +176,11 @@ def run(root, installed_www):
 
 
 if __name__ == '__main__':
-    print(json.dumps(run(sys.argv[1],sys.argv[2])))
+    result = run(sys.argv[1],sys.argv[2])
+    if len(sys.argv) > 3:
+        artifacts = Path(sys.argv[3])
+        artifacts.mkdir(parents=True, exist_ok=True)
+        for source in [result['review_image'], *result['pdf_review_images']]:
+            shutil.copy2(source, artifacts / Path(source).name)
+        (artifacts / 'checks.json').write_text(json.dumps(result, indent=2))
+    print(json.dumps(result))

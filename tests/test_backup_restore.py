@@ -16,6 +16,7 @@ import types
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
+from typing import NotRequired, TypedDict
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -41,11 +42,12 @@ class BackupRestoreTests(unittest.TestCase):
             'Path':Path,'os':os,'json':json,'shutil':shutil,'tarfile':tarfile,
             'tempfile':tempfile,'datetime':datetime,'sqlite3':sqlite3,'closing':closing,'uuid4':uuid4,
             '_CONTROLLER_IMAGE_SUFFIXES':frozenset({'.jpg','.jpeg','.png','.webp'}),
+            'TypedDict':TypedDict,'NotRequired':NotRequired,
             'logger':logging.getLogger('backup-test'),
             'log_backup_history':lambda **kwargs:None,
             'set_maintenance_mode':lambda enabled,*args:self.maintenance.append(enabled)}
         tree=ast.parse((ROOT/'www/admin/backup.py').read_text(encoding='utf-8'))
-        nodes=[n for n in tree.body if isinstance(n,ast.ClassDef) and n.name in ('BackupManager','RestoreManager')]
+        nodes=[n for n in tree.body if isinstance(n,ast.ClassDef) and n.name in ('_RestoreResult','BackupManager','RestoreManager')]
         exec(compile(ast.Module(body=nodes,type_ignores=[]),'actual-backup-restore','exec'),self.env)
         self.env['RestoreManager'].reload_gunicorn=lambda instance:False
         with closing(sqlite3.connect(self.configs/'edrefcard.db')) as conn:
@@ -166,6 +168,23 @@ class BackupRestoreTests(unittest.TestCase):
         result=self.restore(archive,create_safety_backup=False)
         self.assertFalse(result['success'])
         self.assertTrue(any('reconnection failed' in error for error in result['errors']))
+
+    def test_database_member_without_file_contents_fails_cleanly(self):
+        archive=self.manager().create_backup()
+        self.destination()
+        real_extract=tarfile.TarFile.extractfile
+        def missing_database(tar,member):
+            name=member if isinstance(member,str) else member.name
+            return None if name=='database/edrefcard.db' else real_extract(tar,member)
+        with patch.object(tarfile.TarFile,'extractfile',missing_database):
+            result=self.restore(archive,restore_binds=False,restore_controller_images=False,
+                                create_safety_backup=False)
+        self.assertFalse(result['success'])
+        self.assertFalse(result['db_restored'])
+        self.assertEqual(result['errors'],['Database restore failed: Database archive entry has no file contents.'])
+        self.assertFalse((self.configs/'edrefcard.db').exists())
+        self.assertEqual(self.reconnected,[])
+        self.assertEqual(self.maintenance,[True,False])
 
     def test_archive_image_traversal_and_links_are_rejected(self):
         archive=self.root/'malicious.tar.gz'

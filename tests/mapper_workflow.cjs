@@ -204,7 +204,7 @@ async function run() {
     await publicPage.locator('img.refcard-image[alt="Controller Reference Card"]').waitFor();
     check('API generation and saved-card reopening use the same published controller');
     check('No browser JavaScript errors', errors.length===0);
-    check('No application HTTP 5xx responses', serverErrors.length===0);
+    check('No unexpected page HTTP 5xx responses', serverErrors.length===0);
     await admin.screenshot({path:path.join(out,'controllers.png'),fullPage:false});
     await mapper.screenshot({path:path.join(out,'editor.png'),fullPage:false});
     await publicPage.screenshot({path:path.join(out,'public-card.png'),fullPage:false});

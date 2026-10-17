@@ -1,6 +1,6 @@
 # EdRefCard2 stabilization and controller delivery
 
-Updated on 2026-10-16. Use the dated delivery checkpoints below rather than old
+Updated on 2026-10-17. Use the dated delivery checkpoints below rather than old
 roadmap completion percentages to assess release readiness. STECS Space Mini
 LH is now published after owner validation. Other controller pilots remain
 separate work; finish their review before adding more editor features.
@@ -403,3 +403,303 @@ The final production archive and restoration check were repeated under that
 account. The archive is retained on the persistent volume with an additional
 private copy outside the container. This release does not claim a new off-site
 SFTP transfer or a live database restoration.
+
+## Orion readiness review October 16
+
+Stephane confirmed a feature freeze: finish and validate existing work before
+adding editor capabilities. Review of the beta database confirms Orion remains
+draft ID 4, hardware `4098BEF0`, with no published snapshot. All five saved mapping
+rows remained unchanged during this review.
+
+The three owner-confirmed axes are present: yaw RZ, left toe brake RY and right
+toe brake RX. Both validation sources remain available. However, the stored
+draft still places yaw at the upper left and the left brake at the lower left;
+the previously requested visual swap was not saved. A candidate preview moves
+the left brake to the upper left and yaw to the lower left, leaving the right
+brake at the lower right. It does not save or publish that candidate.
+
+- [Candidate three-axis layout](https://beta.edrefcard.info/configs/dd/ddpreview-18e1d06085274e3383fc5e0e77f0cddc-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [Candidate with Alicina's actual bindings](https://beta.edrefcard.info/configs/dd/ddpreview-3cd0e68e74f441f9a8c7c269db851d1a-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+Actual authenticated HTTPS previews passed for the owner's profile in all four
+styles and for the three-axis synthetic profile, with no missing used inputs.
+Her profile uses RZ only, so the brake boxes correctly disappear. On-foot Turn
+shares Yaw's input and is intentionally suppressed by the existing HideIfSameAs
+rule, not lost through an incomplete mapping. A4 and Letter exports of the
+candidate owner preview were reopened, rasterized and visually inspected.
+
+Remaining gates: Stephane approves the candidate placement, save that placement
+through the normal draft workflow, obtain Alicina's confirmation of the pedal
+callouts, then authorize publication and verify public generation. No new file
+or fully bound profile is needed from her. No deployment or mapping publication
+was performed during this review.
+
+### Orion aligned preview October 17
+
+Stephane rejected the October 16 elbow-line candidate. The replacement aligns
+each one-row box center with its existing physical anchor and uses equal-size
+850 x 80 px frames. Preview and compact owner renders have straight horizontal
+leaders. The four owner styling previews and the three-axis synthetic preview
+report no missing used inputs. All five saved mappings remain unchanged.
+
+- [Replacement three-axis layout](https://beta.edrefcard.info/configs/dd/ddpreview-036c132060454bb78dcf20d44c70696d-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [Replacement owner preview](https://beta.edrefcard.info/configs/dd/ddpreview-0662ea6b21f44188b50e811583cdd522-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+This is an unsaved visual candidate, not a published template. Final geometry
+still needs visual approval and a dense-axis profile check before saving.
+
+### Approved Orion placement saved October 17
+
+After Stephane's explicit visual approval, the aligned candidate was saved to
+beta draft ID 4 through the authenticated editor save route with optimistic
+concurrency. A SQLite online snapshot was retained privately outside the
+container. The other four mappings remain byte-for-byte unchanged; Orion is
+still a draft without a published snapshot. Reopening the editor and previewing
+the saved document succeed, with no missing used inputs in Alicina's profile.
+
+The actual owner render retains 40 px command text. A synthetic test with six
+independent contexts on each of the three axes renders all 18 labels without
+clipping or omission, using 23 px text. That denser case is readable at native
+resolution but is not equivalent to the owner's 40 px output. Neither the
+synthetic bindings nor an example game assignment was saved in the template.
+
+- [Saved owner-profile preview](https://beta.edrefcard.info/configs/dd/ddpreview-1263a383f4054059b15737729bdec831-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [Approved three-axis diagram](https://beta.edrefcard.info/configs/dd/ddpreview-036c132060454bb78dcf20d44c70696d-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+Next gate: Alicina confirms the physical callout locations, then authorize
+publication and check public generation. No application deployment was needed.
+
+## Public forum evidence refreshed October 17
+
+Read all 12 posts on page 23 (#441-452); it is currently the last page and the
+latest visible post is dated October 10. Earlier evidence through #448 remains
+valid. The October 3 progress update is posted as #449. Merc's #450 comment
+about a semicolon in the beta hyperlink is already resolved in the live #449
+link; the old quoted link in his reply is not the current hyperlink.
+
+Two additional actionable controller dossiers were inspected, including their
+actual downloadable XML and original image attachments. No mapping was created,
+attached or published, and no forum reply was sent during this inspection.
+
+### BigJ: VIRPIL VMAX Prime Throttle
+
+- [Post #451](https://forums.frontier.co.uk/threads/627609/post-10899893), October 5.
+- [Device identity screenshot](https://forums.frontier.co.uk/attachments/1791154555484-png.469106/)
+  explicitly shows L-VPC VMAX Prime Throttle, VID 3344, PID 8196. It also shows
+  R-VPC Stick WarBRD-D, VID 3344, PID 43F5; that identifies the base, not its grip.
+- [Actual bindings](https://forums.frontier.co.uk/attachments/custom-4-2-binds-txt.469108/)
+  parse successfully and contain `33448196` and `334443F5`, plus GamePad.
+  The throttle uses 30 distinct input codes, including X, Y and RX axes. This
+  is usage in this file, not an exhaustive hardware inventory.
+- [Numbered controller worksheet](https://forums.frontier.co.uk/attachments/vmax-prime-throttle-button-mapping-jpg.469110/)
+  is a 4000 x 2823 JPEG. It depicts grouped hats, axes, and the A-F controls
+  in both five-way shift-modifier and no-shift configurations. Establish which
+  logical configuration the owner uses before claiming a universal mapping.
+- XML SHA256: `53f1a7d53734ffd50d73cf04d0807ff5782e4451fae5c77580b80f9f7b8707fb`.
+- Next: acknowledge the supplied files, confirm any VPC logical remapping and
+  shift-selector configuration, then prepare/review a template when this dossier
+  reaches the controller queue. Do not ask for the same bindings or IDs again.
+
+### Judder Man: WINCTRL URSA MINOR Combat Throttle Metal.EX 1.0
+
+- [Post #452](https://forums.frontier.co.uk/threads/627609/post-10903289), October 10.
+- [Actual bindings](https://forums.frontier.co.uk/attachments/custom-4-2-binds-txt.469731/)
+  parse successfully. `4098BC2A` matches the existing URSA MINOR Fighter Right
+  legacy entry; `4098B970` is the distinct throttle and has no current template.
+- The throttle uses 19 distinct input codes: 16 buttons and three axes (Z, RX,
+  RZ). These are the used subset, not the controller's full inventory.
+- Three configuration screenshots show physical numbering, including the
+  button bank, hats, axes, switches, encoder and controls up to button 77:
+  [first view](https://forums.frontier.co.uk/attachments/screenshot-2026-10-10-074426-png.469725/),
+  [second view](https://forums.frontier.co.uk/attachments/screenshot-2026-10-10-074448-png.469726/),
+  [third view](https://forums.frontier.co.uk/attachments/screenshot-2026-10-10-074504-png.469727/).
+- XML SHA256: `4423bdf1b2df502447da602d8b14b148abf563744e97b478891a9498f7a7439a`.
+- Next: acknowledge that the stick is covered but the throttle is separate.
+  Confirm custom logical remapping, if any; begin with supplied screenshots and
+  the normal profile rather than requesting a fully bound file.
+
+User reports that the latest Orion preview message has been sent to Alicina,
+and the request for Modern Standard details has been sent to vishnus by private
+message. Neither reply has arrived in this conversation yet. Preserve the
+feature freeze: finish existing pilots and workflow verification before adding
+editor capabilities. These new files expand the contribution queue, not the
+release acceptance scope.
+
+## Merc SOL-R4 draft review October 17
+
+Read-only review of beta mapping IDs 2 and 3 confirms both remain drafts with
+no published snapshots, last updated by Merc on July 9 and July 7 respectively.
+There are no saved version rows for these older drafts. Both source images are
+present and match their declared dimensions. All five saved mappings remained
+byte-for-byte unchanged throughout the review. No publication, attachment,
+draft save or application deployment was performed.
+
+### Confirmed defects
+
+- Stick: 48 groups, 56 rows, 51 distinct non-empty codes. Five full axes are
+  each repeated twice (X, Y, Z, RX, RZ). Real rendering confirms identical
+  command lists appear twice; the Analogue/Digital row type does not make
+  these full-axis keys direction-specific. RY is represented only by its two
+  half-axis codes, so a normal full RY binding is not covered.
+- Stick: 11 public compatible source profiles were parsed. Only the two recent
+  sol-r profiles have no missing used inputs. The other nine use POV directions
+  absent from the draft; four also use full RY. These are anonymous compatible
+  profiles, not proof that Merc owns any particular source.
+- Stick: the two recent real profiles render without an exception, but their
+  smallest command font is 6 px; some trigger and multi-context blocks are not
+  acceptably readable. The URL overlaps upper boxes, many leaders cross, and
+  the lower portion of the canvas is largely unused.
+- Throttle: 19 groups, 24 rows, 22 distinct non-empty codes. Two rows have empty
+  joy values (groups labelled Joy_ZAxis and AXIS). The first omission causes
+  actual throttle-axis commands to disappear from all three available public
+  compatible profiles. Their used-input coverage reports missing Joy_ZAxis.
+- Throttle: the first two POV rows pair Joy_POV1Down with an up symbol and
+  Joy_POV1Up with a down symbol. The code/symbol inconsistency is confirmed;
+  final physical orientation is part of owner review.
+- Throttle: only negative and positive RZ are mapped. A full analogue RZ use
+  case is uncovered. A full-axis synthetic test reproduces that limitation.
+  Existing real-profile fonts shrink to 11 px; a two-axis group is only 45 px
+  high and some boxes obscure the product image.
+
+### Manufacturer checks
+
+The official [flightstick manual](https://ts.thrustmaster.com/download/accessories/Manuals/SOL-R/Sol-R_FlightStick_user-manual_21L.pdf)
+was read with pypdf and its printed mapping pages 20-22 rendered with Poppler
+and visually inspected. It documents right/left modes and POV enabled/disabled
+variants. Preserve that distinction rather than assuming one hat numbering
+mode covers every owner. Base controls, physical hat/button groups and the
+existing clean image/anchors can be reused.
+
+The official [SOL-R 6 throttle manual](https://ts.thrustmaster.com/download/accessories/Manuals/SOL-R/Sol-R_6_Throttle_user-manual.pdf),
+printed mapping page 14, confirms the main Z throttle, X/Y mini-stick, RZ rocker,
+Slider 0 antenna control, POV and buttons. The remaining empty field appears to
+target the antenna knob. Its actual Elite input code still needs confirmation:
+Joy_UAxis was used as a diagnostic hypothesis, not established as fact from
+the current owner files, which do not bind it.
+
+### Review artifacts and next action
+
+- [Current stick with real bindings](https://beta.edrefcard.info/configs/dd/ddpreview-solr-review-2-689785ca2ca34bcd8929020e23c7ad90-sol-r4.jpg)
+- [Current throttle with real bindings](https://beta.edrefcard.info/configs/dd/ddpreview-solr-review-3-20e57c4dac3a4e369fbbf253871c8c3d-sol-r4-throttle.jpg)
+
+The generated diagnostic report and original source snapshots are retained
+locally outside tracked source. Synthetic inventory outputs are not public
+catalogue records and do not recommend any game assignments.
+
+Recommendation: prepare unsaved corrected template candidates using Merc's
+images and physical anchors; restore the main throttle input, make full/half
+axis handling unambiguous, support documented hat modes, group physical hats
+and enlarge/reposition frames for real command density. Review candidates with
+Stephane before asking Merc to confirm hardware-specific details. Do not
+overwrite his drafts or add editor features under this review authorization.
+
+## Separate SOL-R candidates prepared October 17
+
+With Stephane's approval to prepare previews, two corrected candidates were
+built separately from Merc's database rows. No draft save, publication, alias
+attachment, source-image overwrite or application deployment occurred. All
+five saved mappings and both original image hashes remain unchanged.
+
+The stick candidate groups the existing physical banks, hats, encoder,
+selector and grip controls: 17 groups and 54 unique input rows, including full
+RY and four POV directions. It is explicitly a right-handed grip candidate;
+it does not promise correct physical placement for the left-handed mode.
+Repeated full-axis rows were collapsed so actions are not printed twice.
+
+The throttle candidate has nine groups and 22 known input rows. Main throttle
+Z is restored, the POV arrows match their direction codes, the physical hats
+are grouped and the full RZ row covers full-axis and half-axis uses. This
+aggregation retains all commands but needs owner review for direction clarity.
+The antenna knob is deliberately not assigned a guessed code. A visible review
+note flags the remaining unknown input instead of implying exhaustive support.
+
+Original photos were only cropped, scaled and repositioned on separate review
+canvases, without retouching or AI generation. Original anchors were transformed
+with the photos; grouped controls use the centroid of their existing anchors.
+Candidate JSON retains original source-group indices and anchor coordinates
+for traceability. These physical locations are inherited evidence, not newly
+owner-validated positions.
+
+Twenty-two actual engine renders pass: all 11 public stick profiles and three
+public throttle profiles in Group style; the latest common profile additionally
+in None, Category and Modifier for each controller; and both synthetic input
+inventories. There are no missing used inputs. Captured rendered commands
+match the expected per-input command multiset, including modifiers, without
+introduced duplication or loss. All rendered command text remains 40 px,
+including the dense 135-label stick profile. Normal specialization suppression
+is retained. Main and dense output images were visually inspected.
+
+- [Stick candidate with real bindings](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-2-b7c9bc4a2dbb41e7adf2a298bd97e8b0-solr-candidate-2-69222327c8574c37b6e2455d08cfcbd8.jpg)
+- [Throttle candidate with real bindings](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-3-42e42154733e40ff851d36c0e0a884f7-solr-candidate-3-836fe769094a4db3a8cd7e409712b85d.jpg)
+- [Dense stick profile](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-2-1918370183174b3bb56ee0e4748be8df-solr-candidate-2-69222327c8574c37b6e2455d08cfcbd8.jpg)
+
+Candidate sources, JSON, original JSON snapshots and results are retained
+locally outside tracked source and privately outside the container. Only the
+anonymous generated JPEG previews are served on beta. They are not catalogue
+configuration entries or editable registered mappings. No new PDF export or
+authenticated editor-flow validation is claimed for these candidates yet.
+
+Next: Stephane reviews the two visual candidates, then prepare Merc's focused
+validation message covering inherited physical callouts, right-handed/POV mode,
+trigger behavior, axis direction clarity and the antenna's actual Elite code.
+Do not overwrite Merc's drafts or publish on the basis of preview tests alone.
+
+## SOL-R leader and endpoint review October 17
+
+Stephane requested fewer crossing leaders and more visible endpoints. Separate
+preview candidates now order frames by the vertical positions of their physical
+anchors. Leaders start at the actual compact frame edge, use a diagonal section
+and a short horizontal approach to the control. The preview stroke is 7 px red
+over a 13 px white halo; each hardware endpoint has a red 15 px-radius marker
+with a 5 px white outline. The separate top view of the stick base is retained.
+
+All 22 rendering checks pass again: used-input coverage and command multisets
+are unchanged, with command text at 40 px. Geometric checks find no proper
+leader intersections or leader crossings through other frame edges in these
+outputs. These checks do not establish a general-purpose collision-free layout
+algorithm for arbitrary mappings. Main stick, throttle and dense stick images
+were visually inspected after rendering.
+
+- [Revised stick preview](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-2-4f13f665284943568a1bcf4f18934748-solr-candidate-2-026dbcff521b486c8fa35e7752a233bb.jpg)
+- [Revised throttle preview](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-3-3b1b2f6663ef4abc90ab865f7dcddfe1-solr-candidate-3-7a0a0348f09b4d36923d1885f71b4bc5.jpg)
+- [Revised dense stick preview](https://beta.edrefcard.info/configs/dd/ddpreview-solr-candidate-2-45f8b88487fa44ec8521ca9bac48e20d-solr-candidate-2-026dbcff521b486c8fa35e7752a233bb.jpg)
+
+The routing and drawing override runs only in an isolated diagnostic process.
+The installed renderer, all saved mappings and both original image files remain
+unchanged. Candidate sources and results are retained privately outside the
+container and locally outside tracked source. No publication or application
+deployment occurred. Await Stephane's visual approval before integrating the
+leader style into the application; Merc's hardware review remains necessary.
+
+## Shared leader style integrated and staging verified October 17
+
+Stephane approved the revised previews and explicitly approved generalizing
+the thicker leaders and outlined hardware endpoints to data-driven cards.
+Commit `5dd9c27` adds the same 7 px red stroke, 13 px white halo and red endpoint
+with a 5 px white outline to the shared drawing function. Existing per-controller
+frame positions, anchors and elbow routes are retained. This is not a global
+auto-layout change. The SOL-R diagonal routing and revised source canvases are
+still separate review candidates, not saved mappings.
+
+Legacy artwork and imported `no_chrome` PDF fields are untouched. Mappings
+without anchors remain pixel-identical. Existing downloaded images are not
+rewritten in bulk; the new style appears when a card or preview is rendered
+again. Existing source-sensitive PDF caching handles changed generated images.
+
+Verification:
+
+- All 71 unit tests pass in the staging runtime, with no skipped tests.
+- Real-Wand/Flask integration passes: anchored previews, four styles, coverage,
+  dense modifiers, three legacy templates, input errors and A4/Letter exports.
+- Twenty before/after renders cover all five saved controllers in four styles,
+  using real bindings. The private owner fixture is used for STECS and is never
+  added to Git or the public catalogue. Every text command, font size and text
+  position matches before/after. AEROMAX, which has no stored anchors, remains
+  byte-identical. All saved mapping rows remain unchanged.
+- Orion and STECS output images were visually inspected.
+- Staging deployment is verified by the exact installed renderer SHA256 and an
+  authenticated HTTP preview whose served JPEG contains the expected endpoint
+  pixel. Mapping rows remain unchanged and SQLite quick_check returns ok.
+
+Beta promotion is the next step under Stephane's visual approval. No mapper
+draft or controller publication is part of this renderer-only release.

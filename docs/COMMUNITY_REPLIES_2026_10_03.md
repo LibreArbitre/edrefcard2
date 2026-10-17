@@ -1,7 +1,10 @@
 # Community reply drafts October 3 2026
 
 Ready-to-edit replies for the public thread and the two private conversations.
-They describe work in progress, not released support. None has been sent.
+They describe work in progress, not released support. This is a historical draft
+collection, not a reliable record of unsent replies. The public progress update
+was posted as #449, and Stephane confirmed sending the October 17 Alicina
+follow-up. Current evidence and delivery status are in STABILIZATION_PLAN.md.
 Keep each reply attached to its relevant post rather than posting all replies as
 one large announcement.
 
@@ -142,3 +145,27 @@ your device appear supported with actions beside the wrong controls.
 If you have customized the logical button assignments in VPC Software,
 screenshots of those assignments would be helpful. Otherwise, I'll start with
 the manufacturer sheets and your current file. Thanks for sharing them!
+
+## Alicina follow-up October 17: approved draft ready for owner review
+
+Prepared only, not sent. This supersedes the old promise to send a preview.
+
+Hi Alicina,
+
+The Orion draft is now ready for your final check. I've used your existing
+bindings, so there's no need to upload or change anything.
+
+[Your actual bindings preview](https://beta.edrefcard.info/configs/dd/ddpreview-1263a383f4054059b15737729bdec831-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+Your file only uses the rudder axis, so the unused brake boxes are intentionally
+hidden on that card. The template also covers both toe brakes, as you confirmed:
+left RY, right RX, rudder RZ.
+
+[All three physical callouts](https://beta.edrefcard.info/configs/dd/ddpreview-036c132060454bb78dcf20d44c70696d-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+
+Could you confirm that the brake callouts point to the correct pedals and the
+rudder callout to the correct mechanism? Once you've checked those locations,
+we can publish support on the beta. No need to learn the editor or bind the
+unused brakes.
+
+Thanks again for helping!

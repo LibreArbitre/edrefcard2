@@ -818,7 +818,7 @@ leader, 13 px white halo and filled, white-outlined hardware endpoint. New
 inventory and owner previews were rendered through authenticated HTTPS and the
 served endpoint pixels checked; the inventory image was visually inspected.
 
-- [All three controls with clearer hardware markers](https://beta.edrefcard.info/configs/dd/ddpreview-8c26a1894f4341a89bcd6d41e1e37f04-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [All three controls with clearer hardware markers and canonical beta URL](https://beta.edrefcard.info/configs/dd/ddpreview-9ae9a5881e6b4e0c982dbacd0f06abd4-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
 - [Public renderer using Alicina's existing source](https://beta.edrefcard.info/binds/orion-owner-validation-20261003)
 
 The public saved-card route renders the published Orion and its real actions;
@@ -833,3 +833,26 @@ SQLite quick_check is ok, and the four other mapping rows are unchanged,
 including both Merc drafts. This closes the Orion hardware-review/publication
 gate. SOL-R owner verification remains separate and pending. Staging controller
 data was not overwritten with the beta database.
+
+## Canonical beta URL corrected October 17
+
+The deployed APP_URL still referenced https://edrefcard2.l0l.fr. Config.webRoot
+intentionally uses the configured external URL, not the request Host, so opening
+an editor preview through beta.edrefcard.info did not change its printed address.
+After Stephane's approval, only APP_URL was changed in the persistent Dokploy
+Compose environment to https://beta.edrefcard.info and the stack redeployed.
+Every other environment line was compared privately and remains identical.
+
+The running container now has the canonical beta URL. Fresh Orion inventory and
+owner previews were generated through HTTPS; the printed beta.edrefcard.info
+address was visually checked. The owner saved-card route and A4/Letter downloads
+were regenerated and checked as well. The fresh owner preview is:
+
+[Orion with actual owner bindings and canonical beta URL](https://beta.edrefcard.info/configs/dd/ddpreview-9cb10200ca0b4c5f8b13fba01d5d5f2c-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg).
+
+Saved mapping rows, all 3,100 existing configuration IDs and 12 controller source
+assets are unchanged, and SQLite quick_check is ok. The prior environment and a
+coherent database snapshot are preserved privately outside the container. No
+source-code change or bulk rewrite of historical preview images was needed.
+Old preview URLs and downloaded images can still show the old printed address;
+share the fresh links above. Future renders use the canonical beta URL.

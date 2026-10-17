@@ -724,3 +724,41 @@ layout candidates still await hardware review before replacing Merc's drafts.
 The release applies the visibility style on subsequent data-driven renders, not
 as a bulk rewrite of saved JPEGs or previously downloaded files. Legacy artwork
 and no_chrome imported PDF artwork retain their original lines and markers.
+
+## Blocking CI and real contributor journey October 17
+
+Commit `c2be23f` replaces the best-effort Python test step with blocking Python,
+real-Wand/PDF and authenticated browser workflow checks. Container build and
+startup remain blocking in their own job. Legacy Ruff/Mypy debt is explicitly
+advisory in a separate job, not silently treated as a clean codebase. Existing
+GitHub branch protection and merge permissions were not changed.
+
+[GitHub Actions run 39054468836](https://github.com/LibreArbitre/edrefcard2/actions/runs/39054468836)
+passed all three jobs. Evidence includes 71 Python tests plus 15 subtests with
+no skips/failures, real rendering and A4/Letter integration, and 25 browser
+workflow assertions. The CI produced screenshots, synthetic PDFs and machine-
+readable results; selected desktop screenshots and the PDF raster were visually
+inspected. Browser JavaScript errors and application HTTP 5xx counts are zero.
+
+The browser journey uses real sessions, pages, routes, SQLite and generated
+images. It covers mapper creation/permissions, photo upload, scaffold, anchors,
+real-bind preview, save/reopen, local recovery, stale-tab conflict, publication,
+replacement-photo draft isolation, rollback as a new draft, republication,
+fresh web upload, API generation and saved-card reopening. Public JPEG hashes
+are compared before/after draft edits and rollback to prove publication isolation.
+No application responses are intercepted or successful saves mocked.
+
+An independent scratch copy of the application was also exercised using the
+staging runtime through a private SSH tunnel. The live staging database contains
+none of the synthetic users, hardware IDs or profile records and quick_check is
+ok. The disposable server and tunnel were stopped after testing. The fixture
+overrides inherited credentials, database location and scheduler mode; generated
+test credentials stay outside source and uploaded CI artifacts. The browser
+checks a per-instance nonce before making its first write.
+
+Reproduction commands and limits are documented in [Testing](TESTING.md).
+This certifies the tested desktop Chromium flow, not mobile editor layout,
+every device variant, HTTPS cookie behavior or multi-worker scaling. Hardware
+owner sign-off remains necessary for Orion and the separate SOL-R candidates.
+No new user feature, beta data change or application deployment is needed for
+this test-only batch.

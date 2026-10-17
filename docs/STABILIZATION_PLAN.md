@@ -703,3 +703,24 @@ Verification:
 
 Beta promotion is the next step under Stephane's visual approval. No mapper
 draft or controller publication is part of this renderer-only release.
+
+## Shared leader style delivered to beta October 17
+
+Main and dev were aligned at `806494a` for delivery; the rendering change is
+`5dd9c27`. Dokploy beta deployment completed and the installed renderer SHA256
+matches staging and the reviewed source. An authenticated preview request to
+beta produced a served JPEG with the expected red endpoint at its actual
+anchor, verifying the live request path rather than only an HTTP 200 or build
+status. All 71 unit tests and the real-Wand/Flask/PDF integration suite pass
+again in the delivered beta runtime.
+
+A coherent pre-deployment SQLite snapshot was preserved privately outside the
+container. Post-deployment checks confirm all 3,100 existing configuration IDs
+are still present, all five mapping rows match their pre-deployment hash, all
+12 controller source assets match their hashes, and SQLite quick_check is ok.
+No controller draft was saved or published in this release. The separate SOL-R
+layout candidates still await hardware review before replacing Merc's drafts.
+
+The release applies the visibility style on subsequent data-driven renders, not
+as a bulk rewrite of saved JPEGs or previously downloaded files. Legacy artwork
+and no_chrome imported PDF artwork retain their original lines and markers.

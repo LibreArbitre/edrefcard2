@@ -762,3 +762,39 @@ every device variant, HTTPS cookie behavior or multi-worker scaling. Hardware
 owner sign-off remains necessary for Orion and the separate SOL-R candidates.
 No new user feature, beta data change or application deployment is needed for
 this test-only batch.
+
+## Bounded static-debt and reliability lot October 17
+
+Commit `ccaacd6` fixes two concrete defects without changing the editor workflow:
+
+- An unexpected preview-rendering failure used an unimported `logError`, masking
+  the intended JSON error response with a second exception. The real authenticated
+  workflow now checks a missing image and its expected HTTP 500 JSON response.
+- The shared font fitter checked individual command width only for the first
+  command on a line. A later overlong command could wrap but still overflow its
+  box. Every command is now checked at each candidate size. A regression test
+  failed before the fix, and an additional real-Wand metrics check passes.
+
+PDF worksheet fields, scaffold grouping and recent-error types are made explicit;
+an optional database filter is narrowed once. These changes preserve stored JSON
+formats and runtime behavior. The same-runtime full Mypy comparison falls from
+174 to 119 diagnostics, with no new ignores. GitHub's different dependency set
+reports 120 remaining Mypy diagnostics and 32 Ruff diagnostics. This is a bounded
+reduction, not a claim that all static debt is resolved.
+
+The three clarified modules have a blocking targeted Mypy check. Undefined names
+and loop-variable shadowing are also blocking Ruff checks. The full legacy static
+analysis remains visible and advisory.
+
+[CI run 39056087037](https://github.com/LibreArbitre/edrefcard2/actions/runs/39056087037)
+passes 72 Python tests, real rendering/PDF checks, 26 real mapper workflow checks,
+the targeted static gates and container build/startup. Staging is deployed and
+verified by three installed source hashes, an authenticated HTTPS preview and the
+expected JSON error response. Real-Wand/PDF integration also passes in that
+deployed runtime. The deliberately induced error is not an unexpected page error.
+
+A coherent SQLite snapshot was preserved privately outside the container before
+deployment. All 2,912 existing configuration IDs, saved mapping rows and four
+controller source assets are unchanged; SQLite quick_check is ok. No draft was
+saved, published or replaced. Beta/main promotion has not been performed for this
+lot; the verified application change is currently on dev/staging only.

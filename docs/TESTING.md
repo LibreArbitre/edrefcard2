@@ -62,6 +62,7 @@ It covers:
 
 - Admin login, mapper creation and mapper login; role restrictions.
 - Photo upload, blank scaffold, physical anchors, real-bind preview and coverage.
+- A missing preview image returns the expected structured HTTP 500 error.
 - Draft save, reopen and browser-local recovery after reload.
 - First publication and actual public card generation.
 - Editing both the title and photo without changing the public card's bytes.
@@ -69,7 +70,7 @@ It covers:
 - Publishing a reviewed revision and downloading both PDF formats.
 - History inspection, rollback as a new draft, and explicit republication.
 - Fresh web upload, API generation and reopening of generated cards.
-- Browser JavaScript errors and application HTTP 5xx responses.
+- Browser JavaScript errors and unexpected page HTTP 5xx responses.
 
 `PLAYWRIGHT_EXECUTABLE_PATH` can select an installed Chromium-based executable
 for a local check; Playwright still creates fresh, isolated browser profiles.

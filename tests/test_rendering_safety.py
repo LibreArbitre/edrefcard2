@@ -30,6 +30,8 @@ class DrawingProbe:
         self.balance = self.calls = 0
         self.impossible = impossible
         self.written = []
+        self.lines = []
+        self.circles = []
 
     def push(self):
         self.balance += 1
@@ -50,7 +52,10 @@ class DrawingProbe:
         pass
 
     def line(self, *args):
-        pass
+        self.lines.append((args, self.stroke_color, self.stroke_width))
+
+    def circle(self, *args):
+        self.circles.append((args, self.stroke_color, self.stroke_width, self.fill_color))
 
 
 class ImageProbe:
@@ -94,6 +99,36 @@ class RenderingSafetyTests(unittest.TestCase):
             'label':'BTN1','box_xy':[74,204],'box_wh':[193,40], 'rows':[row]})
         self.assertEqual(len(self.rectangles), 1)
         self.assertGreater(self.rectangles[0]['height'], 20)
+
+    def test_leader_has_white_halo_red_stroke_and_marked_hardware_anchor(self):
+        context = DrawingProbe()
+        box = {'box_xy':[100,200], 'box_wh':[400,120], 'button_xy':[800,500],
+               'rows':[{}]}
+        before = copy.deepcopy(box)
+        self.env['_drawDataDrivenBox'](context, None, box)
+        route = [((500,260),(650,260)), ((650,260),(650,500)), ((650,500),(800,500))]
+        self.assertEqual(context.lines, [(p,'white',13) for p in route] +
+                         [(p,'#962320',7) for p in route])
+        self.assertEqual(context.circles, [(((800,500),(815,500)), 'white',5,'#962320')])
+        self.assertEqual(context.balance, 0)
+        self.assertEqual(box, before)
+
+    def test_compact_leader_starts_at_actual_frame_not_reserved_height(self):
+        context = DrawingProbe()
+        self.env['_drawDataDrivenBox'](context, None, {
+            'label':'Compact', 'box_xy':[100,200], 'box_wh':[900,600],
+            'button_xy':[50,500], 'rows':[{}]}, compact=True)
+        self.assertEqual(context.lines[0][0][0], (100,247))
+        self.assertEqual(context.circles[0][0][0], (50,500))
+
+    def test_no_anchor_or_imported_pdf_has_no_new_leader_or_endpoint(self):
+        for extra in [{}, {'button_xy':[800,500], 'no_chrome':True}]:
+            context = DrawingProbe()
+            self.env['_drawDataDrivenBox'](context, None, {
+                'box_xy':[100,200], 'box_wh':[400,120], 'rows':[{}], **extra})
+            self.assertEqual(context.lines, [])
+            self.assertEqual(context.circles, [])
+            self.assertEqual(context.balance, 0)
 
     def test_tiny_word_symbol_gutters_leave_room_for_text(self):
         self.env['_drawDataDrivenBox'](DrawingProbe(), None, {

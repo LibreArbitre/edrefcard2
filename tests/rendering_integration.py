@@ -48,12 +48,16 @@ def run(root, installed_www):
     mapping = {'image':'probe','title':'Stabilization render checks',
                'width':1200,'height':850,'device_ids':['TEST'],'styling':'Group', 'boxes':[
         {'label':'Small 193 x 40','box_xy':[60,180],'box_wh':[193,40],
+         'button_xy':[580,320],
          'rows':[{'joy':'Joy_1','symbol':'press','number':1}]},
         {'label':'Negative direction','box_xy':[60,260],'box_wh':[500,120],
+         'button_xy':[580,460],
          'rows':[{'joy':'Neg_Joy_RYAxis'}]},
         {'label':'Positive direction','box_xy':[620,260],'box_wh':[500,120],
+         'button_xy':[580,540],
          'rows':[{'joy':'Pos_Joy_RYAxis'}]},
         {'label':'Imported hat','box_xy':[60,440],'box_wh':[500,300], 'no_chrome':True,
+         'button_xy':[580,650],
          'rows':[{'joy':f'Joy_{n}', 'field_rect':[0,(n-1)*.25,1,.20]}
                  for n in range(1,5)]},
     ]}

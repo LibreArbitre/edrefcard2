@@ -18,6 +18,7 @@ import sqlite3
 from pathlib import Path
 from contextlib import closing
 from uuid import uuid4
+from typing import NotRequired, TypedDict
 
 import paramiko
 import requests
@@ -31,6 +32,32 @@ from scripts.models import Config
 logger = logging.getLogger(__name__)
 
 _CONTROLLER_IMAGE_SUFFIXES = frozenset({'.jpg', '.jpeg', '.png', '.webp'})
+
+
+class _RestoreResult(TypedDict):
+    success: bool
+    safety_backup: str | None
+    db_restored: bool
+    binds_restored: int
+    controller_images_restored: int
+    errors: list[str]
+    db_path: NotRequired[str]
+    gunicorn_reloaded: NotRequired[bool]
+
+
+class _DiscordField(TypedDict):
+    name: str
+    value: str
+    inline: NotRequired[bool]
+
+
+class _DiscordEmbed(TypedDict):
+    title: str
+    description: str
+    color: int
+    timestamp: str
+    footer: dict[str, str]
+    fields: NotRequired[list[_DiscordField]]
 
 
 # ============== Encryption Utilities ==============
@@ -247,8 +274,8 @@ def get_maintenance_message() -> str:
 class BackupManager:
     """Handles creating and managing backups."""
     
-    def __init__(self):
-        self.configs_path = Config.configsPath()
+    def __init__(self) -> None:
+        self.configs_path: Path = Config.configsPath()
         self.data_path = Path(__file__).parent.parent / 'data'
         self.legacy_backup_dir = self.data_path / 'backups'
         self.backup_dir = self.configs_path / '.backups'
@@ -276,7 +303,7 @@ class BackupManager:
             include_controller_images = include_db
         timestamp = datetime.datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')
         filename = f"backup_{timestamp}_{uuid4().hex}.tar.gz"
-        final_backup_path = self.backup_dir / filename
+        final_backup_path: Path = self.backup_dir / filename
         
         # Use a temporary file to avoid concurrent write corruption
         temp_fd, temp_path_str = tempfile.mkstemp(suffix='.tar.gz', dir=str(self.backup_dir))
@@ -478,7 +505,7 @@ def _resolve_safe_public_ip(host: str) -> str:
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
             raise ValueError(f"Refusing to connect to non-public address ({ip}) for host '{host}'")
         if safe_ip is None:
-            safe_ip = info[4][0]
+            safe_ip = str(info[4][0])
     if safe_ip is None:
         raise ValueError(f"No address found for host '{host}'")
     return safe_ip
@@ -690,7 +717,7 @@ class RestoreManager:
                              restore_db: bool = True,
                              restore_binds: bool = True,
                              create_safety_backup: bool = True,
-                             restore_controller_images=None) -> dict:
+                             restore_controller_images=None) -> _RestoreResult:
         """Restore from a backup archive.
         
         Args:
@@ -705,7 +732,7 @@ class RestoreManager:
         """
         if restore_controller_images is None:
             restore_controller_images = restore_db
-        results = {
+        results: _RestoreResult = {
             'success': False,
             'safety_backup': None,
             'db_restored': False,
@@ -752,7 +779,10 @@ class RestoreManager:
                         
                         with tempfile.TemporaryDirectory() as tmpdir:
                             extracted_db = Path(tmpdir) / 'edrefcard.db'
-                            with tar.extractfile(db_member) as source, open(extracted_db, 'wb') as target:
+                            source = tar.extractfile(db_member)
+                            if source is None:
+                                raise ValueError('Database archive entry has no file contents.')
+                            with source, open(extracted_db, 'wb') as target:
                                 shutil.copyfileobj(source, target)
                             with closing(sqlite3.connect(extracted_db.resolve().as_uri() + '?mode=ro', uri=True)) as check:
                                 if check.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
@@ -946,7 +976,7 @@ class DiscordNotifier:
         return cls(webhook_url=settings.get('discord_webhook_url', ''))
     
     def send_notification(self, title: str, message: str, 
-                          success: bool = True, fields: list = None) -> bool:
+                          success: bool = True, fields: list[_DiscordField] | None = None) -> bool:
         """Send a notification to Discord.
         
         Args:
@@ -968,7 +998,7 @@ class DiscordNotifier:
             logger.error(f"Refusing to send to invalid Discord webhook: {e}")
             return False
 
-        embed = {
+        embed: _DiscordEmbed = {
             'title': title,
             'description': message,
             'color': 0x28a745 if success else 0xdc3545,  # Green or red

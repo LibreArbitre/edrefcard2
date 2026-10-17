@@ -915,3 +915,28 @@ configuration IDs are preserved; SQLite quick_check is ok. A coherent pre-deploy
 snapshot remains outside the container. The beta database was not copied to
 staging. This code lot is on dev/staging only, pending beta promotion; the
 successful beta SFTP recovery drill above used the already installed beta code.
+
+## Backup typing lot delivered to beta October 17
+
+After Stephane's explicit promotion approval, main was fast-forwarded to
+`d20bfab` and the beta Compose stack manually redeployed through Dokploy. The
+installed backup.py SHA256 matches staging's tested module. The promoted
+[main CI run 39063901992](https://github.com/LibreArbitre/edrefcard2/actions/runs/39063901992)
+passes all jobs, including 75 Python tests, 26 real mapper checks, rendering/PDF
+checks, four targeted module type checks and container build/startup.
+
+A coherent pre-deployment SQLite snapshot and controller-image hashes were
+preserved privately outside the container. A fresh beta backup was restored
+only into a private temporary folder using the installed application module,
+with worker reload disabled. All 3,079 bindings and 12 controller source images
+match their archived hashes. Live and restored SQLite quick_checks are ok.
+All 3,100 existing configuration IDs, mapping/user rows and live maintenance
+state are preserved. SFTP credentials, destination, schedule and webhook settings
+match the pre-deploy database; no remote upload, purge or notification was
+triggered during this promotion check. Normal local backup bookkeeping was used.
+
+The authenticated backup dashboard returns HTTPS 200 and APP_URL still equals
+https://beta.edrefcard.info. No controller draft or publication changed. The
+37-diagnostic reduction is now delivered, not merely prepared on staging.
+Explicit SFTP host-key pinning remains separate, unimplemented security debt;
+this typing release does not change the established connection policy.

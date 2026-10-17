@@ -2,7 +2,7 @@
 
 Updated on 2026-10-17. Use the dated delivery checkpoints below rather than old
 roadmap completion percentages to assess release readiness. STECS Space Mini
-LH is now published after owner validation. Other controller pilots remain
+LH and WINCTRL Orion pedals are now published after owner validation. Other controller pilots remain
 separate work; finish their review before adding more editor features.
 
 ## Initial deployment and data before stabilization
@@ -798,3 +798,38 @@ deployment. All 2,912 existing configuration IDs, saved mapping rows and four
 controller source assets are unchanged; SQLite quick_check is ok. No draft was
 saved, published or replaced. Beta/main promotion has not been performed for this
 lot; the verified application change is currently on dev/staging only.
+
+## Orion owner approval and reliability lot delivered to beta October 17
+
+Alicina replied "Looks great! Thanks so much!" to the final request to check the
+physical callouts. Stephane authorized Orion publication, reliability promotion,
+and reuse of the already approved shared leader/endpoint style on this controller.
+
+Main was fast-forwarded to `bd85a48` and manually deployed through Dokploy. The
+installed renderer and admin source hashes match the staging-tested application.
+[Main CI run 39056835710](https://github.com/LibreArbitre/edrefcard2/actions/runs/39056835710)
+is green. The real-Wand/rendering/PDF suite also passes in the delivered beta
+runtime, including the overlong-command regression.
+
+Orion mapping ID 4, hardware `4098BEF0`, is now published through the normal admin
+publication endpoint with its reviewed revision timestamp. Its saved mapping JSON
+and placement were not modified. All three controls use the shared 7 px red
+leader, 13 px white halo and filled, white-outlined hardware endpoint. New
+inventory and owner previews were rendered through authenticated HTTPS and the
+served endpoint pixels checked; the inventory image was visually inspected.
+
+- [All three controls with clearer hardware markers](https://beta.edrefcard.info/configs/dd/ddpreview-8c26a1894f4341a89bcd6d41e1e37f04-winctrl-orion-rudder-a107b27b7378499a8b9ec7f1939c9c18.jpg)
+- [Public renderer using Alicina's existing source](https://beta.edrefcard.info/binds/orion-owner-validation-20261003)
+
+The public saved-card route renders the published Orion and its real actions;
+unused brake axes remain hidden for this profile. Both A4 and Letter downloads
+return PDFs and the device appears on the supported-device page. No synthetic
+configuration was added to the catalogue. Previously downloaded images are not
+modified; new renders use the shared style.
+
+A coherent pre-deploy snapshot remains privately outside the container. All
+3,100 prior configuration IDs and 12 controller source assets are preserved,
+SQLite quick_check is ok, and the four other mapping rows are unchanged,
+including both Merc drafts. This closes the Orion hardware-review/publication
+gate. SOL-R owner verification remains separate and pending. Staging controller
+data was not overwritten with the beta database.

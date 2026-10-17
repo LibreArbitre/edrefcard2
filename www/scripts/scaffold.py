@@ -63,7 +63,8 @@ def extract_device_keys(xml, device_id):
 
 def _cluster_buttons(numbers):
     """Split sorted button numbers into consecutive runs, capped per box."""
-    runs, current = [], []
+    runs: list[list[int]] = []
+    current: list[int] = []
     for n in numbers:
         if current and n != current[-1] + 1:
             runs.append(current)
@@ -81,7 +82,7 @@ def _cluster_buttons(numbers):
 
 def group_keys(keys):
     """Group raw Key values into draft boxes (label + rows, no positions)."""
-    povs = {}            # 'POV1' -> {'Up': key, ...}
+    povs: dict[str, dict[str, str]] = {}  # 'POV1' -> {'Up': key, ...}
     buttons = []         # ints
     axes = []            # 'X', 'RZ', ...
     others = []

@@ -1198,13 +1198,13 @@ def calculateBestFitFontSize(context, width, height, texts, biggestFontSize):
     """
     if width <= 0 or height <= 0:
         raise ValueError('Text area must have positive width and height.')
-    fontSize = max(1, min(int(biggestFontSize), 256))
+    maxFontSize = max(1, min(int(biggestFontSize), 256))
     if not texts:
-        return fontSize
+        return maxFontSize
     context.push()
     try:
         with Image(width=max(1, math.ceil(width)), height=max(1, math.ceil(height))) as img:
-            for fontSize in range(fontSize, 0, -1):
+            for fontSize in range(maxFontSize, 0, -1):
                 currentX = 0
                 currentY = 0
                 tooLong = False
@@ -1212,10 +1212,12 @@ def calculateBestFitFontSize(context, width, height, texts, biggestFontSize):
                     context.font = text['Style']['Font']
                     context.font_size = fontSize
                     metrics = context.get_font_metrics(img, text['Text'], multiline=False)
+                    # Every command must fit on its own, including commands
+                    # encountered after the first item on a line.
+                    if int(metrics.text_width) > width:
+                        tooLong = True
+                        break
                     if currentX + int(metrics.text_width) > width:
-                        if currentX == 0:
-                            tooLong = True
-                            break
                         currentX = 0
                         currentY += fontSize
                     text['X'] = currentX

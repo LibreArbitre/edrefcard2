@@ -6,6 +6,12 @@ check are blocking: any failure makes the workflow fail. Ruff and Mypy findings
 against the legacy code are explicitly advisory in a separate job. This does
 not configure GitHub branch-protection or change merge permissions.
 
+Undefined names and unsafe loop-variable reuse (Ruff F821/F822/F823/B020) are
+blocking across application code and tests. The clarified PDF import, scaffold
+and error-log modules also have a blocking Mypy check. Imported-module
+diagnostics are omitted only in that targeted check; the separate full-project
+Mypy job still reports the remaining debt without suppressing error categories.
+
 Runner images are fixed to Ubuntu 24.04 instead of the moving ubuntu-latest
 label. Official checkout/setup/artifact actions use explicit release versions
 whose declared runtime is Node.js 24; application browser tests use Node.js 22.

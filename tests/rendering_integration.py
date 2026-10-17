@@ -15,6 +15,7 @@ import types
 
 from flask import Flask, request, url_for, current_app
 from wand.image import Image
+from wand.drawing import Drawing
 
 
 def run(root, installed_www):
@@ -97,6 +98,15 @@ def run(root, installed_www):
         config.makeDir()
         assert renderer.createDataDrivenImage(mapping, config, False, physical, modifiers, styling)
         assert config.pathWithNameAndSuffix('probe','.jpg').stat().st_size > 1000
+    # A later command must fit individually even when the first command is short.
+    with Image(width=400, height=200, background='white') as image, Drawing() as drawing:
+        drawing.font = renderer.getFontPath('Regular', 'Normal')
+        texts = [{'Text':text, 'Style':{'Font':drawing.font}} for text in ['A', 'W'*30]]
+        size = renderer.calculateBestFitFontSize(drawing,120,180,texts,40)
+        assert 0 < size < 40
+        drawing.font_size = size
+        for text in texts:
+            assert int(drawing.get_font_metrics(image,text['Text'],multiline=False).text_width) <= 120
     registry = importlib.import_module('scripts.bindingsData').supportedDevices
     for hardware in ['ThrustMasterWarthogJoystick','SaitekX56Joystick','044F0405']:
         legacy_xml = f'<Root><PrimaryFire><Primary Device="{hardware}" Key="Joy_1"/></PrimaryFire></Root>'
@@ -170,7 +180,7 @@ def run(root, installed_www):
                 pdf[0].get_pixmap(matrix=fitz.Matrix(1,1)).save(str(sandbox / ('pdf-' + fmt + '.png')))
     assert 'None::0' not in devices
     assert logs == [], logs
-    return {'checks':'real preview, coverage, directions, dense modifiers, four styles, three legacy templates, A4/Letter PDF, concurrent outputs and input errors passed',
+    return {'checks':'real preview, coverage, directions, dense modifiers, long-command fitting, four styles, three legacy templates, A4/Letter PDF, concurrent outputs and input errors passed',
             'review_image':str(sandbox / 'st/style-group-probe.jpg'),
             'pdf_review_images':[str(sandbox / 'pdf-A4.png'),str(sandbox / 'pdf-Letter.png')]}
 

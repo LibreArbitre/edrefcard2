@@ -15,6 +15,7 @@ binding text inside the manufacturer's artwork instead of redrawing frames.
 
 import io
 import re
+from typing import Any, TypedDict
 
 import fitz  # PyMuPDF
 from PIL import Image
@@ -32,7 +33,18 @@ _DIR_SYMBOL = {'U': 'up', 'R': 'right', 'D': 'down', 'L': 'left', 'P': 'press'}
 _ROLE_RE = re.compile(r'_(Name|Desc|Min|Max|Mid)$')
 
 
-def _vkb_boxes(page, zoom):
+class _WorksheetField(TypedDict):
+    """Measured widget geometry before fields become extensible JSON groups."""
+    label: str
+    physical_group: str
+    box_xy: list[int]
+    box_wh: list[int]
+    button_xy: None
+    no_chrome: bool
+    rows: list[dict[str, Any]]
+
+
+def _vkb_boxes(page: Any, zoom: float) -> tuple[list[dict[str, Any]], str | None]:
     """Read VKB/UntoldForce blank worksheets, not hardware input numbers.
 
     A/B and 1/2 pairs are number/description columns. Field suffixes are
@@ -43,7 +55,7 @@ def _vkb_boxes(page, zoom):
     if 'VKB STECS' not in text or 'UntoldForce' not in text:
         return [], None
     widgets = {w.field_name: w for w in page.widgets() or []}
-    entries = []
+    entries: list[tuple[str, float, float, _WorksheetField]] = []
     for name, widget in widgets.items():
         if name.upper().startswith('USER'):
             continue
@@ -78,7 +90,7 @@ def _vkb_boxes(page, zoom):
                       'verification': 'unverified', 'source_field': name}],
         }))
     entries.sort(key=lambda item: (item[0], item[1], item[2]))
-    grouped = []
+    grouped: list[dict[str, Any]] = []
     for group in sorted({entry[0] for entry in entries}):
         members = [entry for entry in entries if entry[0] == group]
         members.sort(key=lambda item: (item[1], item[2]))
@@ -86,7 +98,7 @@ def _vkb_boxes(page, zoom):
         top = min(item[3]['box_xy'][1] for item in members)
         right = max(item[3]['box_xy'][0] + item[3]['box_wh'][0] for item in members)
         bottom = max(item[3]['box_xy'][1] + item[3]['box_wh'][1] for item in members)
-        rows = []
+        rows: list[dict[str, Any]] = []
         for row_number, (_, _, _, member) in enumerate(members, 1):
             row = dict(member['rows'][0])
             row['source_row'] = row_number
@@ -112,7 +124,7 @@ def _vkb_boxes(page, zoom):
 
 def _family_boxes(page):
     """Group the page's widgets into {family: {role: widget}} dicts."""
-    fams = {}
+    fams: dict[str, dict[str, Any]] = {}
     for w in page.widgets() or []:
         name = w.field_name or ''
         m = _ROLE_RE.search(name)

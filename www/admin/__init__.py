@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
-from scripts import database, parseBindings, slugify
+from scripts import database, parseBindings, slugify, logError
 
 from scripts.models import Config, Errors
 from extensions import limiter

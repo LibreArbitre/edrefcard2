@@ -223,6 +223,12 @@ class RenderingSafetyTests(unittest.TestCase):
         self.assertEqual(self.env['calculateBestFitFontSize'](context, 200, 20,
             [{'Text':'Test','Style':{'Font':'test'}}], 20), 20)
 
+    def test_font_fit_checks_long_commands_after_a_short_command(self):
+        texts = [{'Text':text, 'Style':{'Font':'test'}} for text in ['A', 'X'*30]]
+        size = self.env['calculateBestFitFontSize'](DrawingProbe(), 100, 100, texts, 10)
+        self.assertEqual(size, 6)
+        self.assertTrue(all(len(t['Text'])*size/2 <= 100 for t in texts))
+
     def test_invalid_dimensions_fail_before_image_creation(self):
         for width, height in [(0,10),(10,-12)]:
             with self.assertRaises(ValueError):

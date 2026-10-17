@@ -329,8 +329,8 @@ def list_configurations(page=1, per_page=50, public_only=True, search=None, devi
         """)
         params.append(f"%{device_filter}%")
 
-    if kwargs.get('device_filters'):
-        device_filters = kwargs.get('device_filters')
+    device_filters = kwargs.get('device_filters')
+    if device_filters:
         placeholders = ', '.join(['?'] * len(device_filters))
         where_clauses.append(f"c.id IN (SELECT config_id FROM config_devices WHERE device_display_name IN ({placeholders}))")
         params.extend(device_filters)

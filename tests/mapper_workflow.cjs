@@ -108,6 +108,12 @@ async function run() {
     await mapper.locator('#btnpreview').click();
     await mapper.locator('#previewcoverage').filter({hasText:'All bound inputs are covered'}).waitFor();
     check('Real bind preview covers both assigned inputs');
+    const brokenPreview = {...await mapper.evaluate(() => mapping()), image:'ci-missing-image'};
+    const failedPreview = await mapper.request.post(base + '/admin/mapping-editor/preview', {
+      headers:{Origin:base}, data:{mapping:brokenPreview}});
+    assert.equal(failedPreview.status(),500);
+    assert.match((await failedPreview.json()).error, /Preview failed/);
+    check('Unexpected rendering failure returns a structured error instead of crashing its logger');
     const first = await save(mapper);
     check('Mapper saves a non-public draft', first.public_status==='draft');
     await mapper.reload();

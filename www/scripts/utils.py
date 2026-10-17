@@ -113,7 +113,7 @@ def transKey(key):
     return trans
 
 
-RECENT_ERRORS = []
+RECENT_ERRORS: list[str] = []
 
 def logError(message):
     """Log an error message to stderr and a persistent file.

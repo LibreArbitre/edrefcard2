@@ -1397,15 +1397,18 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
     if btn:
         bx, by = btn
         context.push()
-        context.stroke_color = Color(_LEADER_COLOR)
-        context.stroke_width = 3
         context.fill_color = Color('transparent')
         sx = x + w if bx >= x + w else x
         sy = y + h / 2
         midx = (sx + bx) / 2
-        context.line((sx, sy), (midx, sy))
-        context.line((midx, sy), (midx, by))
-        context.line((midx, by), (bx, by))
+        # Keep the stored layout and existing route. A white halo separates the
+        # stronger red leader from dark hardware without changing its anchor.
+        for color, width in [('white', 13), (_LEADER_COLOR, 7)]:
+            context.stroke_color = Color(color)
+            context.stroke_width = width
+            context.line((sx, sy), (midx, sy))
+            context.line((midx, sy), (midx, by))
+            context.line((midx, by), (bx, by))
         context.pop()
 
     # Header bar + label
@@ -1485,6 +1488,15 @@ def _drawDataDrivenBox(context, sourceImg, box, biggestFontSize=40, styling='Gro
                 context.fill_color = Color('Black') if styling == 'None' else t['Style']['Color']
                 context.text(x=int(t['X']), y=int(t['Y']), body=t['Text'])
                 context.pop()
+
+    if btn:
+        # Draw last so the endpoint stays distinct from this box's chrome.
+        context.push()
+        context.stroke_color = Color('white')
+        context.stroke_width = 5
+        context.fill_color = Color(_LEADER_COLOR)
+        context.circle((bx, by), (bx + 15, by))
+        context.pop()
 
 
 def _buildJoyTexts(deviceIds, joyKey, deviceIndex, physicalKeys, modifiers, styling):

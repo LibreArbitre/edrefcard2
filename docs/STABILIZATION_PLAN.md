@@ -856,3 +856,62 @@ coherent database snapshot are preserved privately outside the container. No
 source-code change or bulk rewrite of historical preview images was needed.
 Old preview URLs and downloaded images can still show the old printed address;
 share the fresh links above. Future renders use the canonical beta URL.
+
+## Off-site backup round-trip and isolated recovery verified October 17
+
+The existing automatic backup and SFTP settings were already enabled. History
+showed successful scheduled transfers, including October 17. Verification used
+the existing destination and credentials without changing either. The SFTP
+destination resolves to a different server from beta's public interfaces.
+
+A fresh complete manual archive was created as appuser, uploaded with the normal
+SFTP manager, listed remotely, downloaded again and compared with SHA256. The
+21,343,751-byte source and received archive are byte-identical. The application's
+restore implementation restored the received copy only into a new private
+temporary folder. Its Config path and database path were changed before the
+restore manager was constructed; worker reload was disabled in this diagnostic
+process. Live maintenance mode was never enabled.
+
+Results: 3,100 configurations, 3,079 bindings files and 12 controller source images
+restored. Every restored binding/image matches its archived SHA256. Restored
+mapping and user rows match the archive, and both database quick_checks return
+ok. Live mapping/user rows, maintenance state and existing configurations remain
+unchanged. No remote/local retention cleanup or notification was invoked. Only
+normal backup bookkeeping and the successful SFTP-upload flag were recorded.
+The archive and private recovery evidence are retained outside the container as
+well as in the persistent backup location and on the configured SFTP server.
+
+Limits: this is an isolated application-level recovery, not a live database swap
+or a complete VPS rebuild. A separate security debt remains: SFTPManager uses
+Paramiko Transport.connect without an explicitly pinned host key. This drill
+does not certify host-key identity validation; future hardening requires a
+trusted server fingerprint rather than silently trusting a newly observed key.
+
+## Backup typing debt reduced and staging verified October 17
+
+Commit `3e19372` adds explicit internal TypedDict contracts for restore reports,
+Discord fields and embeds, plus Path annotations for backup output. Optional
+notification fields are typed as optional; returned dictionaries and notification
+JSON retain their existing shape. A missing database-member stream now produces
+a specific failed-restore result rather than attempting to enter a None context.
+No SFTP credentials, destination, schedule or retention policy changed.
+
+Three new tests cover that failure path and the two notification payload shapes.
+All 75 Python tests pass, with 15 subtests in the application runtime.
+[CI run 39063505134](https://github.com/LibreArbitre/edrefcard2/actions/runs/39063505134)
+is green, including 26 real browser checks, rendering/PDF integration and
+container startup. The targeted blocking type gate now includes backup.py and
+passes all four selected modules. No error categories or new lines were ignored.
+
+The comparable full Mypy count falls from 119 to 82 in the same runtime. GitHub's
+dependency set reports 83 remaining Mypy findings, down from 120, and 32 Ruff
+findings. These residual legacy checks remain visible and advisory.
+
+Staging deployment is verified by the exact installed backup.py SHA256 and an
+authenticated HTTPS backup-dashboard request. A fresh staging archive restores
+only into a private temporary folder: 2,927 bindings and four source images are
+byte-identical. Mapping/user rows, live maintenance state and all 2,912 previous
+configuration IDs are preserved; SQLite quick_check is ok. A coherent pre-deploy
+snapshot remains outside the container. The beta database was not copied to
+staging. This code lot is on dev/staging only, pending beta promotion; the
+successful beta SFTP recovery drill above used the already installed beta code.

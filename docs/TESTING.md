@@ -6,6 +6,10 @@ check are blocking: any failure makes the workflow fail. Ruff and Mypy findings
 against the legacy code are explicitly advisory in a separate job. This does
 not configure GitHub branch-protection or change merge permissions.
 
+Runner images are fixed to Ubuntu 24.04 instead of the moving ubuntu-latest
+label. Official checkout/setup/artifact actions use explicit release versions
+whose declared runtime is Node.js 24; application browser tests use Node.js 22.
+
 ## Python and rendering
 
 Use Python 3.13, the application's requirements and the ImageMagick shared

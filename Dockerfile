@@ -56,4 +56,5 @@ ENTRYPOINT ["docker-entrypoint.sh"]
 # --max-requests recycles workers so memory bloated by card rendering is returned
 # (a worker reached 1.4 GB on 2026-10-31). When the worker holding scheduler.lock
 # is recycled, its replacement takes the lock back at import (see app.py).
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--max-requests", "1000", "--max-requests-jitter", "100", "app:app"]
+# --no-control-socket: gunicorn 26 otherwise tries to create ~/.gunicorn, and appuser has no home.
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--max-requests", "1000", "--max-requests-jitter", "100", "--no-control-socket", "app:app"]

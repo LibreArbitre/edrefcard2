@@ -53,4 +53,7 @@ EXPOSE 8000
 
 # Use entrypoint to fix permissions then drop privileges
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "app:app"]
+# --max-requests recycles workers so memory bloated by card rendering is returned
+# (a worker reached 1.4 GB on 2026-10-31). When the worker holding scheduler.lock
+# is recycled, its replacement takes the lock back at import (see app.py).
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "--max-requests", "1000", "--max-requests-jitter", "100", "app:app"]

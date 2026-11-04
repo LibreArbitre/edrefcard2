@@ -35,3 +35,9 @@ downloaded_binds/
 # Local tooling artefacts
 .playwright-mcp/
 /vpc-120-r_02_upscayl_3x_high-fidelity-4x.png
+
+# Internal notes: contributor exchanges, infra details (repo is public)
+docs/internal/
+
+# Local controller drafts and evidence (large, not versioned)
+/output/

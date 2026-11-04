@@ -98,6 +98,12 @@ app.register_blueprint(web_bp)
 # (Limiter is defined in extensions.py which web.py uses)
 limiter.init_app(app)
 
+# Staging access gate (ACCESS_TOKEN): registered before every other
+# before_request hook so nothing renders for an unauthenticated visitor.
+import staging_gate  # noqa: E402
+
+staging_gate.register(app)
+
 
 # Register CLI commands
 app.cli.add_command(clean_cache_command)

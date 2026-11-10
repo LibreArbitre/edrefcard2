@@ -7,9 +7,9 @@ This module contains the core data models and configuration classes.
 
 import os
 import re
+import secrets
 import string
 import random
-from enum import Enum
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -80,6 +80,43 @@ class Config:
             config = Config(Config.randomName())
         return config
     
+    @staticmethod
+    def claimUnique(base_id, is_taken=None):
+        """Reserve a free config id derived from base_id and return its Config.
+
+        The id is claimed by atomically creating its (empty) .binds file, so
+        two simultaneous uploads of the same filename can never share an id,
+        and an existing config is never overwritten. Nearly every upload is
+        called Custom.4.2.binds: the old "append 3 random letters once,
+        without re-checking" scheme was bound to overwrite a previous card.
+
+        Args:
+            base_id: slug to start from (used as is when free)
+            is_taken: optional callable(id) -> bool for ids reserved
+                elsewhere (database rows whose source file is gone)
+        """
+        base_id = (base_id or '')[:80].strip('-')
+        alphabet = string.ascii_lowercase + string.digits
+        attempt = 0
+        while True:
+            if attempt == 0 and base_id:
+                name = base_id
+            else:
+                # 4 characters, growing if a prefix ever gets crowded
+                suffix = ''.join(secrets.choice(alphabet) for _ in range(4 + attempt // 20))
+                name = f'{base_id}-{suffix}' if base_id else Config.randomName() + suffix
+            attempt += 1
+            config = Config(name)
+            if config.path().exists() or (is_taken is not None and is_taken(name)):
+                continue
+            config.makeDir()
+            try:
+                with open(config.pathWithSuffix('.binds'), 'x'):
+                    pass
+            except FileExistsError:
+                continue
+            return config
+
     def __init__(self, name):
         """Initialize a Config with the given name.
         
@@ -202,16 +239,6 @@ class Config:
         """Get the URL to download the binds file."""
         url = urljoin(Config.webRoot(), "configs/%s.binds" % self.name)
         return url
-
-
-class Mode(Enum):
-    """Operating modes for the application."""
-    invalid = 0
-    blocks = 1
-    list = 2
-    replay = 3
-    generate = 4
-    listDevices = 5
 
 
 class Errors:

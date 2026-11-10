@@ -12,7 +12,7 @@ Currently hosted at [https://edrefcard2.l0l.fr/](https://edrefcard2.l0l.fr/).
   * `gunicorn` - WSGI HTTP server
   * `lxml` - XML parsing
   * `wand` - ImageMagick bindings
-  * `pytest`, `pytest-cov` - Testing
+  * `pytest`, `pytest-cov` - Testing (in `requirements-dev.txt`, with the lint tools)
 
 * ImageMagick 6 or 7
   * You may need to configure the `MAGICK_HOME` env var to get `wand` to see the ImageMagick libraries.

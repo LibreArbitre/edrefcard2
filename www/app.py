@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, render_template, request
 from markupsafe import escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -57,6 +57,24 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max upload
 app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 app.config['WWW_DIR'] = WWW_DIR
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Fail closed: the image and the code ship placeholder credentials so the app
+# starts out of the box in development. In production they would sign the
+# session cookies, derive the SFTP password encryption key and open the admin
+# panel to anyone who read the repository.
+_PLACEHOLDER_SECRETS = frozenset({
+    '', 'dev-secret-key-change-in-production', 'dev-secret-key', 'change-this-in-production'})
+_PLACEHOLDER_ADMIN_PASSWORDS = frozenset({'', 'changeme'})
+if os.environ.get('APP_ENV', 'development').lower() == 'production':
+    _unsafe = [name for name, value, placeholders in (
+        ('FLASK_SECRET_KEY', app.secret_key, _PLACEHOLDER_SECRETS),
+        ('EDREFCARD_ADMIN_PASS', os.environ.get('EDREFCARD_ADMIN_PASS', 'changeme'),
+         _PLACEHOLDER_ADMIN_PASSWORDS),
+    ) if value in placeholders]
+    if _unsafe:
+        raise RuntimeError(
+            'Refusing to start with APP_ENV=production and placeholder credentials: set '
+            + ' and '.join(_unsafe) + ' to strong private values.')
 # Session cookie hardening (session auth for admin/mapper accounts)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -204,6 +222,8 @@ init_backup_scheduler()
 @app.errorhandler(RateLimitExceeded)
 def handle_ratelimit_error(e):
     """Handle rate limit exceeded."""
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Rate limit exceeded', 'detail': str(e.description)}), 429
     return render_template('error.html', 
                            error_message=f'<h1>Rate Limit Exceeded</h1><p>{escape(str(e.description))}</p>'), 429
 

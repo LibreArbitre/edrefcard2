@@ -135,7 +135,111 @@ APP_PROBE = textwrap.dedent('''
                                    'X-Forwarded-Proto': 'https', 'Host': 'cards.example'})
     out['proxy'] = json.loads(response.get_data(as_text=True))
     out['hsts'] = 'Strict-Transport-Security' in response.headers
+
+    # --- unique ids: same filename uploaded again and again
+    first = Config.claimUnique('custom-4-2')
+    claimed = [Config.claimUnique('custom-4-2').name for _ in range(40)]
+    out['unique'] = [first.name, len(set(claimed + [first.name])),
+                     all(Config.isValidName(name) for name in claimed),
+                     Config.claimUnique('reserved', is_taken=lambda name: name == 'reserved').name != 'reserved']
+
+    # --- a PDF only holds the pages of its own config
+    try:
+        import fitz
+        from PIL import Image
+        for name in ('pdfcard', 'pdfcard-abc'):
+            config = Config(name)
+            config.makeDir()
+            config.pathWithSuffix('.binds').write_text('<Root/>')
+            Image.new('RGB', (600, 400), 'red').save(config.pathWithNameAndSuffix('device', '.jpg'))
+        response = client.get('/download/pdfcard/pdf')
+        with fitz.open(stream=response.get_data(), filetype='pdf') as pdf:
+            out['pdf_pages'] = len(pdf)
+        response.close()
+    except ImportError:
+        out['pdf_pages'] = None
+
+    # --- sessions follow the user table
+    from werkzeug.security import generate_password_hash
+    origin = {'Origin': 'http://localhost'}
+    user_id = database.create_user('mapper1', generate_password_hash('first-password'), 'mapper')
+    mapper = appmod.app.test_client()
+    steps = [mapper.post('/admin/login', headers=origin,
+                         data={'username': 'mapper1', 'password': 'first-password'}).status_code,
+             mapper.get('/admin/controllers').status_code]
+    database.update_user_password(user_id, generate_password_hash('second-password'))
+    steps.append(mapper.get('/admin/controllers').status_code)
+    mapper.post('/admin/login', headers=origin, data={'username': 'mapper1', 'password': 'second-password'})
+    steps.append(mapper.get('/admin/controllers').status_code)
+    database.delete_user(user_id)
+    steps.append(mapper.get('/admin/controllers').status_code)
+    out['session'] = steps
+    out['login_redirect'] = client.post(
+        '/admin/login?next=/%5Cevil.example', headers=origin,
+        data={'username': 'admin', 'password': 'probe-password'}).headers.get('Location')
+
+    # --- backups: rotation only touches scheduled backups, settings keep their status
+    import time
+    from admin import backup as bk
+    settings = {'sftp_enabled': False, 'sftp_host': 'sftp.example', 'sftp_port': 22}
+    bk.save_backup_settings(settings)
+    manager = bk.BackupManager()
+    made = {}
+    for index, kind in enumerate(('manual', 'pre_restore', 'scheduled', 'scheduled')):
+        path = manager.create_backup(backup_type=kind)
+        stamp = time.time() - 1000 + index * 100
+        os.utime(path, (stamp, stamp))
+        made.setdefault(kind, []).append(path)
+    deleted = manager.cleanup_old_backups(keep_count=1)
+    out['retention'] = [deleted, made['manual'][0].exists(), made['pre_restore'][0].exists(),
+                        made['scheduled'][0].exists(), made['scheduled'][1].exists()]
+    bk.save_backup_settings(settings)
+    out['last_backup_kept'] = bool(bk.get_backup_settings().get('last_backup_at'))
+
+    # --- SFTP: host key pinned on first use, filenames validated before any connection
+    def refused(call):
+        try:
+            call()
+        except ValueError:
+            return True
+        return False
+    pinned = bk.SFTPManager('sftp.example', 22, 'u', 'p', '/d', pin_host_key=True)
+    pinned._verify_host_key('SHA256:first')
+    adhoc = bk.SFTPManager('other.example', 22, 'u', 'p', '/d')
+    adhoc._verify_host_key('SHA256:whatever')
+    out['sftp'] = [bk.get_pinned_sftp_host_key('SFTP.example', 22),
+                   refused(lambda: pinned._verify_host_key('SHA256:second')),
+                   refused(lambda: pinned._verify_host_key('SHA256:first')),
+                   bk.get_pinned_sftp_host_key('other.example', 22),
+                   refused(lambda: pinned.download_backup('../backup_x.tar.gz')),
+                   refused(lambda: pinned.download_backup('notes.txt'))]
+    bk.forget_sftp_host_key('sftp.example', 22)
+    out['sftp'].append(bk.get_pinned_sftp_host_key('sftp.example', 22))
+
+    # --- error.log is rotated instead of growing forever
+    from scripts import utils
+    log_path = Config.configsPath() / 'error.log'
+    log_path.write_text('x' * (utils.ERROR_LOG_MAX_BYTES + 1))
+    utils.logError('after rotation')
+    out['log'] = [log_path.with_name('error.log.1').exists(), log_path.stat().st_size < 1000]
+
     print('PROBE=' + json.dumps(out))
+''')
+
+STARTUP_PROBE = textwrap.dedent('''
+    import os, sys, types
+    try:
+        import wand.image  # noqa: F401
+    except ImportError:
+        for name in ('wand', 'wand.image', 'wand.drawing', 'wand.color', 'wand.font'):
+            module = types.ModuleType(name)
+            sys.modules[name] = module
+            for attr in ('Image', 'Drawing', 'Color', 'Font'):
+                setattr(module, attr, type(attr, (), {'__init__': lambda self, *a, **k: None}))
+    sys.path.insert(0, sys.argv[1])
+    os.chdir(sys.argv[1])
+    import app  # noqa: F401
+    print('STARTED')
 ''')
 
 APP_DEPENDENCIES = ('flask', 'flask_limiter', 'lxml', 'paramiko', 'requests', 'cryptography')
@@ -185,6 +289,70 @@ class AppRegressionTests(unittest.TestCase):
         self.assertTrue(secure)
         self.assertEqual(url, 'https://cards.example/binds/x')
         self.assertTrue(self.out['hsts'])
+
+    def test_same_filename_never_reuses_an_id(self):
+        first, distinct, valid, avoided_reserved = self.out['unique']
+        self.assertEqual(first, 'custom-4-2')
+        self.assertEqual(distinct, 41)
+        self.assertTrue(valid)
+        self.assertTrue(avoided_reserved)
+
+    def test_pdf_excludes_the_cards_of_a_longer_sibling_id(self):
+        if self.out['pdf_pages'] is None:
+            self.skipTest('PyMuPDF and Pillow required')
+        self.assertEqual(self.out['pdf_pages'], 1)
+
+    def test_session_ends_when_password_changes_or_user_is_deleted(self):
+        # login, page, page after reset, page after new login, page after delete
+        self.assertEqual(self.out['session'], [302, 200, 302, 200, 302])
+
+    def test_login_redirect_stays_on_the_site(self):
+        self.assertNotIn('evil.example', self.out['login_redirect'])
+
+    def test_rotation_keeps_manual_and_safety_backups(self):
+        self.assertEqual(self.out['retention'], [1, True, True, False, True])
+        self.assertTrue(self.out['last_backup_kept'])
+
+    def test_sftp_host_key_is_pinned_and_filenames_are_validated(self):
+        pinned, changed_refused, same_refused, adhoc_pin, traversal, not_backup, forgotten = self.out['sftp']
+        self.assertEqual(pinned, 'SHA256:first')
+        self.assertTrue(changed_refused)
+        self.assertFalse(same_refused)
+        self.assertEqual(adhoc_pin, '')
+        self.assertTrue(traversal)
+        self.assertTrue(not_backup)
+        self.assertEqual(forgotten, '')
+
+    def test_error_log_is_rotated(self):
+        self.assertEqual(self.out['log'], [True, True])
+
+
+@unittest.skipUnless(all(importlib.util.find_spec(name) for name in APP_DEPENDENCIES),
+                     'application dependencies required')
+class ProductionStartupTests(unittest.TestCase):
+    def start(self, **overrides):
+        with tempfile.TemporaryDirectory(prefix='edrefcard-startup-') as folder:
+            env = {**os.environ, 'EDREFCARD_CONFIGS_DIR': folder, 'APP_ENV': 'production', 'APP_URL': ''}
+            for name in ('ACCESS_TOKEN', 'FLASK_SECRET_KEY', 'EDREFCARD_ADMIN_PASS'):
+                env.pop(name, None)
+            env.update(overrides)
+            return subprocess.run([sys.executable, '-c', STARTUP_PROBE, str(WWW)],
+                                  capture_output=True, text=True, env=env, timeout=120)
+
+    def test_production_refuses_placeholder_credentials(self):
+        for overrides in ({},
+                          {'FLASK_SECRET_KEY': 'change-this-in-production', 'EDREFCARD_ADMIN_PASS': 'a-real-password'},
+                          {'FLASK_SECRET_KEY': 'a-long-private-random-key', 'EDREFCARD_ADMIN_PASS': 'changeme'}):
+            completed = self.start(**overrides)
+            self.assertNotEqual(completed.returncode, 0, overrides)
+            self.assertIn('placeholder credentials', completed.stderr)
+            self.assertNotIn('STARTED', completed.stdout)
+
+    def test_production_starts_with_private_credentials(self):
+        completed = self.start(FLASK_SECRET_KEY='a-long-private-random-key',
+                               EDREFCARD_ADMIN_PASS='a-real-password')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn('STARTED', completed.stdout)
 
 
 if __name__ == '__main__':

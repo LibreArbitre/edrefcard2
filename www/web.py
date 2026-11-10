@@ -1,6 +1,4 @@
 import os
-import random
-import string
 import tempfile
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app, abort
@@ -217,7 +215,10 @@ def generate():
                                error_message='<h1>Only .binds files are allowed</h1>')
     
     try:
-        xml_bytes = file.read()
+        # Read one byte past the limit at most: the global MAX_CONTENT_LENGTH
+        # (sized for admin backup uploads) must not let a public upload
+        # load 100 MB in memory before being rejected.
+        xml_bytes = file.read(512001)
         if len(xml_bytes) > 512000:
             return render_template('error.html',
                                    error_message='<h1>File too large. Maximum size is 500KB</h1>')
@@ -246,23 +247,12 @@ def generate():
     elif request.form.get('styling') == 'modifier':
         styling = 'Modifier'
     
-    # Generate config ID from filename
+    # Reserve a unique config ID derived from the filename (never reuses or
+    # overwrites an existing card, see Config.claimUnique)
     base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
-    if not base_id:
-        base_id = Config.randomName()
-
-    
-    run_id = base_id
-    config = Config(run_id)
-    
-    # If ID already exists, append a short random suffix
-    if config.exists():
-        suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
-        run_id = f"{base_id}-{suffix}"
-        config = Config(run_id)
-
-    
-    config.makeDir()
+    config = Config.claimUnique(
+        base_id, is_taken=lambda name: database.get_configuration(name) is not None)
+    run_id = config.name
     
     binds_path = config.pathWithSuffix('.binds')
     with open(str(binds_path), 'w', encoding='utf-8') as f:
@@ -505,6 +495,7 @@ def list_configs():
 
 
 @web_bp.route('/binds/<run_id>')
+@limiter.limit("60 per minute")
 def show_binds(run_id):
     """Show a saved configuration."""
     import codecs
@@ -742,9 +733,13 @@ def generate_pdf(run_id, page_format='A4'):
     pdf_filename = f"{run_id}-{page_format}.pdf"
     pdf_path = config_dir / pdf_filename
     
-    # Search for images
+    # Search for images. The directory is shared with other configs and ids
+    # can be prefixes of one another ('custom-4-2' vs 'custom-4-2-abc'), so
+    # drop the images that belong to a longer sibling id.
     search_pattern = f"{run_id}-*.jpg"
-    all_files = list(config_dir.glob(search_pattern))
+    siblings = [p.stem + '-' for p in config_dir.glob(f"{run_id}-*.binds")]
+    all_files = [p for p in config_dir.glob(search_pattern)
+                 if not any(p.name.startswith(sibling) for sibling in siblings)]
 
     keyboard_img = None
     device_images = []
@@ -855,6 +850,7 @@ def generate_pdf(run_id, page_format='A4'):
     return str(pdf_path)
 
 @web_bp.route('/download/<run_id>/pdf')
+@limiter.limit("30 per minute")
 def download_pdf(run_id):
     """Download existing or generate new PDF."""
     if not Config.isValidName(run_id):

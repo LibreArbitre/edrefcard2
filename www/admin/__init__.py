@@ -550,7 +550,7 @@ def backup_download(filename):
 @require_admin
 def backup_settings():
     """Backup settings page."""
-    from .backup import get_backup_settings, save_backup_settings
+    from .backup import get_backup_settings, save_backup_settings, get_pinned_sftp_host_key
     
     if request.method == 'POST':
         settings = {
@@ -579,7 +579,22 @@ def backup_settings():
         return redirect(url_for('admin.backup_settings'))
     
     settings = get_backup_settings()
-    return render_template('admin/backup_settings.html', settings=settings)
+    return render_template('admin/backup_settings.html', settings=settings,
+                           sftp_host_key=get_pinned_sftp_host_key(
+                               settings.get('sftp_host') or '', settings.get('sftp_port') or 22))
+
+
+@admin_bp.route('/backup/sftp-forget-key', methods=['POST'])
+@require_admin
+def backup_sftp_forget_key():
+    """Forget the pinned SFTP host key (server legitimately reinstalled).
+    The next connection made from the saved settings pins the new key."""
+    from .backup import get_backup_settings, forget_sftp_host_key
+    settings = get_backup_settings()
+    if settings.get('sftp_host'):
+        forget_sftp_host_key(settings['sftp_host'], settings.get('sftp_port') or 22)
+        flash('Pinned SFTP host key forgotten. The next connection will record the new one.', 'success')
+    return redirect(url_for('admin.backup_settings'))
 
 
 @admin_bp.route('/backup/sftp-test', methods=['POST'])
@@ -667,11 +682,12 @@ def restore_from_upload():
         flash('Please select at least one component to restore.', 'warning')
         return redirect(url_for('admin.restore_dashboard'))
     
+    tmp_path = None
     try:
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp:
-            file.save(tmp.name)
             tmp_path = Path(tmp.name)
+            file.save(tmp)
         
         # Perform restore
         restore_manager = RestoreManager()
@@ -680,9 +696,6 @@ def restore_from_upload():
             restore_db=restore_db,
             restore_binds=restore_binds
         )
-        
-        # Cleanup temp file
-        tmp_path.unlink(missing_ok=True)
         
         if results['success']:
             flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
@@ -704,6 +717,9 @@ def restore_from_upload():
             
     except Exception as e:
         flash(f'Restore failed: {e}', 'danger')
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
     
     return redirect(url_for('admin.restore_dashboard'))
 
@@ -850,7 +866,9 @@ def login():
                                   request.form.get('password', ''))
         if user:
             nxt = request.form.get('next') or request.args.get('next') or ''
-            if not nxt.startswith('/') or nxt.startswith('//'):
+            # Internal path only ("//x", a backslash and control chars leave the site)
+            if (not nxt.startswith('/') or nxt.startswith('//') or '\\' in nxt
+                    or any(c < ' ' for c in nxt)):
                 nxt = ''
             if not nxt:
                 nxt = url_for('admin.controllers') if user['role'] == 'mapper' \

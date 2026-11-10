@@ -1,6 +1,4 @@
 import re
-import random
-import string
 from flask import Blueprint, request, jsonify, url_for
 from scripts import (
     Config,
@@ -11,12 +9,14 @@ from scripts import (
     slugify
 )
 from scripts import database
+from extensions import limiter
 from scripts.parser import ALL_DISPLAY_GROUPS
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
 @api_bp.route('/generate', methods=['GET', 'POST'])
+@limiter.limit("30 per hour", methods=['POST'])
 def generate_api():
     """
     API Endpoint to generate reference card.
@@ -52,34 +52,24 @@ def generate_api():
         return jsonify({'error': 'Invalid file extension. Must be .binds'}), 400
 
     try:
-        xml_bytes = file.read()
+        xml_bytes = file.read(512001)
         if len(xml_bytes) > 512000:
             return jsonify({'error': 'File too large (max 500KB)'}), 413
             
         xml = xml_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        return jsonify({'error': 'Invalid file encoding. UTF-8 required'}), 400
     except Exception as e:
-        return jsonify({'error': f'File parsing error: {str(e)}'}), 400
+        logError(f'API file read error: {e}')
+        return jsonify({'error': 'File could not be read'}), 400
 
     # 2. Setup Config
     try:
-        # Generate config ID from filename
-
+        # Reserve a unique config ID derived from the filename
         base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
-        if not base_id:
-            base_id = ''.join(random.choice(string.ascii_lowercase) for _ in range(6))
-
-        
-        run_id = base_id
-        config = Config(run_id)
-        
-        # If ID already exists, append a short random suffix
-        if config.exists():
-            suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
-            run_id = f"{base_id}-{suffix}"
-            config = Config(run_id)
-
-        
-        config.makeDir()
+        config = Config.claimUnique(
+            base_id, is_taken=lambda name: database.get_configuration(name) is not None)
+        run_id = config.name
         
         binds_path = config.pathWithSuffix('.binds')
         with open(str(binds_path), 'w', encoding='utf-8') as f:
@@ -168,8 +158,9 @@ def generate_api():
         })
 
     except Exception as e:
+        # Details go to the server log only, never to the client
         logError(f'API Error {run_id if "run_id" in locals() else "unknown"}: {e}')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error while generating the reference card'}), 500
 
 @api_bp.route('/binds/<run_id>', methods=['GET'])
 def get_bind_info(run_id):

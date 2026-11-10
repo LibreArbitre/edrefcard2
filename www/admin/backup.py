@@ -16,7 +16,7 @@ import logging
 import signal
 import sqlite3
 from pathlib import Path
-from contextlib import closing
+from contextlib import closing, contextmanager
 from uuid import uuid4
 from typing import NotRequired, TypedDict
 
@@ -178,12 +178,25 @@ def save_backup_settings(settings: dict) -> None:
         encrypted_password = encrypt_password(settings['sftp_password'])
     
     with database.get_db() as conn:
+        # Upsert: INSERT OR REPLACE rebuilt the row and reset last_backup_at
+        # and last_backup_status on every settings save.
         conn.execute("""
-            INSERT OR REPLACE INTO backup_settings 
+            INSERT INTO backup_settings
             (id, sftp_enabled, sftp_host, sftp_port, sftp_user, sftp_password_encrypted,
              sftp_remote_dir, auto_backup_enabled, backup_schedule_hour, discord_webhook_url,
              updated_at)
             VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                sftp_enabled = excluded.sftp_enabled,
+                sftp_host = excluded.sftp_host,
+                sftp_port = excluded.sftp_port,
+                sftp_user = excluded.sftp_user,
+                sftp_password_encrypted = excluded.sftp_password_encrypted,
+                sftp_remote_dir = excluded.sftp_remote_dir,
+                auto_backup_enabled = excluded.auto_backup_enabled,
+                backup_schedule_hour = excluded.backup_schedule_hour,
+                discord_webhook_url = excluded.discord_webhook_url,
+                updated_at = excluded.updated_at
         """, (
             1 if settings.get('sftp_enabled') else 0,
             settings.get('sftp_host', ''),
@@ -446,16 +459,26 @@ class BackupManager:
         backups.sort(key=lambda x: x['created_at'], reverse=True)
         return backups
     
-    def cleanup_old_backups(self, keep_count: int = 1) -> int:
-        """Remove old local backups, keeping only the most recent ones.
+    def cleanup_old_backups(self, keep_count: int = 1, backup_type: str = 'scheduled') -> int:
+        """Remove old local backups of one type, keeping the most recent ones.
+
+        Only backups recorded in the history with this type are rotated.
+        Manual backups and pre-restore safety backups are never deleted
+        here: the nightly job used to remove them the following night.
         
         Args:
-            keep_count: Number of backups to keep
+            keep_count: Number of backups of this type to keep
+            backup_type: History type to rotate ('scheduled' by default)
             
         Returns:
             Number of backups deleted
         """
-        backups = self.list_local_backups()
+        from scripts import database
+        with database.get_db() as conn:
+            rotated = {row['filename'] for row in conn.execute(
+                "SELECT filename FROM backup_history WHERE backup_type = ? AND status = 'success'",
+                (backup_type,))}
+        backups = [b for b in self.list_local_backups() if b['filename'] in rotated]
         deleted = 0
         
         for backup in backups[keep_count:]:
@@ -511,15 +534,54 @@ def _resolve_safe_public_ip(host: str) -> str:
     return safe_ip
 
 
+def _is_backup_filename(filename: str) -> bool:
+    """True for a plain 'backup_*.tar.gz' name (no directory component)."""
+    return (isinstance(filename, str) and Path(filename).name == filename
+            and '\\' not in filename and filename.startswith('backup_')
+            and filename.endswith('.tar.gz'))
+
+
+def _host_key_state_key(host: str, port: int) -> str:
+    return f'sftp_host_key:{str(host).strip().lower()}:{int(port)}'
+
+
+def get_pinned_sftp_host_key(host: str, port: int) -> str:
+    """Fingerprint recorded for this SFTP server, or '' when none yet."""
+    if not host:
+        return ''
+    return get_app_state(_host_key_state_key(host, port), '')
+
+
+def forget_sftp_host_key(host: str, port: int) -> None:
+    """Drop the pinned fingerprint (server legitimately reinstalled)."""
+    from scripts import database
+    with database.get_db() as conn:
+        conn.execute("DELETE FROM app_state WHERE key = ?", (_host_key_state_key(host, port),))
+
+
 class SFTPManager:
-    """Handles SFTP operations for remote backups."""
+    """Handles SFTP operations for remote backups.
     
-    def __init__(self, host: str, port: int, user: str, password: str, remote_dir: str):
+    The server's host key is pinned on first use (like ssh's known_hosts):
+    the first connection made from the saved settings records its SHA256
+    fingerprint, and every later connection must present the same key.
+    Without this, anyone able to intercept the connection could read the
+    SFTP password and the backups.
+    """
+
+    CONNECT_TIMEOUT = 20
+
+    def __init__(self, host: str, port: int, user: str, password: str, remote_dir: str,
+                 pin_host_key: bool = False):
         self.host = host
-        self.port = port
+        self.port = int(port or 22)
         self.user = user
         self.password = password
         self.remote_dir = remote_dir
+        # Only saved settings may record a new fingerprint; an ad-hoc test
+        # with form values checks an existing pin but never creates one.
+        self.pin_host_key = pin_host_key
+        self.host_fingerprint = ''
     
     @classmethod
     def from_settings(cls) -> 'SFTPManager':
@@ -530,17 +592,53 @@ class SFTPManager:
             port=settings.get('sftp_port', 22),
             user=settings.get('sftp_user', ''),
             password=settings.get('sftp_password', ''),
-            remote_dir=settings.get('sftp_remote_dir', '/backups/edrefcard')
+            remote_dir=settings.get('sftp_remote_dir', '/backups/edrefcard'),
+            pin_host_key=True
         )
     
-    def _connect(self) -> paramiko.SFTPClient:
-        """Establish SFTP connection."""
+    def _verify_host_key(self, fingerprint: str) -> None:
+        """Compare with the pinned fingerprint; pin it on first use."""
+        self.host_fingerprint = fingerprint
+        expected = get_pinned_sftp_host_key(self.host, self.port)
+        if expected:
+            if expected != fingerprint:
+                raise ValueError(
+                    f"SFTP host key mismatch for {self.host}:{self.port} "
+                    f"(pinned {expected}, server sent {fingerprint}). Connection refused. "
+                    "If the server was reinstalled, use 'Forget host key' in the backup settings.")
+        elif self.pin_host_key:
+            set_app_state(_host_key_state_key(self.host, self.port), fingerprint)
+            logger.info(f"Pinned SFTP host key for {self.host}:{self.port}: {fingerprint}")
+
+    @contextmanager
+    def _session(self):
+        """Open an authenticated SFTP session and always close its transport."""
+        import hashlib
+        import socket
         # SSRF guard: validate the host resolves to a public IP and connect to
         # that exact IP (prevents probing internal services / DNS rebinding).
         safe_ip = _resolve_safe_public_ip(self.host)
-        transport = paramiko.Transport((safe_ip, self.port))
-        transport.connect(username=self.user, password=self.password)
-        return paramiko.SFTPClient.from_transport(transport)
+        sock = socket.create_connection((safe_ip, self.port), timeout=self.CONNECT_TIMEOUT)
+        try:
+            transport = paramiko.Transport(sock)
+        except Exception:
+            sock.close()
+            raise
+        try:
+            transport.start_client(timeout=self.CONNECT_TIMEOUT)
+            # Handshake done: transfers of large backups must not time out
+            sock.settimeout(None)
+            key = transport.get_remote_server_key()
+            digest = hashlib.sha256(key.asbytes()).digest()
+            self._verify_host_key('SHA256:' + base64.b64encode(digest).decode().rstrip('='))
+            # The password is only sent once the server identity is verified
+            transport.auth_password(self.user, self.password)
+            sftp = paramiko.SFTPClient.from_transport(transport)
+            if sftp is None:
+                raise OSError('SFTP subsystem unavailable on this server')
+            yield sftp
+        finally:
+            transport.close()
     
     def test_connection(self) -> tuple[bool, str]:
         """Test SFTP connection.
@@ -552,20 +650,17 @@ class SFTPManager:
             return False, "SFTP host not configured"
         
         try:
-            sftp = self._connect()
-            
-            # Try to list the remote directory
-            try:
-                sftp.listdir(self.remote_dir)
-            except OSError:
-                # Directory doesn't exist, try to create it
+            with self._session() as sftp:
+                # Try to list the remote directory
                 try:
-                    sftp.mkdir(self.remote_dir)
+                    sftp.listdir(self.remote_dir)
                 except OSError:
-                    pass  # Parent dirs might not exist
-            
-            sftp.close()
-            return True, f"Successfully connected to {self.host}"
+                    # Directory doesn't exist, try to create it
+                    try:
+                        sftp.mkdir(self.remote_dir)
+                    except OSError:
+                        pass  # Parent dirs might not exist
+            return True, f"Successfully connected to {self.host} (host key {self.host_fingerprint})"
             
         except paramiko.AuthenticationException:
             return False, "Authentication failed - check username/password"
@@ -586,25 +681,23 @@ class SFTPManager:
             True if upload successful
         """
         try:
-            sftp = self._connect()
+            with self._session() as sftp:
+                # Ensure remote directory exists
+                try:
+                    sftp.stat(self.remote_dir)
+                except OSError:
+                    # Create directory path recursively
+                    parts = self.remote_dir.strip('/').split('/')
+                    current = ''
+                    for part in parts:
+                        current += '/' + part
+                        try:
+                            sftp.stat(current)
+                        except OSError:
+                            sftp.mkdir(current)
             
-            # Ensure remote directory exists
-            try:
-                sftp.stat(self.remote_dir)
-            except OSError:
-                # Create directory path recursively
-                parts = self.remote_dir.strip('/').split('/')
-                current = ''
-                for part in parts:
-                    current += '/' + part
-                    try:
-                        sftp.stat(current)
-                    except OSError:
-                        sftp.mkdir(current)
-            
-            remote_path = f"{self.remote_dir}/{backup_path.name}"
-            sftp.put(str(backup_path), remote_path)
-            sftp.close()
+                remote_path = f"{self.remote_dir}/{backup_path.name}"
+                sftp.put(str(backup_path), remote_path)
             
             logger.info(f"Uploaded backup to {remote_path}")
             return True
@@ -618,21 +711,18 @@ class SFTPManager:
         backups = []
         
         try:
-            sftp = self._connect()
-            
-            try:
-                files = sftp.listdir_attr(self.remote_dir)
-                for f in files:
-                    if f.filename.startswith('backup_') and f.filename.endswith('.tar.gz'):
-                        backups.append({
-                            'filename': f.filename,
-                            'size_bytes': f.st_size,
-                            'created_at': datetime.datetime.fromtimestamp(f.st_mtime).isoformat() if f.st_mtime else '',
-                        })
-            except OSError:
-                pass  # Directory doesn't exist yet
-            
-            sftp.close()
+            with self._session() as sftp:
+                try:
+                    files = sftp.listdir_attr(self.remote_dir)
+                    for f in files:
+                        if _is_backup_filename(f.filename):
+                            backups.append({
+                                'filename': f.filename,
+                                'size_bytes': f.st_size,
+                                'created_at': datetime.datetime.fromtimestamp(f.st_mtime).isoformat() if f.st_mtime else '',
+                            })
+                except OSError:
+                    pass  # Directory doesn't exist yet
             
         except Exception as e:
             logger.error(f"Failed to list remote backups: {e}")
@@ -651,19 +741,23 @@ class SFTPManager:
         Returns:
             Path to downloaded file (in temp directory)
         """
+        # The name comes from a form: without this check '../x' was read from
+        # outside the remote directory and written outside the temp directory.
+        if not _is_backup_filename(remote_filename):
+            raise ValueError('Invalid backup filename.')
+        temp_fd, temp_name = tempfile.mkstemp(prefix='edrefcard-sftp-', suffix='.tar.gz')
+        os.close(temp_fd)
+        local_path = Path(temp_name)
         try:
-            sftp = self._connect()
-            
-            remote_path = f"{self.remote_dir}/{remote_filename}"
-            local_path = Path(tempfile.gettempdir()) / remote_filename
-            
-            sftp.get(remote_path, str(local_path))
-            sftp.close()
+            with self._session() as sftp:
+                remote_path = f"{self.remote_dir}/{remote_filename}"
+                sftp.get(remote_path, str(local_path))
             
             logger.info(f"Downloaded backup from {remote_path}")
             return local_path
             
         except Exception as e:
+            local_path.unlink(missing_ok=True)
             logger.error(f"SFTP download failed: {e}")
             raise
     
@@ -681,21 +775,18 @@ class SFTPManager:
         cutoff = datetime.datetime.now() - datetime.timedelta(days=retention_days)
         
         try:
-            sftp = self._connect()
-            
-            try:
-                files = sftp.listdir_attr(self.remote_dir)
-                for f in files:
-                    if f.filename.startswith('backup_') and f.filename.endswith('.tar.gz'):
-                        if f.st_mtime and datetime.datetime.fromtimestamp(f.st_mtime) < cutoff:
-                            remote_path = f"{self.remote_dir}/{f.filename}"
-                            sftp.remove(remote_path)
-                            deleted += 1
-                            logger.info(f"Deleted old remote backup: {f.filename}")
-            except OSError:
-                pass
-            
-            sftp.close()
+            with self._session() as sftp:
+                try:
+                    files = sftp.listdir_attr(self.remote_dir)
+                    for f in files:
+                        if _is_backup_filename(f.filename):
+                            if f.st_mtime and datetime.datetime.fromtimestamp(f.st_mtime) < cutoff:
+                                remote_path = f"{self.remote_dir}/{f.filename}"
+                                sftp.remove(remote_path)
+                                deleted += 1
+                                logger.info(f"Deleted old remote backup: {f.filename}")
+                except OSError:
+                    pass
             
         except Exception as e:
             logger.error(f"Failed to cleanup remote backups: {e}")
@@ -1090,8 +1181,11 @@ def run_scheduled_backup():
             except Exception as e:
                 logger.error(f"SFTP upload failed during scheduled backup: {e}")
         
-        # Cleanup old local backups (keep only 1)
-        backup_manager.cleanup_old_backups(keep_count=1)
+        # Rotate local scheduled backups. With a remote copy one local file is
+        # enough; if SFTP is enabled but the upload failed, the local files are
+        # the only copies, so keep a week of them.
+        sftp_wanted = bool(settings.get('sftp_enabled') and settings.get('sftp_host'))
+        backup_manager.cleanup_old_backups(keep_count=7 if sftp_wanted and not uploaded else 1)
         
         # Send Discord notification
         notifier = DiscordNotifier.from_settings()

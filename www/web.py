@@ -114,6 +114,93 @@ def render_data_driven(physical_keys, modifiers, devices, config, public, stylin
     return created, handled
 
 
+# ---- render cache ------------------------------------------------------------
+# A card page used to redraw every image with ImageMagick on each view, which
+# is slow and is what made a worker grow to 1.4 GB. The result of a render is
+# now remembered next to the images ('<id>-render.json') together with a
+# signature of everything it depends on. A view with an unchanged signature
+# and all its images still on disk serves the stored result without drawing.
+_RENDER_CACHE_VERSION = 1
+_render_build_stamp = None
+
+
+def _render_build():
+    """Identifies the rendering code and artwork of this deployment, so a
+    new release never serves cards drawn by the previous one."""
+    global _render_build_stamp
+    if _render_build_stamp is None:
+        from scripts import __version__
+        www = Path(__file__).resolve().parent
+        newest = 0
+        for pattern in ('web.py', 'scripts/*.py', 'res/*.jpg'):
+            for path in www.glob(pattern):
+                try:
+                    newest = max(newest, path.stat().st_mtime_ns)
+                except OSError:
+                    pass
+        _render_build_stamp = f'{__version__}:{newest}'
+    return _render_build_stamp
+
+
+def _render_signature(xml, display_groups, styling, keyboard_display):
+    import hashlib
+    import json
+    mappings, aliases = database.get_render_dependencies()
+    payload = json.dumps({
+        'cache': _RENDER_CACHE_VERSION,
+        'build': _render_build(),
+        'source': hashlib.sha256(xml.encode('utf-8')).hexdigest(),
+        'groups': sorted(display_groups),
+        'styling': styling,
+        'keyboard': keyboard_display,
+        'web_root': Config.webRoot(),  # printed on every card
+        'mappings': mappings,
+        'aliases': aliases,
+    }, sort_keys=True)
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+def _load_render_cache(config, signature):
+    """Stored render result for this signature, or None. Never raises."""
+    import json
+    try:
+        path = config.pathWithNameAndSuffix('render', '.json')
+        with open(path, encoding='utf-8') as handle:
+            data = json.load(handle)
+        if data.get('signature') != signature:
+            return None
+        files = data['files']
+        if not all(isinstance(name, str) and Path(name).name == name
+                   and (path.parent / name).is_file() for name in files):
+            return None  # an image was cleaned up: draw again
+        if not (isinstance(data['created_images'], list) and isinstance(data['data_driven_images'], list)
+                and isinstance(data['unsupported_devices'], list) and isinstance(data['errors'], dict)):
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _store_render_cache(config, signature, result):
+    """Remember a successful render. Never raises."""
+    import json
+    temp_name = None
+    try:
+        path = config.pathWithNameAndSuffix('render', '.json')
+        files = sorted(p.name for p in config.ownedFiles() if p.suffix.lower() == '.jpg')
+        with tempfile.NamedTemporaryFile('w', encoding='utf-8', dir=path.parent,
+                                         suffix='.tmp', delete=False) as handle:
+            temp_name = handle.name
+            json.dump({'signature': signature, 'files': files, **result}, handle)
+        os.replace(temp_name, path)
+        temp_name = None
+    except Exception as e:
+        logError(f'render cache not stored for {config.name}: {e}\n')
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
 def generate_legacy_images(physical_keys, modifiers, devices, config, public,
                            styling, misconfiguration_warnings):
     """Render the legacy template-based cards for every supported device
@@ -555,8 +642,29 @@ def show_binds(run_id):
     data_driven_images = []
     handled_dd = set()
 
+    # Serve the previous render when nothing it depends on has changed
+    signature = cached = None
+    rendered = False
+    if not source_missing:
+        try:
+            signature = _render_signature(
+                xml, display_groups, styling,
+                db_config.get('keyboard_display', 'text') if db_config else 'text')
+            cached = _load_render_cache(config, signature)
+        except Exception as e:
+            logError(f'render cache unavailable for {run_id}: {e}\n')
+
     try:
-        if not source_missing:
+        if cached is not None:
+            created_images = cached['created_images']
+            data_driven_images = cached['data_driven_images']
+            unsupported_devices = cached['unsupported_devices']
+            keyboard_layout_image = bool(cached.get('keyboard_layout_image'))
+            errors.unhandledDevicesWarnings = cached['errors'].get('unhandled_devices_warnings', '')
+            errors.misconfigurationWarnings = cached['errors'].get('misconfiguration_warnings', '')
+            errors.deviceWarnings = cached['errors'].get('device_warnings', '')
+            errors.errors = cached['errors'].get('errors', '')
+        elif not source_missing:
             # Ensure directory exists for image regeneration
             config.makeDir()
             (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)
@@ -583,6 +691,7 @@ def show_binds(run_id):
             dd_created, handled_dd = render_data_driven(physical_keys, modifiers, devices,
                                                         config, True, styling, errors)
             data_driven_images.extend(dd_created)
+            rendered = True
 
         else:
             logError(f"Source missing for {run_id}, checking existing images...")
@@ -618,7 +727,22 @@ def show_binds(run_id):
         # import traceback
         # traceback.print_exc()
         errors.errors = '<h1>Unexpected System Error</h1><p>An unexpected error occurred while processing your request. Please try again later.</p>'
-    
+
+    # Only a complete, error-free render is worth remembering
+    if rendered and signature and not errors.errors:
+        _store_render_cache(config, signature, {
+            'created_images': created_images,
+            'data_driven_images': data_driven_images,
+            'unsupported_devices': unsupported_devices,
+            'keyboard_layout_image': keyboard_layout_image,
+            'errors': {
+                'unhandled_devices_warnings': errors.unhandledDevicesWarnings,
+                'misconfiguration_warnings': errors.misconfigurationWarnings,
+                'device_warnings': errors.deviceWarnings,
+                'errors': errors.errors,
+            },
+        })
+
     refcard_url_dynamic = url_for('web.show_binds', run_id=run_id, _external=True)
     binds_url_dynamic = url_for('web.serve_config', path=f"{run_id[:2]}/{run_id}.binds", _external=True)
 
@@ -839,7 +963,15 @@ def generate_pdf(run_id, page_format='A4'):
         with tempfile.NamedTemporaryFile(suffix='.pdf', dir=config_dir, delete=False) as output:
             temp_pdf = output.name
         pdf.output(temp_pdf)
-        os.replace(temp_pdf, pdf_path)
+        try:
+            os.replace(temp_pdf, pdf_path)
+        except OSError:
+            # Another worker published the same export first (Windows refuses
+            # to replace a file that is being read): its file is ours if it
+            # carries the same source signature.
+            with fitz.open(pdf_path) as cached:
+                if cached.metadata.get('keywords') != cache_key:
+                    raise
     except Exception as e:
          logError(f"Error saving PDF {pdf_path}: {e}")
          return None

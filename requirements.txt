@@ -1,16 +1,20 @@
 # Runtime dependencies (installed in the production image).
 # Test and lint tools live in requirements-dev.txt.
-lxml
-wand
-flask
-gunicorn>=26
+# Versions are the ones running in production on 2026-11-10; the full
+# dependency tree is frozen in constraints.txt. To upgrade: change a version
+# here, rebuild, then regenerate constraints.txt with `pip freeze`.
+lxml==6.1.3
+Wand==0.7.2
+Flask==3.1.3
+gunicorn==27.0.0
 Flask-Limiter==3.5.0
+Pillow==13.0.0  # imported directly (uploads, mirroring, PDF export)
 
-fpdf2
-PyMuPDF>=1.24  # manufacturer AcroForm sheet import (scripts/pdf_import.py)
+fpdf2==2.9.0
+PyMuPDF==2.1  # manufacturer AcroForm sheet import (scripts/pdf_import.py)
 
 # Backup system dependencies
-paramiko>=3.4.0
-APScheduler>=3.10.0
-requests>=2.31.0
-cryptography>=41.0.0
+paramiko==5.1.0
+APScheduler==3.11.3
+requests==2.34.2
+cryptography==50.0.2

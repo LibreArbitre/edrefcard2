@@ -87,7 +87,7 @@
   </select>
   <input type="number" id="stampnum" value="1" min="1" style="width:58px" title="Next Joy_N (auto-incremented)">
   <input type="number" id="stamppov" value="1" min="1" style="width:44px" title="Next POV">
-  <button id="btnarrange" class="ghost" title="Auto-arrange boxes into 2 columns sorted by button position (no leader-line crossings)">Arrange</button>
+  <button id="btnarrange" class="ghost" title="Auto-arrange boxes into 2 columns sorted by button position (no leader-line crossings). Select 2 or more boxes (Shift+click) to arrange only those.">Arrange</button>
   <label style="font-size:.78rem;white-space:nowrap" title="While dragging: snap to a 20px grid and to neighbour box edges (blue dashed guides)"><input type="checkbox" id="snap" checked> snap</label>
   <span id="aligntools" hidden>
     <button id="alleft" class="ghost" title="Align left edges">&#8676;</button>
@@ -125,11 +125,11 @@
         <a href="#" data-lang="en">EN</a> &middot; <a href="#" data-lang="fr">FR</a> &middot; <a href="#" data-lang="es">ES</a>
       </span>
       <span id="hint_en">1) Upload a clean photo. 2) + Box, drag/resize it. 3) Add rows (symbol, number, Joy). 4) "Set btn" then click the physical button on the photo. 5) Preview / Save.<br>
-      <b>Shortcuts</b>: Ctrl+wheel = zoom &middot; Space+drag = pan &middot; Shift+click = multi-select (then align tools appear) &middot; drag the red dot = move the anchor &middot; drag the title or the card URL = move them &middot; arrows = move selection (Shift = x10) &middot; Del = delete &middot; Ctrl+D = duplicate &middot; Ctrl+Z/Y = undo/redo.</span>
+      <b>Shortcuts</b>: Ctrl+wheel = zoom &middot; Space+drag = pan &middot; Shift+click = multi-select (then align tools appear) &middot; drag the red dot = move the anchor &middot; drag the title or the card URL = move them &middot; arrows = move selection (Shift = x10) &middot; Del = delete &middot; Ctrl+D = duplicate &middot; Ctrl+Z/Y = undo/redo &middot; Enter in an input code = next row.</span>
       <span id="hint_fr" hidden>1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set btn" puis clique le bouton sur l'image. 5) Preview / Save.<br>
-      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; Shift+clic = multi-sélection (outils d'alignement) &middot; glisser le point rouge = déplacer l'ancre &middot; glisser le titre ou l'URL de la carte = les déplacer &middot; flèches = bouger la sélection (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</span>
+      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; Shift+clic = multi-sélection (outils d'alignement) &middot; glisser le point rouge = déplacer l'ancre &middot; glisser le titre ou l'URL de la carte = les déplacer &middot; flèches = bouger la sélection (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir &middot; Entrée dans un code = ligne suivante.</span>
       <span id="hint_es" hidden>1) Sube una foto limpia. 2) + Box, arrastra/redimensiona. 3) A&ntilde;ade filas (s&iacute;mbolo, n&uacute;mero, Joy). 4) "Set btn" y haz clic en el bot&oacute;n f&iacute;sico sobre la foto. 5) Preview / Save.<br>
-      <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; Shift+clic = multi-selecci&oacute;n (herramientas de alineaci&oacute;n) &middot; arrastra el punto rojo = mover el ancla &middot; arrastra el t&iacute;tulo o la URL de la tarjeta = moverlos &middot; flechas = mover la selecci&oacute;n (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer.</span>
+      <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; Shift+clic = multi-selecci&oacute;n (herramientas de alineaci&oacute;n) &middot; arrastra el punto rojo = mover el ancla &middot; arrastra el t&iacute;tulo o la URL de la tarjeta = moverlos &middot; flechas = mover la selecci&oacute;n (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer &middot; Intro en un c&oacute;digo = fila siguiente.</span>
     </div>
     {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
     <div id="checks" aria-live="polite">
@@ -178,8 +178,6 @@
 const EXISTING = JSON.parse({{ existing_json|tojson }});
 const EDITOR_USER = {{ editor_user|default('mapper')|tojson }};
 const SYMS = ["","press","up","right","down","left","stage1","stage2","push","pull"];
-const TYPES = ["Digital","Analogue"];
-const GROUPS = ["General","Ship","SRV","UI","Camera","Fighter","Head look","Galaxy map","Scanners","Holo-Me","Multicrew","OnFoot","Settlement","Misc"];
 
 let state = {title:"", image:null, width:0, height:0, boxes:[]};
 let sel = -1;          // primary selected box index (last clicked)
@@ -229,9 +227,28 @@ function restoreDocument(value){
   if(mappingId) $('#deviceid').value = savedDeviceId;
   $('#imgname').value = doc.imgname || state.image || '';
   clearSel(); setBtnFor = -1; lastAction = ''; dirty = true;
+  syncStampCounters();
   if(state.image) loadImage(state.image);
   else { img.removeAttribute('src'); img.style.width=''; renderPanel(); renderStage(); }
   autosave();
+}
+
+// Next free Joy_N / POV for the stamps: restarting at 1 on an existing
+// mapping stamped Joy_1 a second time.
+function syncStampCounters(){
+  let button=0, pov=0;
+  state.boxes.forEach(b=>(b.rows||[]).forEach(r=>{
+    let m=/^(?:Neg_|Pos_)?Joy_(\d+)$/.exec(r.joy||''); if(m) button=Math.max(button,+m[1]);
+    m=/^Joy_POV(\d+)/.exec(r.joy||''); if(m) pov=Math.max(pov,+m[1]);
+  }));
+  $('#stampnum').value=button+1; $('#stamppov').value=pov+1;
+}
+// Keep a box inside the image (its text is cut off otherwise).
+function clampBox(b){
+  if(!state.width || !state.height) return;
+  b.box_wh=[Math.min(b.box_wh[0],state.width),Math.min(b.box_wh[1],state.height)];
+  b.box_xy=[Math.min(Math.max(0,b.box_xy[0]),state.width-b.box_wh[0]),
+            Math.min(Math.max(0,b.box_xy[1]),state.height-b.box_wh[1])];
 }
 
 function snapshot(action, before){
@@ -331,6 +348,7 @@ function loadExisting(){
     $("#imgname").value = state.image||"";
     $("#deviceid").value = EXISTING.device_id||"";
     $('#deviceid').readOnly = Boolean(mappingId);
+    syncStampCounters();
     if(state.image){ loadImage(state.image); }
   }catch(e){ console.warn(e); }
 }
@@ -352,7 +370,25 @@ function loadImage(slug){
 
 function computeScale(){ scale = img.clientWidth / (state.width||img.naturalWidth||1); }
 
+// While a drag is in progress the stage is redrawn at most once per frame,
+// and the expensive tail (JSON view, autosave, checks) waits for the drop:
+// every mouse move used to rebuild and reserialize the whole mapping.
+let dragActive=false, framePending=false;
 function renderStage(){
+  if(dragActive){
+    if(!framePending){
+      framePending=true;
+      requestAnimationFrame(()=>{ framePending=false; drawStage(false); });
+    }
+    return;
+  }
+  drawStage(true);
+}
+function endDrag(){ if(dragActive){ dragActive=false; renderStage(); } }
+document.addEventListener('mouseup',endDrag,true);
+window.addEventListener('blur',endDrag);
+
+function drawStage(full){
   computeScale();
   // remove existing overlays
   stage.querySelectorAll('.box,.marker,.tanchor').forEach(n=>n.remove());
@@ -435,8 +471,10 @@ function renderStage(){
       ctx.restore();
     }
   }
-  $("#json").value = JSON.stringify(mapping(),null,1);
-  $('#hardwareids').textContent='Hardware IDs: '+(mapping().device_ids.join(', ') || 'not set');
+  if(!full) return;
+  const current=mapping();
+  $("#json").value = JSON.stringify(current,null,1);
+  $('#hardwareids').textContent='Hardware IDs: '+(current.device_ids.join(', ') || 'not set');
   autosave();
   scheduleChecks();
 }
@@ -480,12 +518,14 @@ function startDrag(e,i,d){
   const starts=idxs.map(k=>state.boxes[k].box_xy.slice());
   const pq=idxs.indexOf(i);
   const sx=e.clientX, sy=e.clientY;
+  dragActive=true;
   function mv(ev){
     const dx=(ev.clientX-sx)/scale, dy=(ev.clientY-sy)/scale;
     const [nx,ny]=snapPos(i, starts[pq][0]+dx, starts[pq][1]+dy);
     const adx=nx-starts[pq][0], ady=ny-starts[pq][1];
     idxs.forEach((k,q)=>{
       state.boxes[k].box_xy=[Math.max(0,Math.round(starts[q][0]+adx)),Math.max(0,Math.round(starts[q][1]+ady))];
+      clampBox(state.boxes[k]);
     });
     renderStage();
   }
@@ -498,6 +538,7 @@ function startMarkerDrag(e,i){
   if(spaceDown) return;
   e.preventDefault(); e.stopPropagation();
   snapshot('btnmove');
+  dragActive=true;
   const r=stage.getBoundingClientRect(), b=state.boxes[i];
   function mv(ev){
     b.button_xy=[Math.max(0,Math.round((ev.clientX-r.left)/scale)),Math.max(0,Math.round((ev.clientY-r.top)/scale))];
@@ -514,6 +555,7 @@ function startTextDrag(e,key,defaults,size){
   if(spaceDown) return;
   e.preventDefault(); e.stopPropagation();
   snapshot('textmove');
+  dragActive=true;
   const start=(state[key]||defaults).slice(), sx=e.clientX, sy=e.clientY;
   function mv(ev){
     const x=Math.round(start[0]+(ev.clientX-sx)/scale), y=Math.round(start[1]+(ev.clientY-sy)/scale);
@@ -527,7 +569,8 @@ function startTextDrag(e,key,defaults,size){
 function startResize(e,i,d){
   if(spaceDown) return;
   e.preventDefault(); snapshot('resize'); const r=stage.getBoundingClientRect(), b=state.boxes[i];
-  function mv(ev){ b.box_wh=[Math.max(40,Math.round((ev.clientX-r.left)/scale-b.box_xy[0])),Math.max(30,Math.round((ev.clientY-r.top)/scale-b.box_xy[1]))]; renderStage(); }
+  dragActive=true;
+  function mv(ev){ b.box_wh=[Math.max(40,Math.round((ev.clientX-r.left)/scale-b.box_xy[0])),Math.max(30,Math.round((ev.clientY-r.top)/scale-b.box_xy[1]))]; clampBox(b); renderStage(); }
   function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 }
@@ -574,26 +617,46 @@ function stampAt(kind,px,py){
 }
 
 // Auto-arrange: two margin columns, each sorted by the anchor's Y, so leader
-// lines never cross within a column. Floating boxes go under the left column.
+// lines never cross within a column. Floating boxes fill the shorter column.
 $("#btnarrange").addEventListener('click',()=>{
   if(!state.boxes.length) return;
+  // With 2+ boxes selected only those move: hand-placed boxes stay put.
+  const scoped=selSet.size>=2;
+  const targets=state.boxes.filter((b,i)=>!scoped || selSet.has(i));
   snapshot('arrange');
   const W=state.width||4400,H=state.height||2560,k=W/4400;
   const colW=Math.round(W*0.314), colX=[Math.round(W*0.016), W-colW-Math.round(W*0.016)];
-  const anch=state.boxes.filter(b=>b.button_xy), free=state.boxes.filter(b=>!b.button_xy);
+  const anch=targets.filter(b=>b.button_xy), free=targets.filter(b=>!b.button_xy);
   const left=anch.filter(b=>b.button_xy[0]<W/2).sort((a,b)=>a.button_xy[1]-b.button_xy[1]);
   const right=anch.filter(b=>b.button_xy[0]>=W/2).sort((a,b)=>a.button_xy[1]-b.button_xy[1]);
-  left.push(...free);
+  // Boxes without an anchor go to whichever column is shorter, so a blank
+  // scaffold fills both margins instead of one endless left column.
+  const columnHeight=col=>col.reduce((sum,b)=>sum+40+72*Math.max(1,(b.rows||[]).length),0);
+  free.forEach(b=>(columnHeight(left)<=columnHeight(right)?left:right).push(b));
+  const top=Math.round(H*0.08), room=H-Math.round(H*0.02)-top, minGap=Math.round(8*k);
+  let squeezed=false;
   [[left,0],[right,1]].forEach(([col,ci])=>{
-    let y=Math.round(H*0.08);
-    col.forEach(b=>{
-      const h=Math.round((40+72*Math.max(1,(b.rows||[]).length))*k);
+    if(!col.length) return;
+    const heights=col.map(b=>Math.round((40+72*Math.max(1,(b.rows||[]).length))*k));
+    const total=heights.reduce((sum,h)=>sum+h,0), gaps=col.length-1;
+    let gap=Math.round(60*k), factor=1;
+    if(total+gap*gaps>room){
+      // A long column first loses its spacing, then its boxes shrink to fit
+      // the image instead of running past the bottom edge.
+      gap=Math.max(minGap,gaps?Math.floor((room-total)/gaps):0);
+      if(total+gap*gaps>room){ gap=minGap; factor=(room-gap*gaps)/total; squeezed=true; }
+    }
+    let y=top;
+    col.forEach((b,q)=>{
+      const h=Math.max(1,Math.floor(heights[q]*factor));
       b.box_xy=[colX[ci],y]; b.box_wh=[colW,h];
-      y+=h+Math.round(60*k);
+      y+=h+gap;
     });
   });
-  clearSel(); renderPanel(); renderStage();
-  $("#status").textContent="Arranged: "+left.length+" left, "+right.length+" right.";
+  if(!scoped) clearSel();
+  renderPanel(); renderStage();
+  $("#status").textContent="Arranged "+(scoped?"the selection":"all boxes")+": "+left.length+" left, "+right.length+" right."+
+    (squeezed?" Boxes were shrunk to fit the image height: consider a taller canvas or fewer rows per box.":"")+" Ctrl+Z to undo.";
 });
 
 // ---- multi-selection alignment / distribution ----
@@ -671,6 +734,18 @@ function renderPanel(){
 }
 
 function bindPanel(){
+  // Enter in an input code: next row, or a new row after the last one, so a
+  // whole box can be typed without touching the mouse.
+  $("#boxes").querySelectorAll('input[data-k="joy"]').forEach(el=>{
+    el.addEventListener('keydown',e=>{
+      if(e.key!=='Enter') return;
+      e.preventDefault();
+      const i=+el.dataset.i, j=+el.dataset.j;
+      el.blur();  // commits the value (change event)
+      const next=$("#boxes").querySelector('[data-i="'+i+'"][data-j="'+(j+1)+'"][data-k="number"]');
+      if(next) next.focus(); else $("#boxes").querySelector('[data-addrow="'+i+'"]')?.click();
+    });
+  });
   $("#boxes").querySelectorAll('input,select').forEach(el=>{
     el.addEventListener('change',()=>{
       const i=+el.dataset.i, k=el.dataset.k;
@@ -687,7 +762,8 @@ function bindPanel(){
   $("#boxes").querySelectorAll('[data-setbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setBtnFor=+b.dataset.setbtn;$("#status").textContent="Click the button on the photo…";}));
   $("#boxes").querySelectorAll('[data-clrbtn]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();snapshot('clrbtn');state.boxes[+b.dataset.clrbtn].button_xy=null;$("#status").textContent="Point removed.";renderPanel();renderStage();}));
   $("#boxes").querySelectorAll('[data-delbox]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.delbox;if(!confirm('Delete the whole box "'+(state.boxes[i].label||'box '+(i+1))+'"? (Ctrl+Z to undo)'))return;snapshot('delbox');state.boxes.splice(i,1);clearSel();renderPanel();renderStage();}));
-  $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;snapshot('addrow');(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();renderStage();}));
+  $("#boxes").querySelectorAll('[data-addrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const i=+b.dataset.addrow;snapshot('addrow');(state.boxes[i].rows=state.boxes[i].rows||[]).push({symbol:'',number:null,joy:'',type:'Digital'});renderPanel();renderStage();
+    $("#boxes").querySelector('[data-i="'+i+'"][data-j="'+(state.boxes[i].rows.length-1)+'"][data-k="number"]')?.focus();}));
   $("#boxes").querySelectorAll('[data-delrow]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const[i,j]=b.dataset.delrow.split('.').map(Number);snapshot('delrow');state.boxes[i].rows.splice(j,1);renderPanel();renderStage();}));
 }
 
@@ -728,6 +804,7 @@ $("#btnscaffold").addEventListener('click',()=>{
   if(!state.width){state.width=W;state.height=H;}
   snapshot('scaffold');
   state.boxes=state.boxes.concat(boxes);
+  syncStampCounters();
   clearSel(); renderPanel(); renderStage();
   $("#status").textContent=boxes.length+" boxes generated.";
 });
@@ -779,7 +856,7 @@ bindAsync('#pdffile',async()=>{
   }
   $("#imgname").value=j.name;
   if(!$("#title").value) $("#title").value=j.title||'';
-  clearSel();
+  clearSel(); syncStampCounters();
   loadImage(j.name); autosave();
   $("#status").textContent=`PDF imported: ${j.boxes.length} boxes pre-positioned (${j.width}x${j.height})`;
   if(j.review_note) $("#status").textContent+=' '+j.review_note;
@@ -819,7 +896,7 @@ bindAsync('#jsonfile',async()=>{
   $("#title").value=m.title||'';
   if(Array.isArray(m.device_ids)&&m.device_ids[0]&&!$("#deviceid").value) $("#deviceid").value=m.device_ids[0];
   $("#imgname").value=m.image||'';
-  clearSel();
+  clearSel(); syncStampCounters();
   if(state.image){ loadImage(state.image); } else { img.removeAttribute('src');renderPanel(); renderStage(); }
   autosave();
   $("#status").textContent="Imported "+state.boxes.length+" boxes from "+f.name;
@@ -913,7 +990,7 @@ document.addEventListener('keydown',e=>{
   const mv={ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
   if(mv){
     e.preventDefault(); snapshot('arrow');
-    idxs.forEach(k=>{ const b=state.boxes[k]; b.box_xy=[Math.max(0,b.box_xy[0]+mv[0]),Math.max(0,b.box_xy[1]+mv[1])]; });
+    idxs.forEach(k=>{ const b=state.boxes[k]; b.box_xy=[Math.max(0,b.box_xy[0]+mv[0]),Math.max(0,b.box_xy[1]+mv[1])]; clampBox(b); });
     renderStage();
   }
 });

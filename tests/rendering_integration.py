@@ -64,12 +64,16 @@ def run(root, installed_www):
                  for n in range(1,5)]},
     ]}
     tree = ast.parse((root / 'www/admin/__init__.py').read_text())
-    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'mapping_editor_preview')
-    node.decorator_list = []
+    # The route and the module-level helpers it calls
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+             and n.name in ('_purge_old_previews', 'mapping_editor_preview')]
+    assert len(nodes) == 2, [n.name for n in nodes]
+    for node in nodes:
+        node.decorator_list = []
     logs = []
     env = {'request':request,'url_for':url_for,'Config':models.Config,'Errors':models.Errors,
            'parseBindings':parser.parseBindings,'logError':logs.append}
-    exec(compile(ast.Module(body=[node],type_ignores=[]),'preview-probe','exec'),env)
+    exec(compile(ast.Module(body=nodes,type_ignores=[]),'preview-probe','exec'),env)
     app = Flask('preview-probe')
     app.add_url_rule('/admin/mapping-editor/preview', view_func=env['mapping_editor_preview'], methods=['POST'])
     app.add_url_rule('/configs/<path:path>',endpoint='web.serve_config',view_func=lambda path:'')

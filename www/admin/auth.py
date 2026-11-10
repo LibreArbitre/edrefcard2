@@ -79,7 +79,7 @@ def check_auth(username, password):
     is_valid = user_ok and pass_ok
 
     # Log authentication attempts (values sanitized: IP/UA/username are attacker-controlled)
-    ip_address = _sanitize_log(request.headers.get('X-Forwarded-For', request.remote_addr))
+    ip_address = _sanitize_log(request.remote_addr)
     user_agent = _sanitize_log(request.headers.get('User-Agent', 'Unknown'))
     username = _sanitize_log(username)
 
@@ -119,7 +119,7 @@ def login_session_user(username, password):
     from werkzeug.security import check_password_hash
     from scripts import database
 
-    ip_address = _sanitize_log(request.headers.get('X-Forwarded-For', request.remote_addr))
+    ip_address = _sanitize_log(request.remote_addr)
     safe_name = _sanitize_log(username)
 
     user = None

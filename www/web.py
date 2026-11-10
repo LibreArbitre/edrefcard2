@@ -4,6 +4,7 @@ import string
 import tempfile
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app, abort
+from markupsafe import escape
 from extensions import limiter
 from scripts import (
     Config,
@@ -168,6 +169,16 @@ def generate_legacy_images(physical_keys, modifiers, devices, config, public,
     return created_images, unsupported_devices
 
 
+def _config_not_found(run_id=None):
+    """404 page for an unknown or malformed config id (id escaped: the error
+    template renders its message as HTML)."""
+    if run_id is None:
+        message = '<h1>Configuration not found</h1>'
+    else:
+        message = f'<h1>Configuration "{escape(run_id)}" not found</h1>'
+    return render_template('error.html', error_message=message), 404
+
+
 @web_bp.route('/')
 def index():
     """Render the home page."""
@@ -314,7 +325,7 @@ def generate():
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
-        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+        errors.errors = f'<h1>System Error</h1><p>{escape(str(e))}</p>'
     except Exception as e:
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         import traceback
@@ -497,7 +508,12 @@ def list_configs():
 def show_binds(run_id):
     """Show a saved configuration."""
     import codecs
-    
+
+    # run_id comes straight from the URL: reject anything that is not a
+    # generated id before it reaches the filesystem or the error page.
+    if not Config.isValidName(run_id):
+        return _config_not_found()
+
     errors = Errors()
     unsupported_devices = []
     
@@ -511,7 +527,7 @@ def show_binds(run_id):
         
         if not binds_path.exists():
             if db_config is None:
-                return render_template('error.html', error_message=f'<h1>Configuration "{run_id}" not found</h1>')
+                return _config_not_found(run_id)
             
             source_missing = True
             xml = None
@@ -541,7 +557,7 @@ def show_binds(run_id):
 
     except (ValueError):
         return render_template('error.html',
-                               error_message=f'<h1>Configuration "{run_id}" invalid</h1>')
+                               error_message=f'<h1>Configuration "{escape(run_id)}" invalid</h1>'), 404
     
     created_images = []
     keyboard_layout_image = False
@@ -605,7 +621,7 @@ def show_binds(run_id):
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
-        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+        errors.errors = f'<h1>System Error</h1><p>{escape(str(e))}</p>'
     except Exception as e:
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         # import traceback
@@ -689,12 +705,12 @@ def show_device(device_name):
         createBlockImage(device_name)
     except KeyError:
         return render_template('error.html',
-                               error_message=f'<h1>{device_name} is not a supported controller.</h1>')
+                               error_message=f'<h1>{escape(device_name)} is not a supported controller.</h1>'), 404
     except Exception as e:
         # e.g. missing/corrupt template image: 500s leaked here before
         logError(f'show_device {device_name}: {e}\n')
         return render_template('error.html',
-                               error_message=f'<h1>{device_name} does not have a visual layout yet.</h1>')
+                               error_message=f'<h1>{escape(device_name)} does not have a visual layout yet.</h1>'), 404
     
     return render_template('refcard.html',
                            run_id='',
@@ -841,6 +857,9 @@ def generate_pdf(run_id, page_format='A4'):
 @web_bp.route('/download/<run_id>/pdf')
 def download_pdf(run_id):
     """Download existing or generate new PDF."""
+    if not Config.isValidName(run_id):
+        return _config_not_found()
+
     format_type = request.args.get('format', 'A4')
     if format_type not in ['A4', 'Letter']:
         format_type = 'A4'
@@ -855,13 +874,12 @@ def download_pdf(run_id):
                 download_name=f"EDRefCard-{run_id}-{format_type}.pdf"
             )
         else:
-             from scripts.models import Config as ConfigModel
-             cfg = ConfigModel(run_id)
-             search_path = cfg.path().parent
-             return render_template('error.html', error_message=f'<h1>No images found to generate PDF</h1><p>Debug: Searched in {search_path} for pattern {run_id}-*.jpg</p>')
+             return render_template('error.html',
+                                    error_message='<h1>No images found to generate PDF</h1>'
+                                                  '<p>Open the reference card page first, then retry.</p>'), 404
     except Exception as e:
         logError(f"PDF Gen Error: {e}")
-        return render_template('error.html', error_message=f'<h1>Error generating PDF</h1><p>{e}</p>')
+        return render_template('error.html', error_message='<h1>Error generating PDF</h1>'), 500
 
 @web_bp.route('/configs/<path:path>')
 def serve_config(path):

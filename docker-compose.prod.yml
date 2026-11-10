@@ -14,6 +14,7 @@ services:
       - APP_ENV
       - BACKUP_ENV_LABEL
       - ACCESS_TOKEN
+      - TRUSTED_PROXY_HOPS
       - EDREFCARD_CONFIGS_DIR=/app/www/configs
     restart: unless-stopped
     # NO PORT MAPPING - Dokploy/Traefik handles routing automatically

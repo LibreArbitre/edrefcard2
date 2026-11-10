@@ -44,6 +44,11 @@ DISPLAY_GROUP_FIELDS = {
     'showmisc': 'Misc',
 }
 
+# Every display group, for callers without a form (API, batch import).
+# Single source of truth: hand-written copies drifted ('On Foot' instead of
+# 'OnFoot', 'Settlement' forgotten) and silently dropped those bindings.
+ALL_DISPLAY_GROUPS = tuple(DISPLAY_GROUP_FIELDS.values())
+
 
 def parseFormData(form_data):
     """Parse form data from Flask request.form (dict-like object).

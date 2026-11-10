@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 
 from flask import Flask, render_template, request
+from markupsafe import escape
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Get the www directory path
 WWW_DIR = Path(__file__).parent.resolve()
@@ -40,6 +42,17 @@ app = Flask(__name__,
             template_folder=str(WWW_DIR / 'templates'))
 
 # Configure the application
+# The app runs behind a reverse proxy (Traefik on Dokploy). Without this,
+# request.remote_addr is the proxy, so every visitor shares ONE rate-limit
+# bucket, and request.is_secure is False, so no HSTS header is sent and
+# external URLs are generated as http://. TRUSTED_PROXY_HOPS = number of
+# proxies in front of the app whose X-Forwarded-* headers are trusted
+# (default 1; set 0 when the container is exposed directly, otherwise a
+# client could spoof its address).
+_proxy_hops = int(os.environ.get('TRUSTED_PROXY_HOPS', '1') or 0)
+if _proxy_hops > 0:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=_proxy_hops, x_proto=_proxy_hops)  # type: ignore[method-assign]
+
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB max upload
 app.config['CONFIGS_FOLDER'] = WWW_DIR / 'configs'
 app.config['WWW_DIR'] = WWW_DIR
@@ -192,7 +205,7 @@ init_backup_scheduler()
 def handle_ratelimit_error(e):
     """Handle rate limit exceeded."""
     return render_template('error.html', 
-                           error_message=f'<h1>Rate Limit Exceeded</h1><p>{e.description}</p>'), 429
+                           error_message=f'<h1>Rate Limit Exceeded</h1><p>{escape(str(e.description))}</p>'), 429
 
 @app.errorhandler(Exception)
 def handle_exception(e):

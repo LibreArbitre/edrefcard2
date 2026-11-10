@@ -6,11 +6,11 @@ Flask Blueprint for administration functionality.
 """
 
 import re
-import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from scripts import database, parseBindings, slugify, logError
+from scripts.parser import ALL_DISPLAY_GROUPS
 
 from scripts.models import Config, Errors
 from extensions import limiter
@@ -94,22 +94,29 @@ def list_configs():
 def delete_config(config_id):
     """Delete a configuration."""
     db = database
-    
-    # Get config path to delete files
-    config = Config(config_id)
-    config_path = config.path().parent
-    
+
+    if not Config.isValidName(config_id):
+        flash('Invalid configuration id.', 'error')
+        return redirect(url_for('admin.list_configs'))
+
+    # Only this config's own files. Its directory is shared with every other
+    # config starting with the same two characters, so it must never be
+    # removed as a whole (that used to wipe all sibling configs).
+    other_ids = db.get_all_config_ids() - {config_id}
+    owned = Config(config_id).ownedFiles(other_ids)
+
     # Delete from database
     db.delete_configuration(config_id)
 
-    
-    # Delete files on disk
-    if config_path.exists():
+    failed = []
+    for path in owned:
         try:
-            shutil.rmtree(config_path)
+            path.unlink()
         except Exception as e:
-            flash(f'Warning: Could not delete files: {e}', 'warning')
-    
+            failed.append(f'{path.name}: {e}')
+    if failed:
+        flash(f'Warning: Could not delete files: {"; ".join(failed)}', 'warning')
+
     flash(f'Configuration {config_id} deleted.', 'success')
     return redirect(url_for('admin.list_configs'))
 
@@ -118,21 +125,23 @@ def delete_config(config_id):
 @require_admin
 def purge_pdf(config_id):
     """Purge generated PDF files for a configuration."""
-    config = Config(config_id)
-    config_path = config.path().parent
+    if not Config.isValidName(config_id):
+        flash('Invalid configuration id.', 'error')
+        return redirect(url_for('admin.list_configs'))
 
-    
     purged_count = 0
     errors = []
-    
-    # Look for PDF files in the config directory
-    if config_path.exists():
-        for pdf_file in config_path.glob('*.pdf'):
-            try:
-                pdf_file.unlink()
-                purged_count += 1
-            except Exception as e:
-                errors.append(f"Could not delete {pdf_file.name}: {e}")
+
+    # Only this config's PDFs (its directory is shared with sibling configs)
+    other_ids = database.get_all_config_ids() - {config_id}
+    for pdf_file in Config(config_id).ownedFiles(other_ids):
+        if pdf_file.suffix.lower() != '.pdf':
+            continue
+        try:
+            pdf_file.unlink()
+            purged_count += 1
+        except Exception as e:
+            errors.append(f"Could not delete {pdf_file.name}: {e}")
     
     if errors:
         flash(f'Purged {purged_count} PDFs, but encountered errors: {"; ".join(errors)}', 'warning')
@@ -316,8 +325,7 @@ def batch_import():
             errors = Errors()
             
             # Default display groups for batch import (all groups)
-            display_groups = ['Ship', 'SRV', 'OnFoot', 'UI', 'Galaxy map', 'Head look', 
-                              'Scanners', 'Fighter', 'Multicrew', 'Camera', 'Holo-Me', 'Misc']
+            display_groups = list(ALL_DISPLAY_GROUPS)
             
             # Parse bindings
             (physicalKeys, modifiers, devices) = parseBindings(config.name, xml, display_groups, errors)

@@ -11,6 +11,7 @@ from scripts import (
     slugify
 )
 from scripts import database
+from scripts.parser import ALL_DISPLAY_GROUPS
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -111,7 +112,7 @@ def generate_api():
         styling = styling_map.get(styling_mode, 'Modifier')
         
         # Default display groups (all On) if not specified
-        display_groups = ['Ship', 'SRV', 'Head look', 'UI', 'Galaxy map', 'Scanners', 'Fighter', 'On Foot', 'Multicrew', 'Camera', 'Holo-Me', 'Misc']
+        display_groups = list(ALL_DISPLAY_GROUPS)
         
         # 3. Generation Logic (shared with the web UI, see web.generate_legacy_images)
         (physical_keys, modifiers, devices) = parseBindings(run_id, xml, display_groups, errors)

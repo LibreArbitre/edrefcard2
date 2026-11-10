@@ -9,6 +9,8 @@ services:
       - edrefcard_data:/app/www/configs
     environment:
       - PYTHONUNBUFFERED=1
+      # Port published directly, no reverse proxy: trust no X-Forwarded-* header
+      - TRUSTED_PROXY_HOPS=0
     user: root
     restart: unless-stopped
 

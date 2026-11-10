@@ -149,7 +149,7 @@ app.cli.add_command(seed_aeromax_command)
 # =============================================================================
 # The scheduler runs automatic nightly backups ONLY when:
 # 1. APP_ENV=production
-# 2. auto_backup_enabled=True in backup settings (Admin UI)
+# 2. auto_backup_enabled=True in backup settings (Admin UI), read every hour
 
 def init_backup_scheduler():
     """Initialize the backup scheduler for automatic nightly backups."""
@@ -185,28 +185,23 @@ def init_backup_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.cron import CronTrigger
-        from admin.backup import get_backup_settings, run_scheduled_backup
-        
-        settings = get_backup_settings()
-        
-        if not settings.get('auto_backup_enabled'):
-            print("Backup scheduler will NOT run (auto_backup_enabled=False in settings)")
-            return
-        
+        from admin.backup import run_scheduled_backup_tick
+
+        # Hourly tick: the job itself reads the settings, so enabling the
+        # nightly backup or changing its hour in the admin panel takes effect
+        # at the next hour instead of at the next container restart.
         scheduler = BackgroundScheduler()
-        hour = settings.get('backup_schedule_hour', 4)
-        
         scheduler.add_job(
-            run_scheduled_backup,
-            CronTrigger(hour=hour, minute=0),
+            run_scheduled_backup_tick,
+            CronTrigger(minute=0),
             id='nightly_backup',
             replace_existing=True,
-            misfire_grace_time=3600  # Allow 1 hour grace for missed jobs
+            misfire_grace_time=1800,
+            coalesce=True
         )
-        
         scheduler.start()
-        print(f"Backup scheduler ENABLED - nightly at {hour:02d}:00 UTC")
-        
+        print("Backup scheduler ENABLED - hourly check of the backup settings (UTC)")
+
     except Exception as e:
         print(f"Warning: Could not initialize backup scheduler: {e}")
 

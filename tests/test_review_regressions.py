@@ -243,6 +243,80 @@ APP_PROBE = textwrap.dedent('''
                                            draft['updated_at'], draft['id'])
     out['gate'].append(publish(fixed))
 
+    # --- review page: nothing to compare before a first publication, then the draft's changes
+    compare_url = '/admin/controllers/compare/%d' % draft['id']
+    live = database.get_controller_mapping(draft['id'])
+    moved = gate_mapping('Joy_1')
+    moved['boxes'][0]['box_xy'] = [300, 500]
+    moved['boxes'].append({'label': 'B', 'box_xy': [100, 800], 'box_wh': [600, 190],
+                           'button_xy': [900, 900], 'rows': [{'joy': 'Joy_2'}]})
+    database.save_controller_draft('GATE0001', 'Gate', moved, 'probe', live['updated_at'], live['id'])
+    page = client.get(compare_url, headers=headers)
+    text = page.get_data(as_text=True)
+    out['compare'] = [client.get('/admin/controllers/compare/999999', headers=headers).status_code,
+                      page.status_code, 'Box &#34;A&#34;: moved' in text, 'Box added: &#34;B&#34;' in text]
+
+    # --- render cache: a card is drawn once, then again only when a dependency changes
+    import web
+    from scripts import supportedDevices
+    legacy_key = next(key for key in supportedDevices if key != 'Keyboard')
+    draws = []
+
+    def fake_legacy(physical_keys, modifiers, devices, config, public, styling, warnings):
+        draws.append(config.name)
+        config.pathWithNameAndSuffix('fake', '.jpg').write_text('x')
+        return [legacy_key + '::0'], []
+    web.generate_legacy_images = fake_legacy
+    web.render_data_driven = lambda *args, **kwargs: ([], set())
+    card = Config('cachecard')
+    card.makeDir()
+    binds = ('<Root PresetName="Custom"><PrimaryFire><Primary Device="CACHE001" Key="Joy_1"/>'
+             '</PrimaryFire>%s</Root>')
+    card.pathWithSuffix('.binds').write_text(binds % '', encoding='utf-8')
+    database.create_configuration(config_id='cachecard', description='cache', display_groups=['Ship'])
+
+    def view():
+        response = client.get('/binds/cachecard')
+        return [response.status_code, len(draws), 'cachecard-' in response.get_data(as_text=True)]
+    cache_steps = [view(), view()]
+    database.attach_legacy_device_alias('CACHE999', legacy_key, 'probe')
+    cache_steps.append(view())                       # shared dependency changed
+    cache_steps.append(view())
+    card.pathWithNameAndSuffix('fake', '.jpg').unlink()
+    cache_steps.append(view())                       # an image was cleaned up
+    card.pathWithSuffix('.binds').write_text(binds % '<!-- edited -->', encoding='utf-8')
+    cache_steps.append(view())                       # the source changed
+    out['cache'] = cache_steps
+
+    # --- scheduler tick follows the settings without a restart
+    import datetime as dt
+    ticks = []
+    bk.run_scheduled_backup = lambda: ticks.append('run')
+    base = {'sftp_enabled': False, 'sftp_host': '', 'auto_backup_enabled': True, 'backup_schedule_hour': 4}
+
+    def at(hour):
+        return dt.datetime(2030, 1, 1, hour, 0, tzinfo=dt.UTC)
+    bk.save_backup_settings(base)
+    tick = [bk.run_scheduled_backup_tick(at(3)), bk.run_scheduled_backup_tick(at(4))]
+    bk.save_backup_settings({**base, 'backup_schedule_hour': 9})
+    tick += [bk.run_scheduled_backup_tick(at(4)), bk.run_scheduled_backup_tick(at(9))]
+    bk.save_backup_settings({**base, 'auto_backup_enabled': False, 'backup_schedule_hour': 9})
+    tick.append(bk.run_scheduled_backup_tick(at(9)))
+    # a scheduled backup was recorded moments ago (retention check above): not twice in the hour
+    bk.save_backup_settings({**base, 'backup_schedule_hour': dt.datetime.now(dt.UTC).hour})
+    tick.append(bk.run_scheduled_backup_tick())
+    out['tick'] = tick + [len(ticks)]
+
+    # --- editor previews are temporary
+    from admin import _purge_old_previews
+    preview_folder = Config('ddpreview-x').path().parent
+    preview_folder.mkdir(parents=True, exist_ok=True)
+    for name, age in (('ddpreview-old-card.jpg', 7200), ('ddpreview-new-card.jpg', 60), ('ddkeep.jpg', 7200)):
+        (preview_folder / name).write_text('x')
+        os.utime(preview_folder / name, (time.time() - age,) * 2)
+    _purge_old_previews(preview_folder)
+    out['previews'] = sorted(p.name for p in preview_folder.iterdir())
+
     # --- error.log is rotated instead of growing forever
     from scripts import utils
     log_path = Config.configsPath() / 'error.log'
@@ -359,6 +433,27 @@ class AppRegressionTests(unittest.TestCase):
 
     def test_publication_is_blocked_until_errors_are_fixed(self):
         self.assertEqual(self.out['gate'], ['draft', 'published'])
+
+    def test_review_page_lists_what_the_draft_changes(self):
+        self.assertEqual(self.out['compare'], [404, 200, True, True])
+
+    def test_card_is_drawn_once_until_a_dependency_changes(self):
+        # [status, number of draws so far, page shows the card image]
+        self.assertEqual(self.out['cache'], [
+            [200, 1, True],   # first view draws
+            [200, 1, True],   # second view is served from the cache
+            [200, 2, True],   # a controller alias changed
+            [200, 2, True],
+            [200, 3, True],   # an image was removed from disk
+            [200, 4, True],   # the .binds source changed
+        ])
+
+    def test_scheduler_tick_follows_the_settings(self):
+        # wrong hour, due, hour changed (old hour), new hour, disabled, already ran this hour
+        self.assertEqual(self.out['tick'], [False, True, False, True, False, False, 2])
+
+    def test_old_editor_previews_are_purged(self):
+        self.assertEqual(self.out['previews'], ['ddkeep.jpg', 'ddpreview-new-card.jpg'])
 
     def test_error_log_is_rotated(self):
         self.assertEqual(self.out['log'], [True, True])

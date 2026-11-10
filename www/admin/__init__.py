@@ -1231,6 +1231,38 @@ def controllers_history_json(mapping_id, version_id):
     return Response(v['mapping_json'], mimetype='application/json')
 
 
+@admin_bp.route('/controllers/compare/<int:mapping_id>')
+@require_mapper
+def controllers_compare(mapping_id):
+    """Review page: what the saved draft changes compared with the public
+    revision, with both layouts side by side, before publishing."""
+    import json
+    from scripts.mapping_diff import diff_mappings
+    from scripts.mapping_lint import lint_mapping
+    row = database.get_controller_mapping(mapping_id)
+    if not row:
+        abort(404)
+    try:
+        draft = json.loads(row['mapping_json'])
+    except ValueError:
+        draft = {}
+    public = {}
+    if row.get('published_snapshot'):
+        try:
+            public = json.loads(json.loads(row['published_snapshot'])['mapping_json'])
+        except (ValueError, KeyError, TypeError):
+            public = {}
+    if not public:
+        flash(f'"{row["device_name"]}" has no public revision yet: there is nothing to compare with.', 'info')
+        return redirect(url_for('admin.mapping_editor', device=row['device_id']))
+    _, role = current_user()
+    return render_template(
+        'admin/mapping_compare.html', mapping=row, role=role,
+        changes=diff_mappings(public, draft),
+        blocking=[issue['message'] for issue in lint_mapping(draft) if issue['level'] == 'error'],
+        revisions_json=json.dumps({'public': public, 'draft': draft}))
+
+
 @admin_bp.route('/controllers/rollback', methods=['POST'])
 @require_admin
 def controllers_rollback():
@@ -1416,6 +1448,22 @@ def mapping_editor_import_pdf():
                     'url': url_for('web.serve_config', path=f'controllers/{name}.jpg')})
 
 
+def _purge_old_previews(folder, max_age_seconds=3600):
+    """Editor previews are one-shot images: drop those older than an hour
+    (nothing else ever removed them). Never raises."""
+    import time
+    cutoff = time.time() - max_age_seconds
+    try:
+        for path in folder.glob('ddpreview-*.jpg'):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 @admin_bp.route('/mapping-editor/preview', methods=['POST'])
 @require_mapper
 def mapping_editor_preview():
@@ -1477,6 +1525,7 @@ def mapping_editor_preview():
     # Unique output prevents concurrent mapper previews overwriting one another.
     config = Config('ddpreview-' + uuid.uuid4().hex)
     config.makeDir()
+    _purge_old_previews(config.path().parent)
     try:
         createDataDrivenImage(mapping, config, public=False, physicalKeys=physical_keys,
                               modifiers=modifiers, imageDevices=device_ids,

@@ -893,8 +893,16 @@ class RestoreManager:
                             else:
                                 logger.debug("[RESTORE] No existing DB at target path")
                             
-                            # Copy the restored database
-                            shutil.copy2(extracted_db, target_db)
+                            # Put the restored database in place atomically: a
+                            # request served during a plain copy would read a
+                            # half-written file.
+                            staged_db = target_db.with_name(target_db.name + '.restoring')
+                            shutil.copy2(extracted_db, staged_db)
+                            os.replace(staged_db, target_db)
+                            # Journals of the replaced database must not be
+                            # replayed on top of the restored one.
+                            for leftover in ('-journal', '-wal', '-shm'):
+                                target_db.with_name(target_db.name + leftover).unlink(missing_ok=True)
                             
                             logger.debug(f"[RESTORE] After copy, DB size: {target_db.stat().st_size} bytes")
                             
@@ -1139,6 +1147,38 @@ class DiscordNotifier:
 
 
 # ============== Scheduled Backup Job ==============
+
+def run_scheduled_backup_tick(now=None):
+    """Hourly scheduler entry point: run the nightly backup when it is due.
+
+    Reads the settings on every tick (enabled flag and hour, UTC), and never
+    runs twice within the same hour (a recycled worker restarts the scheduler).
+    Returns True when a backup was started.
+    """
+    now = now or datetime.datetime.now(datetime.UTC)
+    try:
+        settings = get_backup_settings()
+        if not settings.get('auto_backup_enabled'):
+            return False
+        if now.hour != int(settings.get('backup_schedule_hour') or 0):
+            return False
+        for entry in get_backup_history(limit=10):
+            if entry.get('backup_type') != 'scheduled':
+                continue
+            try:
+                previous = datetime.datetime.fromisoformat(entry['created_at'])
+            except (TypeError, ValueError):
+                continue
+            if previous.tzinfo is None:
+                previous = previous.replace(tzinfo=datetime.UTC)
+            if abs((now - previous).total_seconds()) < 3000:
+                return False
+    except Exception as e:
+        logger.error(f"Scheduled backup check failed: {e}")
+        return False
+    run_scheduled_backup()
+    return True
+
 
 def run_scheduled_backup():
     """Run the scheduled nightly backup job."""

@@ -1,0 +1,81 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Review draft - {{ mapping.device_name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Review draft: {{ mapping.device_name }}</h1>
+    <p>What the saved draft changes compared with the revision the public sees.
+       Publishing replaces the public revision with the draft; nothing is published from this page until you press the button.</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Changes ({{ changes|length }})</h2>
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin.controllers') }}">&larr; Controllers</a>
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin.mapping_editor', device=mapping.device_id) }}">Open in editor</a>
+        {% if role == 'admin' and not blocking %}
+        <form method="post" action="{{ url_for('admin.controllers_publish') }}"
+              onsubmit="return confirm('Publish this draft? It replaces the public revision.')">
+            <input type="hidden" name="mapping_id" value="{{ mapping.id }}">
+            <input type="hidden" name="base_updated_at" value="{{ mapping.updated_at }}">
+            <input type="hidden" name="state" value="published">
+            <button class="btn btn-primary btn-sm" type="submit">Publish draft</button>
+        </form>
+        {% endif %}
+    </div>
+    {% if blocking %}
+    <p><span class="badge badge-warning">{{ blocking|length }} blocking issue{{ 's' if blocking|length > 1 }}</span>
+       Publication is refused until these are fixed in the editor:</p>
+    <ul>{% for message in blocking %}<li>{{ message }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if changes %}
+    <ul id="changes">{% for change in changes %}<li>{{ change }}</li>{% endfor %}</ul>
+    {% else %}
+    <p style="color:var(--text-secondary)">No difference with the public revision: the draft was saved without any change.</p>
+    {% endif %}
+    <p style="color:var(--text-secondary);font-size:0.85rem">Last saved {{ mapping.updated_at }}{% if mapping.updated_by %} by {{ mapping.updated_by }}{% endif %}.</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Layout previews</h2>
+    </div>
+    <p style="color:var(--text-secondary);font-size:0.85rem">Layout only (no bindings): the same render as the editor's Preview button.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem">
+        <figure style="margin:0">
+            <figcaption><strong>Public revision</strong></figcaption>
+            <div id="preview-public" style="color:var(--text-secondary)">Rendering...</div>
+        </figure>
+        <figure style="margin:0">
+            <figcaption><strong>Draft</strong></figcaption>
+            <div id="preview-draft" style="color:var(--text-secondary)">Rendering...</div>
+        </figure>
+    </div>
+</div>
+
+<script>
+const REVISIONS = JSON.parse({{ revisions_json|tojson }});
+async function renderRevision(target, mapping) {
+    const holder = document.getElementById(target);
+    try {
+        const response = await fetch({{ url_for('admin.mapping_editor_preview')|tojson }}, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mapping: mapping})});
+        const data = await response.json();
+        if (!response.ok || !data.url) throw new Error(data.error || 'Preview failed.');
+        const image = document.createElement('img');
+        image.src = data.url; image.alt = target === 'preview-draft' ? 'Draft layout' : 'Public layout';
+        image.style.maxWidth = '100%';
+        const link = document.createElement('a');
+        link.href = data.url; link.target = '_blank'; link.rel = 'noopener'; link.title = 'Open full size';
+        link.append(image);
+        holder.replaceChildren(link);
+    } catch (error) {
+        holder.textContent = 'Preview unavailable: ' + error.message;
+    }
+}
+renderRevision('preview-public', REVISIONS.public);
+renderRevision('preview-draft', REVISIONS.draft);
+</script>
+{% endblock %}

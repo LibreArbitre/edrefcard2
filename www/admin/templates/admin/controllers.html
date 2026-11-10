@@ -177,6 +177,9 @@
                             {% endif %}
                         </form>
                         {% if m.status == 'published' and m.has_draft %}
+                        <a class="btn btn-outline btn-sm"
+                           href="{{ url_for('admin.controllers_compare', mapping_id=m.id) }}"
+                           title="What the draft changes compared with the public revision, with both layouts side by side">Review changes</a>
                         <form method="post" action="{{ url_for('admin.controllers_publish') }}"
                               onsubmit="return confirm('Publish the saved draft? This replaces the public revision.')">
                             <input type="hidden" name="mapping_id" value="{{ m.id }}">

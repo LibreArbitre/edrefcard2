@@ -21,15 +21,22 @@ def clean_cache_command(days):
     
     click.echo(f"Cleaning files older than {days} days in {configs_dir}...")
     
-    for ext in ['*.jpg', '*.svg']:
-        for file_path in configs_dir.glob(ext):
-            if file_path.stat().st_ctime < cutoff:
+    # Generated cards live in the two-character prefix folders
+    # (configs/<id[:2]>/<id>-<template>.jpg). The previous top-level glob
+    # never matched anything. Cards are regenerated on their next view;
+    # .binds sources, controller photos and backups are never touched.
+    for folder in configs_dir.iterdir():
+        if not folder.is_dir() or len(folder.name) > 2:
+            continue
+        for ext in ('*.jpg', '*.pdf', '*-render.json'):
+            for file_path in folder.glob(ext):
                 try:
-                    file_path.unlink()
-                    count += 1
+                    if file_path.stat().st_mtime < cutoff:
+                        file_path.unlink()
+                        count += 1
                 except OSError as e:
                     click.echo(f"Error deleting {file_path}: {e}")
-    
+
     click.echo(f"Deleted {count} files.")
 
 

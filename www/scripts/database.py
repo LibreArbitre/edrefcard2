@@ -785,6 +785,25 @@ def get_published_controller_mappings():
     return result
 
 
+def get_render_dependencies():
+    """Compact description of everything shared that a rendered card depends on:
+    the published controller mappings and the legacy hardware aliases.
+
+    Part of the render-cache signature: publishing, unpublishing or editing a
+    mapping, or attaching an alias, changes this value and so invalidates
+    every cached card on its next view.
+    """
+    with get_db() as conn:
+        mappings = conn.execute(
+            "SELECT id, updated_at FROM controller_mappings "
+            "WHERE status = 'published' ORDER BY id").fetchall()
+        aliases = conn.execute(
+            "SELECT device_id, legacy_key FROM legacy_device_aliases "
+            "ORDER BY device_id").fetchall()
+    return [[row['id'], str(row['updated_at'])] for row in mappings], \
+           [[row['device_id'], row['legacy_key']] for row in aliases]
+
+
 def record_unknown_device(device_id, run_id):
     """Upsert a sighting of an unmapped controller (admin triage queue).
 

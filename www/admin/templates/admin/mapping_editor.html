@@ -44,6 +44,18 @@
   .del{color:var(--accent);border-color:#e6c7c4;padding:4px 8px}
   #preview{margin-top:10px}
   #preview img{max-width:100%;border:1px solid var(--line);border-radius:6px}
+  .tanchor{position:absolute;white-space:nowrap;line-height:1;cursor:move;user-select:none;background:rgba(255,255,255,.4);outline:1px dashed #2b6cb0;outline-offset:2px}
+  .tanchor.title{color:#000;font-weight:900}
+  .tanchor.url{color:#b8241f;font-weight:700}
+  #checks{border:1px solid var(--line);border-radius:6px;padding:8px;margin:0 0 10px}
+  #checks .sum{font-size:.85rem;font-weight:600}
+  #checks .sum.bad{color:var(--accent)}
+  #checks .sum.ok{color:#2e7d32}
+  #checks ul{list-style:none;margin:6px 0 0;padding:0;max-height:190px;overflow:auto}
+  #checks .issue{display:block;width:100%;text-align:left;font-size:.8rem;padding:4px 2px;border:0;border-top:1px solid var(--line);border-radius:0;background:none;color:var(--ink)}
+  #checks .issue:hover,#checks .issue:focus-visible{background:#f4f3f0}
+  #checks .issue b{color:var(--accent)}
+  #checks .issue.warning b{color:#8a6100}
   .hint{background:#fff8e1;border:1px solid #ffe082;padding:6px 9px;border-radius:6px;font-size:.82rem;margin-bottom:8px}
   details{margin-top:10px}
   textarea{width:100%;height:130px;font-family:ui-monospace,monospace;font-size:11px}
@@ -60,6 +72,7 @@
   <button id="btnpdf" class="ghost" title="Import a manufacturer fillable reference sheet (VIRPIL-style AcroForm PDF): artwork + every box pre-positioned with its Joy mapping">Import PDF</button>
   <span style="width:1px;height:24px;background:var(--line)"></span>
   <input type="text" id="title" placeholder="Title (e.g. VIRPIL AEROMAX R)">
+  <label style="font-size:.78rem;white-space:nowrap" title="Print the title on the card. Untick when the artwork already carries the controller name. The title and the card URL can be dragged on the photo."><input type="checkbox" id="showtitle" checked> show title</label>
   <input type="text" id="deviceid" placeholder="Device ID (e.g. 231D0F0F)">
   <button id="btnaddbox" class="ghost">+ Box</button>
   <select id="stamp" title="Burst mode: pick a stamp then click each physical control on the photo (1 click = 1 anchored box)">
@@ -112,13 +125,18 @@
         <a href="#" data-lang="en">EN</a> &middot; <a href="#" data-lang="fr">FR</a> &middot; <a href="#" data-lang="es">ES</a>
       </span>
       <span id="hint_en">1) Upload a clean photo. 2) + Box, drag/resize it. 3) Add rows (symbol, number, Joy). 4) "Set btn" then click the physical button on the photo. 5) Preview / Save.<br>
-      <b>Shortcuts</b>: Ctrl+wheel = zoom &middot; Space+drag = pan &middot; Shift+click = multi-select (then align tools appear) &middot; drag the red dot = move the anchor &middot; arrows = move selection (Shift = x10) &middot; Del = delete &middot; Ctrl+D = duplicate &middot; Ctrl+Z/Y = undo/redo.</span>
+      <b>Shortcuts</b>: Ctrl+wheel = zoom &middot; Space+drag = pan &middot; Shift+click = multi-select (then align tools appear) &middot; drag the red dot = move the anchor &middot; drag the title or the card URL = move them &middot; arrows = move selection (Shift = x10) &middot; Del = delete &middot; Ctrl+D = duplicate &middot; Ctrl+Z/Y = undo/redo.</span>
       <span id="hint_fr" hidden>1) Upload une photo propre. 2) + Box, glisse/redimensionne. 3) Ajoute des lignes (symbole, numéro, Joy). 4) "Set btn" puis clique le bouton sur l'image. 5) Preview / Save.<br>
-      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; Shift+clic = multi-sélection (outils d'alignement) &middot; glisser le point rouge = déplacer l'ancre &middot; flèches = bouger la sélection (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</span>
+      <b>Raccourcis</b> : Ctrl+molette = zoom &middot; Espace+glisser = déplacer la vue &middot; Shift+clic = multi-sélection (outils d'alignement) &middot; glisser le point rouge = déplacer l'ancre &middot; glisser le titre ou l'URL de la carte = les déplacer &middot; flèches = bouger la sélection (Shift = x10) &middot; Suppr = supprimer &middot; Ctrl+D = dupliquer &middot; Ctrl+Z/Y = annuler/rétablir.</span>
       <span id="hint_es" hidden>1) Sube una foto limpia. 2) + Box, arrastra/redimensiona. 3) A&ntilde;ade filas (s&iacute;mbolo, n&uacute;mero, Joy). 4) "Set btn" y haz clic en el bot&oacute;n f&iacute;sico sobre la foto. 5) Preview / Save.<br>
-      <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; Shift+clic = multi-selecci&oacute;n (herramientas de alineaci&oacute;n) &middot; arrastra el punto rojo = mover el ancla &middot; flechas = mover la selecci&oacute;n (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer.</span>
+      <b>Atajos</b>: Ctrl+rueda = zoom &middot; Espacio+arrastrar = mover la vista &middot; Shift+clic = multi-selecci&oacute;n (herramientas de alineaci&oacute;n) &middot; arrastra el punto rojo = mover el ancla &middot; arrastra el t&iacute;tulo o la URL de la tarjeta = moverlos &middot; flechas = mover la selecci&oacute;n (Shift = x10) &middot; Supr = borrar &middot; Ctrl+D = duplicar &middot; Ctrl+Z/Y = deshacer/rehacer.</span>
     </div>
     {% if draft_note %}<div class="hint" style="background:#e8f4e8;border-color:#a5cca5">{{ draft_note }}</div>{% endif %}
+    <div id="checks" aria-live="polite">
+      <h2 style="margin-bottom:4px">Checks</h2>
+      <div class="sum" id="checkssum">Add a box to start checking the mapping.</div>
+      <ul id="checkslist"></ul>
+    </div>
     <details id="scaffolder"><summary class="small">Blank scaffold (from manufacturer docs, no .binds)</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0">
         <label class="small">Buttons <input type="number" id="sc_btn" value="16" min="0" max="128" style="width:64px"></label>
@@ -149,7 +167,8 @@
     <label class="small" for="previewreference">Preview with a saved .binds reference (optional)</label>
     <input id="previewreference" type="text" placeholder="e.g. iapcqr" maxlength="200"
            aria-describedby="previewhelp" style="width:100%;margin-top:4px">
-    <p class="small" id="previewhelp">Enter the reference after /binds/ in a card URL. Preview uses all game modes and does not save or publish your draft.</p>
+    <select id="previewpicker" aria-label="Recent cards using this controller" style="width:100%;margin-top:4px" hidden></select>
+    <p class="small" id="previewhelp">Pick a recent upload that uses this controller, or enter the reference after /binds/ in a card URL. Preview uses all game modes and does not save or publish your draft.</p>
     <p class="small" id="previewcoverage" role="status" aria-live="polite"></p>
     <div id="preview"></div>
   </div>
@@ -231,6 +250,7 @@ function lockEditing(locked){
   ['#stagewrap','#boxes','#scaffolder'].forEach(s=>$(s).inert=locked);
   $('#btnjsonimp').disabled=locked;
   $('#previewreference').disabled=locked;
+  $('#previewpicker').disabled=locked || $('#previewpicker').options.length<2;
 }
 function bindAsync(selector, action, event='click'){
   $(selector).addEventListener(event, async e=>{
@@ -335,7 +355,7 @@ function computeScale(){ scale = img.clientWidth / (state.width||img.naturalWidt
 function renderStage(){
   computeScale();
   // remove existing overlays
-  stage.querySelectorAll('.box,.marker').forEach(n=>n.remove());
+  stage.querySelectorAll('.box,.marker,.tanchor').forEach(n=>n.remove());
   // Live content preview: the same header/rows the renderer will draw,
   // approximated in HTML (row grid = 72 image px, header = 40)
   const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -372,6 +392,23 @@ function renderStage(){
       stage.appendChild(m);
     }
   });
+  // Title and card URL exactly where the renderer prints them (y = text
+  // baseline), draggable so they can be moved off a logo or a control.
+  $('#showtitle').checked = state.show_title !== false;
+  if(state.image && state.width){
+    const addText=(key,cls,text,size,defaults,hint)=>{
+      const [x,y]=state[key]||defaults;
+      const el=document.createElement('div'); el.className='tanchor '+cls; el.textContent=text;
+      el.style.fontSize=(size*scale)+'px';
+      el.style.left=(x*scale)+'px'; el.style.top=((y-size*0.8)*scale)+'px';
+      el.title=hint;
+      el.addEventListener('mousedown',e=>startTextDrag(e,key,defaults,size));
+      stage.appendChild(el);
+    };
+    if(state.show_title!==false && $('#title').value.trim())
+      addText('title_xy','title',$('#title').value,TITLE_SIZE,TITLE_XY,'Card title (drag to move)');
+    addText('url_xy','url',location.origin+'/binds/your-card',URL_SIZE,URL_XY,'Card URL printed on every card (drag to move)');
+  }
   updateAlignTools();
   // live leader lines (box edge -> button point), same idea as the renderer
   lines.width = img.clientWidth || 0; lines.height = img.clientHeight || 0;
@@ -401,6 +438,7 @@ function renderStage(){
   $("#json").value = JSON.stringify(mapping(),null,1);
   $('#hardwareids').textContent='Hardware IDs: '+(mapping().device_ids.join(', ') || 'not set');
   autosave();
+  scheduleChecks();
 }
 
 // Snap the dragged box to a 20px grid and to neighbour box edges; fills
@@ -468,6 +506,24 @@ function startMarkerDrag(e,i){
   function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
   document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
 }
+// Renderer defaults (scripts/renderer.py createDataDrivenImage): font sizes
+// in image pixels and the positions used when a mapping stores none.
+const TITLE_SIZE=52, URL_SIZE=30, TITLE_XY=[40,64], URL_XY=[44,118];
+let lastTextDrag=0;
+function startTextDrag(e,key,defaults,size){
+  if(spaceDown) return;
+  e.preventDefault(); e.stopPropagation();
+  snapshot('textmove');
+  const start=(state[key]||defaults).slice(), sx=e.clientX, sy=e.clientY;
+  function mv(ev){
+    const x=Math.round(start[0]+(ev.clientX-sx)/scale), y=Math.round(start[1]+(ev.clientY-sy)/scale);
+    state[key]=[Math.min(Math.max(0,x),Math.max(0,state.width-1)),
+                Math.min(Math.max(size,y),Math.max(size,state.height-1))];
+    renderStage();
+  }
+  function up(){ lastTextDrag=Date.now(); document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+}
 function startResize(e,i,d){
   if(spaceDown) return;
   e.preventDefault(); snapshot('resize'); const r=stage.getBoundingClientRect(), b=state.boxes[i];
@@ -478,7 +534,8 @@ function startResize(e,i,d){
 
 stage.addEventListener('click',e=>{
   if(spaceDown || !scale) return;
-  const onBox = ['box','rsz','lbl','marker'].some(c=>e.target.classList.contains(c));
+  if(Date.now()-lastTextDrag<300) return;  // the click that ends a title/URL drag
+  const onBox = ['box','rsz','lbl','marker','tanchor'].some(c=>e.target.classList.contains(c));
   const r=stage.getBoundingClientRect();
   const px=Math.round((e.clientX-r.left)/scale), py=Math.round((e.clientY-r.top)/scale);
   if(setBtnFor>=0){
@@ -879,8 +936,85 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)flushDraft(
   $(s).addEventListener('focus',()=>{before=captureDocument();});
   $(s).addEventListener('input',()=>{
     if(before){ snapshot('metadata',before);before=null; }
-    dirty=true;autosave();
+    dirty=true;renderStage();
   });
+});
+
+$('#showtitle').addEventListener('change',e=>{
+  snapshot('showtitle');
+  if(e.target.checked) delete state.show_title; else state.show_title=false;
+  renderStage();
+});
+
+// ---- checks: same rules as the publication gate (scripts/mapping_lint.py) ----
+let checksTimer=null, checksSeq=0, checkedDocument=null;
+function scheduleChecks(){
+  clearTimeout(checksTimer);
+  checksTimer=setTimeout(()=>{ runChecks(); loadReferences(); },500);
+}
+function showChecks(summary, cls, issues){
+  const sum=$('#checkssum'), list=$('#checkslist');
+  sum.textContent=summary; sum.className='sum'+(cls?' '+cls:'');
+  list.replaceChildren(...(issues||[]).map(issue=>{
+    const item=document.createElement('li'), button=document.createElement('button');
+    const level=document.createElement('b');
+    button.type='button'; button.className='issue '+issue.level;
+    level.textContent=issue.level==='error'?'Error':'Warning';
+    button.append(level,' '+issue.message);
+    button.addEventListener('click',()=>{
+      if(issue.box===null || issue.box===undefined || !state.boxes[issue.box]) return;
+      selectOnly(issue.box); renderPanel(); renderStage();
+      stage.querySelectorAll('.box')[issue.box]?.scrollIntoView({block:'center',inline:'center'});
+    });
+    item.append(button);
+    return item;
+  }));
+}
+async function runChecks(){
+  if(!state.boxes.length){ checkedDocument=null; showChecks('Add a box to start checking the mapping.'); return; }
+  const body=JSON.stringify({mapping:mapping()});
+  if(body===checkedDocument) return;
+  const seq=++checksSeq;
+  try{
+    const response=await fetch('/admin/mapping-editor/lint',{method:'POST',headers:{'Content-Type':'application/json'},body});
+    if(!response.ok || response.redirected) throw new Error('unavailable');
+    const issues=(await response.json()).issues||[];
+    if(seq!==checksSeq) return;
+    checkedDocument=body;
+    const errors=issues.filter(issue=>issue.level==='error').length, warnings=issues.length-errors;
+    const count=(n,word)=>n+' '+word+(n>1?'s':'');
+    if(!issues.length) showChecks('No issue found.','ok');
+    else showChecks((errors?count(errors,'error')+' (publication blocked)':'No blocking error')+
+                    (warnings?' · '+count(warnings,'warning'):''), errors?'bad':'', issues);
+  }catch(error){
+    if(seq===checksSeq) showChecks('Checks are unavailable right now. They run again at the next change.');
+  }
+}
+
+// ---- preview picker: recent uploads that really use this controller ----
+let referencesFor=null;
+async function loadReferences(){
+  const ids=mapping().device_ids, key=ids.join(','), picker=$('#previewpicker');
+  if(key===referencesFor) return;
+  referencesFor=key;
+  if(!ids.length){ picker.hidden=true; return; }
+  try{
+    const response=await fetch('/admin/mapping-editor/references?devices='+encodeURIComponent(key));
+    if(!response.ok || response.redirected) throw new Error('unavailable');
+    const references=(await response.json()).references||[];
+    if(referencesFor!==key) return;
+    picker.replaceChildren(new Option(references.length
+      ? 'Recent cards using this controller ('+references.length+')'
+      : 'No uploaded card uses this controller yet',''));
+    references.forEach(reference=>picker.add(new Option(
+      [reference.id,reference.date,reference.description].filter(Boolean).join(' · '),reference.id)));
+    picker.disabled=!references.length; picker.hidden=false;
+  }catch(error){ picker.hidden=true; }
+}
+$('#previewpicker').addEventListener('change',e=>{
+  if(!e.target.value) return;
+  $('#previewreference').value=e.target.value;
+  $('#status').textContent='Reference "'+e.target.value+'" selected. Click Preview to render it.';
 });
 
 window.addEventListener('resize',()=>{ applyZoom(); renderStage(); });

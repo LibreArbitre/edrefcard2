@@ -1623,7 +1623,8 @@ def createDataDrivenImage(mapping, config, public, physicalKeys=None, modifiers=
                 context.font = getFontPath('Black', 'Normal')
                 context.font_size = 52
                 context.fill_color = Color('Black')
-                context.text(x=40, y=64, body=mapping['title'])
+                title_x, title_y = mapping.get('title_xy', [40, 64])
+                context.text(x=int(title_x), y=int(title_y), body=mapping['title'])
                 context.pop()
             # URL under the title (legacy writeUrlToDrawing uses a fixed position
             # that collides with data-driven boxes).

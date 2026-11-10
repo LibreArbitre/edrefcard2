@@ -960,6 +960,7 @@ def _find_mapping_for_device(device_id):
 def controllers():
     """Control tower: existing data-driven mappings + unknown-device queue."""
     import json
+    from scripts.mapping_lint import lint_mapping, lint_summary
     mappings = []
     for r in database.get_all_controller_mappings():
         try:
@@ -975,6 +976,7 @@ def controllers():
             'status': r.get('status', 'published'),
             'has_draft': r.get('has_draft', False),
             'updated_by': r.get('updated_by'),
+            'lint': lint_summary(lint_mapping(m)),
         })
     _, role = current_user()
     unknown = [u for u in database.list_unknown_devices()
@@ -1040,6 +1042,21 @@ def controllers_publish():
         flash('Mapping and target state required.', 'error')
         return redirect(url_for('admin.controllers'))
     user_name, _ = current_user()
+    if state == 'published':
+        # Same checks as the editor's "Checks" panel: errors would ship a
+        # card that is wrong for every user, so they block publication.
+        import json
+        from scripts.mapping_lint import lint_mapping
+        try:
+            issues = lint_mapping(json.loads(row['mapping_json']))
+        except ValueError:
+            issues = [{'level': 'error', 'box': None, 'message': 'The mapping is not valid JSON.'}]
+        blocking = [issue['message'] for issue in issues if issue['level'] == 'error']
+        if blocking:
+            shown = ' '.join(blocking[:3]) + (f' (+{len(blocking) - 3} more)' if len(blocking) > 3 else '')
+            flash(f'Publication blocked for "{row["device_name"]}": {shown} '
+                  'Open the editor: the Checks panel lists every issue.', 'error')
+            return redirect(url_for('admin.controllers'))
     try:
         database.set_controller_publication(row['id'], state,
                                             request.form.get('base_updated_at'), user_name)
@@ -1473,6 +1490,37 @@ def mapping_editor_preview():
     return jsonify({'url': url_for('web.serve_config',
                                   path=f'dd/{config.name}-{image_name}.jpg'),
                     'coverage': coverage})
+
+
+@admin_bp.route('/mapping-editor/lint', methods=['POST'])
+@require_mapper
+def mapping_editor_lint():
+    """Quality checks for the draft being edited (nothing is saved)."""
+    from flask import jsonify
+    from scripts.mapping_lint import lint_mapping
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object.'}), 400
+    return jsonify({'issues': lint_mapping(data.get('mapping'))})
+
+
+@admin_bp.route('/mapping-editor/references')
+@require_mapper
+def mapping_editor_references():
+    """Recent uploads that bind this controller, for the preview picker.
+    Only cards whose .binds source is still on disk can be previewed."""
+    from flask import jsonify
+    ids = [part.strip() for part in (request.args.get('devices') or '').split(',')]
+    ids = [part for part in ids if re.fullmatch(r'[A-Za-z0-9_-]{1,64}', part)][:20]
+    references = []
+    for row in database.list_recent_configs_for_device_ids(ids, limit=40):
+        if not Config.isValidName(row['id']) or not Config(row['id']).pathWithSuffix('.binds').is_file():
+            continue
+        references.append({'id': row['id'], 'description': row.get('description') or '',
+                           'date': str(row.get('created_at') or '')[:10]})
+        if len(references) >= 15:
+            break
+    return jsonify({'references': references})
 
 
 def _notify_discord_mapping(title, message, fields=None):

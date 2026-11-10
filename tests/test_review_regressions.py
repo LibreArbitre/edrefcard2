@@ -216,6 +216,33 @@ APP_PROBE = textwrap.dedent('''
     bk.forget_sftp_host_key('sftp.example', 22)
     out['sftp'].append(bk.get_pinned_sftp_host_key('sftp.example', 22))
 
+    # --- mapping editor: checks endpoint, preview picker, publication gate
+    def gate_mapping(code):
+        return {'title': 'Gate', 'image': 'gate', 'width': 2200, 'height': 1280, 'device_ids': ['GATE0001'],
+                'boxes': [{'label': 'A', 'box_xy': [100, 100], 'box_wh': [600, 190],
+                           'button_xy': [900, 400], 'rows': [{'joy': code}]}]}
+    issues = client.post('/admin/mapping-editor/lint', headers=headers,
+                         json={'mapping': gate_mapping('joy_1')}).get_json()['issues']
+    out['lint'] = [[issue['level'], issue['box']] for issue in issues]
+    for name, with_source in (('gatecard-one', True), ('gatecard-two', False)):
+        if with_source:
+            config = Config(name)
+            config.makeDir()
+            config.pathWithSuffix('.binds').write_text('<Root/>')
+        database.create_configuration(config_id=name, description=name, devices={'GATE0001::0': None})
+    out['references'] = [reference['id'] for reference in client.get(
+        '/admin/mapping-editor/references?devices=gate0001', headers=headers).get_json()['references']]
+
+    def publish(row):
+        client.post('/admin/controllers/publish', headers=headers, data={
+            'mapping_id': row['id'], 'state': 'published', 'base_updated_at': row['updated_at']})
+        return database.get_controller_mapping(row['id'])['status']
+    draft = database.save_controller_draft('GATE0001', 'Gate', gate_mapping('joy_1'), 'probe')
+    out['gate'] = [publish(draft)]
+    fixed = database.save_controller_draft('GATE0001', 'Gate', gate_mapping('Joy_1'), 'probe',
+                                           draft['updated_at'], draft['id'])
+    out['gate'].append(publish(fixed))
+
     # --- error.log is rotated instead of growing forever
     from scripts import utils
     log_path = Config.configsPath() / 'error.log'
@@ -322,6 +349,16 @@ class AppRegressionTests(unittest.TestCase):
         self.assertTrue(traversal)
         self.assertTrue(not_backup)
         self.assertEqual(forgotten, '')
+
+    def test_editor_checks_endpoint_reports_blocking_errors(self):
+        # the mistyped code in box 0, then "no usable input code" for the mapping
+        self.assertEqual(self.out['lint'], [['error', 0], ['error', None]])
+
+    def test_preview_picker_lists_only_cards_with_a_source_file(self):
+        self.assertEqual(self.out['references'], ['gatecard-one'])
+
+    def test_publication_is_blocked_until_errors_are_fixed(self):
+        self.assertEqual(self.out['gate'], ['draft', 'published'])
 
     def test_error_log_is_rotated(self):
         self.assertEqual(self.out['log'], [True, True])

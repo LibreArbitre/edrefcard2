@@ -868,6 +868,27 @@ def count_configs_for_device_ids(device_ids):
         return row['n'] if row else 0
 
 
+def list_recent_configs_for_device_ids(device_ids, limit=15):
+    """Most recent configurations binding any of these hardware IDs.
+
+    Feeds the mapping editor's preview picker: a mapper reviews a draft
+    against real uploads instead of typing a card reference by hand.
+    """
+    device_ids = [str(did).strip() for did in device_ids or [] if str(did).strip()]
+    if not device_ids:
+        return []
+    with get_db() as conn:
+        clauses = " OR ".join("UPPER(cd.device_key) LIKE ?" for _ in device_ids)
+        rows = conn.execute(f"""
+            SELECT c.id, c.description, c.created_at
+            FROM configurations c
+            WHERE c.id IN (SELECT cd.config_id FROM config_devices cd WHERE {clauses})
+            ORDER BY c.created_at DESC
+            LIMIT ?
+        """, [f"{did.upper()}::%" for did in device_ids] + [limit]).fetchall()
+        return [dict(row) for row in rows]
+
+
 # ---- controller-mapping audit trail ----
 
 def log_mapping_action(action, actor, mapping_id=None, device_id=None, detail=None):

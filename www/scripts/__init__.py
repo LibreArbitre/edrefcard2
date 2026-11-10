@@ -6,7 +6,7 @@ This package provides the core functionality for generating Elite: Dangerous
 reference cards from controller bindings files.
 
 The package is organized into the following modules:
-- models: Core data models (Config, Mode, Errors)
+- models: Core data models (Config, Errors)
 - parser: XML parsing and form handling
 - renderer: Image generation
 - styles: Styling constants
@@ -19,16 +19,12 @@ from this package or from the bindings module.
 __version__ = '2.1.0'
 
 # Re-export from submodules for backwards compatibility
-from .models import Config, Mode, Errors
+from .models import Config, Errors
 from .utils import getFontPath, transKey, logError, slugify
 from .parser import (
-    parseBindings, 
-    parseForm, 
-    parseFormData, 
-    determineMode,
-    parseLocalFile,
+    parseBindings,
+    parseFormData,
     isRedundantSpecialisation,
-    controllerNames,
 )
 from .renderer import (
     createKeyboardImage,
@@ -59,16 +55,11 @@ __all__ = [
     '__version__',
     # Models
     'Config',
-    'Mode', 
     'Errors',
     # Parser
     'parseBindings',
-    'parseForm',
     'parseFormData',
-    'determineMode',
-    'parseLocalFile',
     'isRedundantSpecialisation',
-    'controllerNames',
     # Renderer
     'createKeyboardImage',
     'appendKeyboardImage',

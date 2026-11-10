@@ -11,7 +11,6 @@ from collections import OrderedDict
 
 from lxml import etree
 
-from .models import Config, Mode, Errors
 from .utils import logError
 from .mapping_runtime import mapping_software_warning
 
@@ -44,6 +43,11 @@ DISPLAY_GROUP_FIELDS = {
     'showmisc': 'Misc',
 }
 
+# Every display group, for callers without a form (API, batch import).
+# Single source of truth: hand-written copies drifted ('On Foot' instead of
+# 'OnFoot', 'Settlement' forgotten) and silently dropped those bindings.
+ALL_DISPLAY_GROUPS = tuple(DISPLAY_GROUP_FIELDS.values())
+
 
 def parseFormData(form_data):
     """Parse form data from Flask request.form (dict-like object).
@@ -61,91 +65,6 @@ def parseFormData(form_data):
         if form_data.get(field):
             displayGroups.append(group)
     return displayGroups
-
-
-def parseForm(form):
-    """Parse form data from cgi.FieldStorage (legacy CGI).
-    
-    Args:
-        form: A cgi.FieldStorage object
-    
-    Returns:
-        Tuple of (displayGroups, styling, description)
-    """
-    displayGroups = []
-    for field, group in DISPLAY_GROUP_FIELDS.items():
-        if form.getvalue(field):
-            displayGroups.append(group)
-    
-    styling = 'None'  # Yes we do mean a string 'None'
-    if form.getvalue('styling') == 'group':
-        styling = 'Group'
-    if form.getvalue('styling') == 'category':
-        styling = 'Category'
-    if form.getvalue('styling') == 'modifier':
-        styling = 'Modifier'
-    
-    description = form.getvalue('description')
-    if description is None:
-        description = ''
-    
-    return (displayGroups, styling, description)
-
-
-def determineMode(form):
-    """Determine the operating mode from form data.
-    
-    Args:
-        form: A cgi.FieldStorage object
-    
-    Returns:
-        Mode enum value
-    """
-    deviceForBlockImage = form.getvalue('blocks')
-    wantList = form.getvalue('list')
-    wantDeviceList = form.getvalue('devicelist')
-    runIdToReplay = form.getvalue('replay')
-    description = form.getvalue('description')
-    
-    if description is None:
-        description = ''
-    
-    if len(description) > 0 and not description[0].isalnum():
-        mode = Mode.invalid
-    elif deviceForBlockImage is not None:
-        mode = Mode.blocks
-    elif wantList is not None:
-        mode = Mode.list
-    elif wantDeviceList is not None:
-        mode = Mode.listDevices
-    elif runIdToReplay is not None:
-        mode = Mode.replay
-    else:
-        mode = Mode.generate
-    
-    return mode
-
-
-def parseLocalFile(filePath, groupStyles):
-    """Parse a bindings file from the local filesystem.
-    
-    Args:
-        filePath: Path object to the .binds file
-        groupStyles: Dictionary of group styles (for getting all groups)
-    
-    Returns:
-        Tuple of ((physicalKeys, modifiers, devices), errors)
-    """
-    displayGroups = groupStyles.keys()
-    config = Config('000000')
-    errors = Errors()
-    
-    with filePath.open() as f:
-        xml = f.read()
-        (physicalKeys, modifiers, devices) = parseBindings(
-            config.name, xml, displayGroups, errors
-        )
-        return ((physicalKeys, modifiers, devices), errors)
 
 
 def parseBindings(runId, xml, displayGroups, errors):
@@ -416,35 +335,3 @@ def isRedundantSpecialisation(control, bind):
             return True
     
     return False
-
-
-def controllerNames(configObj):
-    """Get the display names of controllers used in a config.
-    
-    Args:
-        configObj: Configuration dictionary with 'devices' key
-    
-    Returns:
-        Set of controller display names
-    """
-    try:
-        from .bindingsData import hotasDetails
-    except ImportError:
-        from bindingsData import hotasDetails
-    
-    rawKeys = configObj['devices'].keys()
-    controllers = [fullKey.split('::')[0] for fullKey in rawKeys]
-    silencedControllers = ['Mouse', 'Keyboard']
-    
-    def displayName(controller):
-        try:
-            return hotasDetails[controller]['displayName']
-        except Exception:
-            return controller
-    
-    controllers = {
-        displayName(controller) 
-        for controller in controllers 
-        if controller not in silencedControllers
-    }
-    return controllers

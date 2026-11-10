@@ -1,9 +1,8 @@
 import os
-import random
-import string
 import tempfile
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, send_from_directory, current_app, abort
+from markupsafe import escape
 from extensions import limiter
 from scripts import (
     Config,
@@ -168,6 +167,16 @@ def generate_legacy_images(physical_keys, modifiers, devices, config, public,
     return created_images, unsupported_devices
 
 
+def _config_not_found(run_id=None):
+    """404 page for an unknown or malformed config id (id escaped: the error
+    template renders its message as HTML)."""
+    if run_id is None:
+        message = '<h1>Configuration not found</h1>'
+    else:
+        message = f'<h1>Configuration "{escape(run_id)}" not found</h1>'
+    return render_template('error.html', error_message=message), 404
+
+
 @web_bp.route('/')
 def index():
     """Render the home page."""
@@ -206,7 +215,10 @@ def generate():
                                error_message='<h1>Only .binds files are allowed</h1>')
     
     try:
-        xml_bytes = file.read()
+        # Read one byte past the limit at most: the global MAX_CONTENT_LENGTH
+        # (sized for admin backup uploads) must not let a public upload
+        # load 100 MB in memory before being rejected.
+        xml_bytes = file.read(512001)
         if len(xml_bytes) > 512000:
             return render_template('error.html',
                                    error_message='<h1>File too large. Maximum size is 500KB</h1>')
@@ -235,23 +247,12 @@ def generate():
     elif request.form.get('styling') == 'modifier':
         styling = 'Modifier'
     
-    # Generate config ID from filename
+    # Reserve a unique config ID derived from the filename (never reuses or
+    # overwrites an existing card, see Config.claimUnique)
     base_id = slugify(file.filename.rsplit('.', 1)[0] if '.' in file.filename else file.filename)
-    if not base_id:
-        base_id = Config.randomName()
-
-    
-    run_id = base_id
-    config = Config(run_id)
-    
-    # If ID already exists, append a short random suffix
-    if config.exists():
-        suffix = ''.join(random.choice(string.ascii_lowercase) for _ in range(3))
-        run_id = f"{base_id}-{suffix}"
-        config = Config(run_id)
-
-    
-    config.makeDir()
+    config = Config.claimUnique(
+        base_id, is_taken=lambda name: database.get_configuration(name) is not None)
+    run_id = config.name
     
     binds_path = config.pathWithSuffix('.binds')
     with open(str(binds_path), 'w', encoding='utf-8') as f:
@@ -314,7 +315,7 @@ def generate():
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
-        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+        errors.errors = f'<h1>System Error</h1><p>{escape(str(e))}</p>'
     except Exception as e:
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         import traceback
@@ -494,10 +495,16 @@ def list_configs():
 
 
 @web_bp.route('/binds/<run_id>')
+@limiter.limit("60 per minute")
 def show_binds(run_id):
     """Show a saved configuration."""
     import codecs
-    
+
+    # run_id comes straight from the URL: reject anything that is not a
+    # generated id before it reaches the filesystem or the error page.
+    if not Config.isValidName(run_id):
+        return _config_not_found()
+
     errors = Errors()
     unsupported_devices = []
     
@@ -511,7 +518,7 @@ def show_binds(run_id):
         
         if not binds_path.exists():
             if db_config is None:
-                return render_template('error.html', error_message=f'<h1>Configuration "{run_id}" not found</h1>')
+                return _config_not_found(run_id)
             
             source_missing = True
             xml = None
@@ -541,7 +548,7 @@ def show_binds(run_id):
 
     except (ValueError):
         return render_template('error.html',
-                               error_message=f'<h1>Configuration "{run_id}" invalid</h1>')
+                               error_message=f'<h1>Configuration "{escape(run_id)}" invalid</h1>'), 404
     
     created_images = []
     keyboard_layout_image = False
@@ -605,7 +612,7 @@ def show_binds(run_id):
 
     except RuntimeError as e:
         logError(f'Runtime error in generation for {run_id}: {e}\n')
-        errors.errors = f'<h1>System Error</h1><p>{str(e)}</p>'
+        errors.errors = f'<h1>System Error</h1><p>{escape(str(e))}</p>'
     except Exception as e:
         logError(f'Unexpected error in generation for {run_id}: {e}\n')
         # import traceback
@@ -689,12 +696,12 @@ def show_device(device_name):
         createBlockImage(device_name)
     except KeyError:
         return render_template('error.html',
-                               error_message=f'<h1>{device_name} is not a supported controller.</h1>')
+                               error_message=f'<h1>{escape(device_name)} is not a supported controller.</h1>'), 404
     except Exception as e:
         # e.g. missing/corrupt template image: 500s leaked here before
         logError(f'show_device {device_name}: {e}\n')
         return render_template('error.html',
-                               error_message=f'<h1>{device_name} does not have a visual layout yet.</h1>')
+                               error_message=f'<h1>{escape(device_name)} does not have a visual layout yet.</h1>'), 404
     
     return render_template('refcard.html',
                            run_id='',
@@ -726,9 +733,13 @@ def generate_pdf(run_id, page_format='A4'):
     pdf_filename = f"{run_id}-{page_format}.pdf"
     pdf_path = config_dir / pdf_filename
     
-    # Search for images
+    # Search for images. The directory is shared with other configs and ids
+    # can be prefixes of one another ('custom-4-2' vs 'custom-4-2-abc'), so
+    # drop the images that belong to a longer sibling id.
     search_pattern = f"{run_id}-*.jpg"
-    all_files = list(config_dir.glob(search_pattern))
+    siblings = [p.stem + '-' for p in config_dir.glob(f"{run_id}-*.binds")]
+    all_files = [p for p in config_dir.glob(search_pattern)
+                 if not any(p.name.startswith(sibling) for sibling in siblings)]
 
     keyboard_img = None
     device_images = []
@@ -839,8 +850,12 @@ def generate_pdf(run_id, page_format='A4'):
     return str(pdf_path)
 
 @web_bp.route('/download/<run_id>/pdf')
+@limiter.limit("30 per minute")
 def download_pdf(run_id):
     """Download existing or generate new PDF."""
+    if not Config.isValidName(run_id):
+        return _config_not_found()
+
     format_type = request.args.get('format', 'A4')
     if format_type not in ['A4', 'Letter']:
         format_type = 'A4'
@@ -855,13 +870,12 @@ def download_pdf(run_id):
                 download_name=f"EDRefCard-{run_id}-{format_type}.pdf"
             )
         else:
-             from scripts.models import Config as ConfigModel
-             cfg = ConfigModel(run_id)
-             search_path = cfg.path().parent
-             return render_template('error.html', error_message=f'<h1>No images found to generate PDF</h1><p>Debug: Searched in {search_path} for pattern {run_id}-*.jpg</p>')
+             return render_template('error.html',
+                                    error_message='<h1>No images found to generate PDF</h1>'
+                                                  '<p>Open the reference card page first, then retry.</p>'), 404
     except Exception as e:
         logError(f"PDF Gen Error: {e}")
-        return render_template('error.html', error_message=f'<h1>Error generating PDF</h1><p>{e}</p>')
+        return render_template('error.html', error_message='<h1>Error generating PDF</h1>'), 500
 
 @web_bp.route('/configs/<path:path>')
 def serve_config(path):

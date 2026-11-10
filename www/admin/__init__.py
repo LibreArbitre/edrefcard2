@@ -6,11 +6,11 @@ Flask Blueprint for administration functionality.
 """
 
 import re
-import shutil
 from pathlib import Path
 from urllib.parse import urlparse
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from scripts import database, parseBindings, slugify, logError
+from scripts.parser import ALL_DISPLAY_GROUPS
 
 from scripts.models import Config, Errors
 from extensions import limiter
@@ -94,22 +94,29 @@ def list_configs():
 def delete_config(config_id):
     """Delete a configuration."""
     db = database
-    
-    # Get config path to delete files
-    config = Config(config_id)
-    config_path = config.path().parent
-    
+
+    if not Config.isValidName(config_id):
+        flash('Invalid configuration id.', 'error')
+        return redirect(url_for('admin.list_configs'))
+
+    # Only this config's own files. Its directory is shared with every other
+    # config starting with the same two characters, so it must never be
+    # removed as a whole (that used to wipe all sibling configs).
+    other_ids = db.get_all_config_ids() - {config_id}
+    owned = Config(config_id).ownedFiles(other_ids)
+
     # Delete from database
     db.delete_configuration(config_id)
 
-    
-    # Delete files on disk
-    if config_path.exists():
+    failed = []
+    for path in owned:
         try:
-            shutil.rmtree(config_path)
+            path.unlink()
         except Exception as e:
-            flash(f'Warning: Could not delete files: {e}', 'warning')
-    
+            failed.append(f'{path.name}: {e}')
+    if failed:
+        flash(f'Warning: Could not delete files: {"; ".join(failed)}', 'warning')
+
     flash(f'Configuration {config_id} deleted.', 'success')
     return redirect(url_for('admin.list_configs'))
 
@@ -118,21 +125,23 @@ def delete_config(config_id):
 @require_admin
 def purge_pdf(config_id):
     """Purge generated PDF files for a configuration."""
-    config = Config(config_id)
-    config_path = config.path().parent
+    if not Config.isValidName(config_id):
+        flash('Invalid configuration id.', 'error')
+        return redirect(url_for('admin.list_configs'))
 
-    
     purged_count = 0
     errors = []
-    
-    # Look for PDF files in the config directory
-    if config_path.exists():
-        for pdf_file in config_path.glob('*.pdf'):
-            try:
-                pdf_file.unlink()
-                purged_count += 1
-            except Exception as e:
-                errors.append(f"Could not delete {pdf_file.name}: {e}")
+
+    # Only this config's PDFs (its directory is shared with sibling configs)
+    other_ids = database.get_all_config_ids() - {config_id}
+    for pdf_file in Config(config_id).ownedFiles(other_ids):
+        if pdf_file.suffix.lower() != '.pdf':
+            continue
+        try:
+            pdf_file.unlink()
+            purged_count += 1
+        except Exception as e:
+            errors.append(f"Could not delete {pdf_file.name}: {e}")
     
     if errors:
         flash(f'Purged {purged_count} PDFs, but encountered errors: {"; ".join(errors)}', 'warning')
@@ -316,8 +325,7 @@ def batch_import():
             errors = Errors()
             
             # Default display groups for batch import (all groups)
-            display_groups = ['Ship', 'SRV', 'OnFoot', 'UI', 'Galaxy map', 'Head look', 
-                              'Scanners', 'Fighter', 'Multicrew', 'Camera', 'Holo-Me', 'Misc']
+            display_groups = list(ALL_DISPLAY_GROUPS)
             
             # Parse bindings
             (physicalKeys, modifiers, devices) = parseBindings(config.name, xml, display_groups, errors)
@@ -542,7 +550,7 @@ def backup_download(filename):
 @require_admin
 def backup_settings():
     """Backup settings page."""
-    from .backup import get_backup_settings, save_backup_settings
+    from .backup import get_backup_settings, save_backup_settings, get_pinned_sftp_host_key
     
     if request.method == 'POST':
         settings = {
@@ -571,7 +579,22 @@ def backup_settings():
         return redirect(url_for('admin.backup_settings'))
     
     settings = get_backup_settings()
-    return render_template('admin/backup_settings.html', settings=settings)
+    return render_template('admin/backup_settings.html', settings=settings,
+                           sftp_host_key=get_pinned_sftp_host_key(
+                               settings.get('sftp_host') or '', settings.get('sftp_port') or 22))
+
+
+@admin_bp.route('/backup/sftp-forget-key', methods=['POST'])
+@require_admin
+def backup_sftp_forget_key():
+    """Forget the pinned SFTP host key (server legitimately reinstalled).
+    The next connection made from the saved settings pins the new key."""
+    from .backup import get_backup_settings, forget_sftp_host_key
+    settings = get_backup_settings()
+    if settings.get('sftp_host'):
+        forget_sftp_host_key(settings['sftp_host'], settings.get('sftp_port') or 22)
+        flash('Pinned SFTP host key forgotten. The next connection will record the new one.', 'success')
+    return redirect(url_for('admin.backup_settings'))
 
 
 @admin_bp.route('/backup/sftp-test', methods=['POST'])
@@ -659,11 +682,12 @@ def restore_from_upload():
         flash('Please select at least one component to restore.', 'warning')
         return redirect(url_for('admin.restore_dashboard'))
     
+    tmp_path = None
     try:
         # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.tar.gz') as tmp:
-            file.save(tmp.name)
             tmp_path = Path(tmp.name)
+            file.save(tmp)
         
         # Perform restore
         restore_manager = RestoreManager()
@@ -672,9 +696,6 @@ def restore_from_upload():
             restore_db=restore_db,
             restore_binds=restore_binds
         )
-        
-        # Cleanup temp file
-        tmp_path.unlink(missing_ok=True)
         
         if results['success']:
             flash(f'Restore completed. DB: {results["db_restored"]}, Binds: {results["binds_restored"]} files.', 'success')
@@ -696,6 +717,9 @@ def restore_from_upload():
             
     except Exception as e:
         flash(f'Restore failed: {e}', 'danger')
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
     
     return redirect(url_for('admin.restore_dashboard'))
 
@@ -842,7 +866,9 @@ def login():
                                   request.form.get('password', ''))
         if user:
             nxt = request.form.get('next') or request.args.get('next') or ''
-            if not nxt.startswith('/') or nxt.startswith('//'):
+            # Internal path only ("//x", a backslash and control chars leave the site)
+            if (not nxt.startswith('/') or nxt.startswith('//') or '\\' in nxt
+                    or any(c < ' ' for c in nxt)):
                 nxt = ''
             if not nxt:
                 nxt = url_for('admin.controllers') if user['role'] == 'mapper' \
@@ -934,6 +960,7 @@ def _find_mapping_for_device(device_id):
 def controllers():
     """Control tower: existing data-driven mappings + unknown-device queue."""
     import json
+    from scripts.mapping_lint import lint_mapping, lint_summary
     mappings = []
     for r in database.get_all_controller_mappings():
         try:
@@ -949,6 +976,7 @@ def controllers():
             'status': r.get('status', 'published'),
             'has_draft': r.get('has_draft', False),
             'updated_by': r.get('updated_by'),
+            'lint': lint_summary(lint_mapping(m)),
         })
     _, role = current_user()
     unknown = [u for u in database.list_unknown_devices()
@@ -1014,6 +1042,21 @@ def controllers_publish():
         flash('Mapping and target state required.', 'error')
         return redirect(url_for('admin.controllers'))
     user_name, _ = current_user()
+    if state == 'published':
+        # Same checks as the editor's "Checks" panel: errors would ship a
+        # card that is wrong for every user, so they block publication.
+        import json
+        from scripts.mapping_lint import lint_mapping
+        try:
+            issues = lint_mapping(json.loads(row['mapping_json']))
+        except ValueError:
+            issues = [{'level': 'error', 'box': None, 'message': 'The mapping is not valid JSON.'}]
+        blocking = [issue['message'] for issue in issues if issue['level'] == 'error']
+        if blocking:
+            shown = ' '.join(blocking[:3]) + (f' (+{len(blocking) - 3} more)' if len(blocking) > 3 else '')
+            flash(f'Publication blocked for "{row["device_name"]}": {shown} '
+                  'Open the editor: the Checks panel lists every issue.', 'error')
+            return redirect(url_for('admin.controllers'))
     try:
         database.set_controller_publication(row['id'], state,
                                             request.form.get('base_updated_at'), user_name)
@@ -1447,6 +1490,37 @@ def mapping_editor_preview():
     return jsonify({'url': url_for('web.serve_config',
                                   path=f'dd/{config.name}-{image_name}.jpg'),
                     'coverage': coverage})
+
+
+@admin_bp.route('/mapping-editor/lint', methods=['POST'])
+@require_mapper
+def mapping_editor_lint():
+    """Quality checks for the draft being edited (nothing is saved)."""
+    from flask import jsonify
+    from scripts.mapping_lint import lint_mapping
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Expected a JSON object.'}), 400
+    return jsonify({'issues': lint_mapping(data.get('mapping'))})
+
+
+@admin_bp.route('/mapping-editor/references')
+@require_mapper
+def mapping_editor_references():
+    """Recent uploads that bind this controller, for the preview picker.
+    Only cards whose .binds source is still on disk can be previewed."""
+    from flask import jsonify
+    ids = [part.strip() for part in (request.args.get('devices') or '').split(',')]
+    ids = [part for part in ids if re.fullmatch(r'[A-Za-z0-9_-]{1,64}', part)][:20]
+    references = []
+    for row in database.list_recent_configs_for_device_ids(ids, limit=40):
+        if not Config.isValidName(row['id']) or not Config(row['id']).pathWithSuffix('.binds').is_file():
+            continue
+        references.append({'id': row['id'], 'description': row.get('description') or '',
+                           'date': str(row.get('created_at') or '')[:10]})
+        if len(references) >= 15:
+            break
+    return jsonify({'references': references})
 
 
 def _notify_discord_mapping(title, message, fields=None):

@@ -5,6 +5,7 @@ EDRefCard Utils Module
 This module contains utility functions used across the application.
 """
 
+import os
 import sys
 import re
 
@@ -115,6 +116,11 @@ def transKey(key):
 
 RECENT_ERRORS: list[str] = []
 
+# error.log lives in the persistent volume and was never trimmed. Past this
+# size it is moved to error.log.1 (one generation kept, so at most twice
+# this amount on disk).
+ERROR_LOG_MAX_BYTES = 5 * 1024 * 1024
+
 def logError(message):
     """Log an error message to stderr and a persistent file.
     
@@ -138,6 +144,11 @@ def logError(message):
     try:
         from scripts.models import Config
         log_path = Config.configsPath() / 'error.log'
+        try:
+            if log_path.stat().st_size > ERROR_LOG_MAX_BYTES:
+                os.replace(log_path, log_path.with_name('error.log.1'))
+        except OSError:
+            pass  # no log yet, or another worker rotated it first
         with open(log_path, 'a', encoding='utf-8') as f:
             f.write(formatted_msg)
     except Exception as e:

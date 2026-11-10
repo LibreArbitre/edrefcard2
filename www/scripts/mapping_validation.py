@@ -17,13 +17,15 @@ def validate_mapping(mapping):
             raise ValueError('Image width and height must be positive numbers.')
     if 'show_title' in mapping and type(mapping['show_title']) is not bool:
         raise ValueError('Title visibility must be true or false.')
-    if 'url_xy' in mapping:
-        position = mapping['url_xy']
+    for key, label in (('url_xy', 'URL'), ('title_xy', 'Title')):
+        if key not in mapping:
+            continue
+        position = mapping[key]
         if (not isinstance(position, list) or len(position) != 2 or
                 any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
                     for v in position) or position[0] >= mapping['width'] or
                 position[1] >= mapping['height']):
-            raise ValueError('URL position must be inside the image.')
+            raise ValueError(f'{label} position must be inside the image.')
     ids = mapping.get('device_ids', [])
     if not isinstance(ids, list) or any(not isinstance(v, str) or not v.strip() for v in ids):
         raise ValueError('Hardware IDs must be a list of non-empty strings.')

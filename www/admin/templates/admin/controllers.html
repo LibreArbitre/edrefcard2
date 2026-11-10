@@ -151,6 +151,8 @@
                     <span class="badge {{ 'badge-success' if m.status == 'published' else 'badge-warning' }}"
                           title="Drafts are hidden from public rendering until published">{{ m.status }}</span>
                     {% if m.has_draft and m.status == 'published' %}<span class="badge badge-warning">unpublished changes</span>{% endif %}
+                    {% if m.lint and m.lint[0] %}<span class="badge badge-warning" title="Errors found by the editor's Checks panel: publication is blocked until they are fixed">{{ m.lint[0] }} blocking issue{{ 's' if m.lint[0] > 1 }}</span>
+                    {% elif m.lint and m.lint[1] %}<span class="badge badge-muted" title="Warnings listed in the editor's Checks panel (they do not block publication)">{{ m.lint[1] }} warning{{ 's' if m.lint[1] > 1 }}</span>{% endif %}
                 </td>
                 <td>{{ m.updated_at }}{% if m.updated_by %}<br><span style="color:var(--text-muted);font-size:0.8rem">by {{ m.updated_by }}</span>{% endif %}</td>
                 <td>

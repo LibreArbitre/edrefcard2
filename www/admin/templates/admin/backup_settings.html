@@ -60,6 +60,18 @@
             🔌 Test Connection
         </button>
         <span id="sftp-test-result" style="margin-left: 1rem;"></span>
+
+        <p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+            {% if sftp_host_key %}
+            Pinned host key: <code>{{ sftp_host_key }}</code>. Connections are refused if the server presents another key.
+            <button type="submit" class="btn btn-outline" formmethod="post" formnovalidate
+                formaction="{{ url_for('admin.backup_sftp_forget_key') }}" style="margin-left: 0.5rem;">
+                Forget host key
+            </button>
+            {% else %}
+            No host key pinned yet: the first connection made with the saved settings records the server's key.
+            {% endif %}
+        </p>
     </div>
 
     <!-- Auto Backup -->

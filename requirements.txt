@@ -1,16 +1,11 @@
-pytest
-pytest-cov
-coveralls
+# Runtime dependencies (installed in the production image).
+# Test and lint tools live in requirements-dev.txt.
 lxml
 wand
 flask
 gunicorn>=26
 Flask-Limiter==3.5.0
 
-ruff
-mypy
-types-Flask
-types-requests
 fpdf2
 PyMuPDF>=1.24  # manufacturer AcroForm sheet import (scripts/pdf_import.py)
 

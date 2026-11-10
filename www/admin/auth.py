@@ -8,6 +8,7 @@ Credentials are read from environment variables.
 
 import os
 import hmac
+import hashlib
 import logging
 from functools import wraps
 from flask import request, Response, session, redirect, url_for
@@ -62,6 +63,18 @@ def _sanitize_log(value, max_len=200):
     return text[:max_len]
 
 
+def _same(a, b):
+    """Constant-time string comparison (bytes: compare_digest rejects
+    non-ASCII str, which turned an accented username into a 500)."""
+    return hmac.compare_digest(str(a or '').encode('utf-8'), str(b or '').encode('utf-8'))
+
+
+def _credential_stamp(secret):
+    """Short fingerprint of a credential, stored in the session so that a
+    password change (or reset) invalidates the sessions opened before it."""
+    return hashlib.sha256(str(secret or '').encode('utf-8')).hexdigest()[:16]
+
+
 def check_auth(username, password):
     """Check if username/password combination is valid.
 
@@ -74,12 +87,12 @@ def check_auth(username, password):
     """
     # Constant-time comparison to avoid leaking credential length/prefix via timing.
     # Compute both halves before AND-ing so the check doesn't short-circuit.
-    user_ok = hmac.compare_digest(username or '', ADMIN_USERNAME)
-    pass_ok = hmac.compare_digest(password or '', ADMIN_PASSWORD)
+    user_ok = _same(username, ADMIN_USERNAME)
+    pass_ok = _same(password, ADMIN_PASSWORD)
     is_valid = user_ok and pass_ok
 
     # Log authentication attempts (values sanitized: IP/UA/username are attacker-controlled)
-    ip_address = _sanitize_log(request.headers.get('X-Forwarded-For', request.remote_addr))
+    ip_address = _sanitize_log(request.remote_addr)
     user_agent = _sanitize_log(request.headers.get('User-Agent', 'Unknown'))
     username = _sanitize_log(username)
 
@@ -106,10 +119,31 @@ def authenticate():
 
 
 def _session_user():
-    """Return the session-auth user dict ({'name', 'role'}) or None."""
+    """Return the session-auth user dict ({'name', 'role'}) or None.
+
+    The session is a signed cookie the server cannot revoke, so it is
+    re-checked against the source of truth on every request: a deleted user,
+    a changed role or a changed password takes effect immediately instead of
+    when the cookie expires.
+    """
     u = session.get('edrc_user')
-    if isinstance(u, dict) and u.get('name') and u.get('role') in ('admin', 'mapper'):
-        return u
+    if not (isinstance(u, dict) and u.get('name') and u.get('role') in ('admin', 'mapper')):
+        return None
+    stamp = str(u.get('stamp') or '')
+    if u.get('src') == 'env':
+        if _same(u['name'], ADMIN_USERNAME) and _same(stamp, _credential_stamp(ADMIN_PASSWORD)):
+            return {'name': ADMIN_USERNAME, 'role': 'admin'}
+    elif u.get('src') == 'db':
+        try:
+            from scripts import database
+            row = database.get_user_by_username(u['name'])
+        except Exception:
+            row = None
+        if (row and row['role'] in ('admin', 'mapper')
+                and _same(stamp, _credential_stamp(row['password_hash']))):
+            return {'name': row['username'], 'role': row['role']}
+    # Unknown, revoked or pre-upgrade session: drop it, the user logs in again
+    session.pop('edrc_user', None)
     return None
 
 
@@ -119,22 +153,24 @@ def login_session_user(username, password):
     from werkzeug.security import check_password_hash
     from scripts import database
 
-    ip_address = _sanitize_log(request.headers.get('X-Forwarded-For', request.remote_addr))
+    ip_address = _sanitize_log(request.remote_addr)
     safe_name = _sanitize_log(username)
 
     user = None
     # Env-configured admin can also use the login form (no DB row needed)
-    user_ok = hmac.compare_digest(username or '', ADMIN_USERNAME)
-    pass_ok = hmac.compare_digest(password or '', ADMIN_PASSWORD)
+    user_ok = _same(username, ADMIN_USERNAME)
+    pass_ok = _same(password, ADMIN_PASSWORD)
     if user_ok and pass_ok:
-        user = {'name': ADMIN_USERNAME, 'role': 'admin'}
+        user = {'name': ADMIN_USERNAME, 'role': 'admin', 'src': 'env',
+                'stamp': _credential_stamp(ADMIN_PASSWORD)}
     else:
         try:
             row = database.get_user_by_username(username or '')
         except Exception:
             row = None
         if row and check_password_hash(row['password_hash'], password or ''):
-            user = {'name': row['username'], 'role': row['role']}
+            user = {'name': row['username'], 'role': row['role'], 'src': 'db',
+                    'stamp': _credential_stamp(row['password_hash'])}
             try:
                 database.touch_user_login(row['id'])
             except Exception:

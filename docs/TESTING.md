@@ -22,7 +22,7 @@ Use Python 3.13, the application's requirements and the ImageMagick shared
 library. On Debian/Ubuntu the native package is `libmagickwand-dev`.
 
 ```sh
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m pytest
 python tests/rendering_integration.py "$PWD" "$PWD/www" /tmp/edrefcard-render-evidence
 ```

@@ -1,0 +1,10 @@
+# Development and CI: runtime dependencies plus test and lint tools.
+-r requirements.txt
+
+pytest
+pytest-cov
+coveralls
+ruff
+mypy
+types-Flask
+types-requests
